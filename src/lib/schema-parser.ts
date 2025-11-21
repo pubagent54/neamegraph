@@ -76,6 +76,9 @@ export function parseSchemaForSummary(jsonldString: string, section?: string | n
             if (name === "aroma") keyFacts.aroma = prop.value;
             if (name === "taste") keyFacts.taste = prop.value;
             if (name === "water source") keyFacts.waterSource = prop.value;
+            if (name === "hops") keyFacts.hops = prop.value;
+            if (name === "awards" || name === "award") keyFacts.awards = prop.value;
+            if (name === "heritage") keyFacts.heritage = prop.value;
           });
         }
         keyFacts.hasImage = !!mainEntity.image;
