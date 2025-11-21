@@ -3,6 +3,7 @@ import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -31,6 +32,15 @@ export default function Pages() {
   const [sectionFilter, setSectionFilter] = useState<string>("all");
   const [bulkPaths, setBulkPaths] = useState("");
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newPage, setNewPage] = useState({
+    path: "",
+    section: "",
+    page_type: "",
+    has_faq: false,
+    priority: 1,
+    notes: "",
+  });
   const [searchParams] = useSearchParams();
   const { userRole } = useAuth();
 
@@ -58,6 +68,50 @@ export default function Pages() {
       toast.error("Failed to fetch pages");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddPage = async () => {
+    try {
+      if (!newPage.path) {
+        toast.error("Path is required");
+        return;
+      }
+
+      if (!newPage.path.startsWith("/")) {
+        toast.error("Path must start with /");
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error } = await supabase.from("pages").insert({
+        path: newPage.path,
+        section: newPage.section || null,
+        page_type: newPage.page_type || null,
+        has_faq: newPage.has_faq,
+        priority: newPage.priority || null,
+        notes: newPage.notes || null,
+        status: "not_started" as const,
+        created_by_user_id: user?.id,
+      });
+
+      if (error) throw error;
+
+      toast.success("Page added successfully");
+      setNewPage({
+        path: "",
+        section: "",
+        page_type: "",
+        has_faq: false,
+        priority: 1,
+        notes: "",
+      });
+      setAddDialogOpen(false);
+      fetchPages();
+    } catch (error: any) {
+      console.error("Error adding page:", error);
+      toast.error(error.message || "Failed to add page");
     }
   };
 
@@ -148,29 +202,110 @@ export default function Pages() {
             </p>
           </div>
           {canEdit && (
-            <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Bulk Add Pages
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Bulk Add Pages</DialogTitle>
-                  <DialogDescription>
-                    Enter one path per line. Section and page type will be auto-detected.
-                  </DialogDescription>
-                </DialogHeader>
-                <Textarea
-                  placeholder="/beers/spitfire&#10;/about-us&#10;/news/new-appointment"
-                  value={bulkPaths}
-                  onChange={(e) => setBulkPaths(e.target.value)}
-                  className="min-h-[200px]"
-                />
-                <Button onClick={handleBulkAdd}>Add Pages</Button>
-              </DialogContent>
-            </Dialog>
+            <div className="flex gap-2">
+              <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Page
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Page</DialogTitle>
+                    <DialogDescription>
+                      Manually add a single page to track
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="path">Path *</Label>
+                      <Input
+                        id="path"
+                        placeholder="/beers/spitfire"
+                        value={newPage.path}
+                        onChange={(e) => setNewPage({ ...newPage, path: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="section">Section</Label>
+                        <Input
+                          id="section"
+                          placeholder="beers, news, etc."
+                          value={newPage.section}
+                          onChange={(e) => setNewPage({ ...newPage, section: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="page_type">Page Type</Label>
+                        <Input
+                          id="page_type"
+                          placeholder="beer_brand, etc."
+                          value={newPage.page_type}
+                          onChange={(e) => setNewPage({ ...newPage, page_type: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="priority">Priority</Label>
+                        <Input
+                          id="priority"
+                          type="number"
+                          value={newPage.priority}
+                          onChange={(e) => setNewPage({ ...newPage, priority: parseInt(e.target.value) || 1 })}
+                        />
+                      </div>
+                      <div className="flex items-center space-x-2 pt-8">
+                        <input
+                          type="checkbox"
+                          id="has_faq"
+                          checked={newPage.has_faq}
+                          onChange={(e) => setNewPage({ ...newPage, has_faq: e.target.checked })}
+                          className="rounded border-input"
+                        />
+                        <Label htmlFor="has_faq" className="cursor-pointer">Has FAQ</Label>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Notes</Label>
+                      <Textarea
+                        id="notes"
+                        placeholder="Optional notes about this page..."
+                        value={newPage.notes}
+                        onChange={(e) => setNewPage({ ...newPage, notes: e.target.value })}
+                        className="min-h-[80px]"
+                      />
+                    </div>
+                    <Button onClick={handleAddPage} className="w-full">Add Page</Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Bulk Add Pages
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Bulk Add Pages</DialogTitle>
+                    <DialogDescription>
+                      Enter one path per line. Section and page type will be auto-detected.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Textarea
+                    placeholder="/beers/spitfire&#10;/about-us&#10;/news/new-appointment"
+                    value={bulkPaths}
+                    onChange={(e) => setBulkPaths(e.target.value)}
+                    className="min-h-[200px]"
+                  />
+                  <Button onClick={handleBulkAdd}>Add Pages</Button>
+                </DialogContent>
+              </Dialog>
+            </div>
           )}
         </div>
 
