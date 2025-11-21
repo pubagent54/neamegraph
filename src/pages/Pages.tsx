@@ -94,6 +94,7 @@ export default function Pages() {
         notes: newPage.notes || null,
         status: "not_started" as const,
         created_by_user_id: user?.id,
+        last_modified_by_user_id: user?.id,
       });
 
       if (error) throw error;
@@ -165,6 +166,7 @@ export default function Pages() {
           page_type,
           status: "not_started" as const,
           created_by_user_id: user?.id,
+          last_modified_by_user_id: user?.id,
         };
       });
 
