@@ -110,22 +110,22 @@ export default function Settings() {
 
   return (
     <Layout>
-      <div className="max-w-2xl space-y-6">
+      <div className="max-w-3xl space-y-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-4xl font-bold tracking-tight mb-2">Settings</h1>
+          <p className="text-lg text-muted-foreground">
             Configure system-wide options
           </p>
         </div>
 
-        <Card>
+        <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader>
-            <CardTitle>URLs</CardTitle>
+            <CardTitle className="text-xl">URLs</CardTitle>
             <CardDescription>
               Configure base URLs for canonical links and HTML fetching
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="canonical">Canonical Base URL</Label>
               <Input
@@ -135,6 +135,7 @@ export default function Settings() {
                   setSettings({ ...settings, canonical_base_url: e.target.value })
                 }
                 placeholder="https://www.shepherdneame.co.uk"
+                className="rounded-xl"
               />
               <p className="text-xs text-muted-foreground">
                 Used for @id and url values in JSON-LD
@@ -150,6 +151,7 @@ export default function Settings() {
                   setSettings({ ...settings, fetch_base_url: e.target.value })
                 }
                 placeholder="https://shepherdneame.shepspreview.co.uk"
+                className="rounded-xl"
               />
               <p className="text-xs text-muted-foreground">
                 Used for retrieving HTML (preview or live site)
@@ -165,6 +167,7 @@ export default function Settings() {
                   setSettings({ ...settings, sitemap_url: e.target.value })
                 }
                 placeholder="https://www.shepherdneame.co.uk/sitemap.xml"
+                className="rounded-xl"
               />
               <p className="text-xs text-muted-foreground">
                 Used for automatic page discovery
@@ -173,14 +176,14 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader>
-            <CardTitle>Preview Authentication</CardTitle>
+            <CardTitle className="text-xl">Preview Authentication</CardTitle>
             <CardDescription>
               Optional HTTP Basic Auth credentials for preview site
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="auth-user">Username</Label>
               <Input
@@ -190,6 +193,7 @@ export default function Settings() {
                   setSettings({ ...settings, preview_auth_user: e.target.value })
                 }
                 placeholder="Optional"
+                className="rounded-xl"
               />
             </div>
 
@@ -203,13 +207,14 @@ export default function Settings() {
                   setSettings({ ...settings, preview_auth_password: e.target.value })
                 }
                 placeholder="Optional"
+                className="rounded-xl"
               />
             </div>
           </CardContent>
         </Card>
 
-        <div className="flex gap-2">
-          <Button onClick={handleSave} disabled={saving}>
+        <div className="flex gap-3">
+          <Button onClick={handleSave} disabled={saving} className="rounded-full">
             <Save className="mr-2 h-4 w-4" />
             {saving ? "Saving..." : "Save Settings"}
           </Button>
@@ -217,6 +222,7 @@ export default function Settings() {
             variant="outline"
             onClick={handleSitemapSync}
             disabled={syncing}
+            className="rounded-full"
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
             {syncing ? "Syncing..." : "Run Sitemap Sync"}

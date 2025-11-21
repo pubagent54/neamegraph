@@ -129,22 +129,22 @@ export default function Rules() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">AI Rules</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-4xl font-bold tracking-tight mb-2">AI Rules</h1>
+            <p className="text-lg text-muted-foreground">
               Manage prompts for schema generation
             </p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={openNewDialog}>
+              <Button onClick={openNewDialog} className="rounded-full">
                 <Plus className="mr-2 h-4 w-4" />
                 New Rule
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl">
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto rounded-2xl">
               <DialogHeader>
                 <DialogTitle>
                   {editingRule ? "Edit Rule" : "Create New Rule"}
@@ -154,7 +154,7 @@ export default function Rules() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
                   <Input
                     id="name"
@@ -163,9 +163,10 @@ export default function Rules() {
                       setFormData({ ...formData, name: e.target.value })
                     }
                     placeholder="e.g., Corporate Schema Prompt v1.1"
+                    className="rounded-xl"
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="body">Prompt Body</Label>
                   <Textarea
                     id="body"
@@ -174,10 +175,10 @@ export default function Rules() {
                       setFormData({ ...formData, body: e.target.value })
                     }
                     placeholder="Enter the system prompt for AI schema generation..."
-                    className="min-h-[400px] font-mono text-sm"
+                    className="min-h-[400px] font-mono text-sm rounded-xl"
                   />
                 </div>
-                <Button onClick={handleSave} className="w-full">
+                <Button onClick={handleSave} className="w-full rounded-full">
                   Save Rule
                 </Button>
               </div>
@@ -190,22 +191,28 @@ export default function Rules() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : rules.length === 0 ? (
-          <Card>
+          <Card className="rounded-2xl border-0 shadow-sm">
             <CardContent className="py-12 text-center text-muted-foreground">
               No rules created yet
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {rules.map((rule) => (
-              <Card key={rule.id}>
+              <Card 
+                key={rule.id}
+                className={`rounded-2xl border-0 shadow-sm transition-all ${
+                  rule.is_active ? "ring-2 ring-primary bg-gradient-to-br from-card to-primary/5" : ""
+                }`}
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <CardTitle>{rule.name}</CardTitle>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <CardTitle className="text-xl">{rule.name}</CardTitle>
                         {rule.is_active && (
-                          <Badge className="bg-status-implemented text-white">
+                          <Badge className="bg-primary rounded-full">
+                            <CheckCircle className="mr-1 h-3 w-3" />
                             Active
                           </Badge>
                         )}
@@ -219,6 +226,7 @@ export default function Rules() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleEdit(rule)}
+                        className="rounded-full"
                       >
                         <Edit2 className="h-4 w-4" />
                       </Button>
@@ -226,16 +234,16 @@ export default function Rules() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDuplicate(rule)}
+                        className="rounded-full"
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
                       {!rule.is_active && (
                         <Button
-                          variant="default"
                           size="sm"
                           onClick={() => handleSetActive(rule.id)}
+                          className="rounded-full"
                         >
-                          <CheckCircle className="mr-2 h-4 w-4" />
                           Set Active
                         </Button>
                       )}
@@ -243,11 +251,13 @@ export default function Rules() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Textarea
-                    value={rule.body}
-                    readOnly
-                    className="font-mono text-xs min-h-[150px]"
-                  />
+                  <div className="bg-muted/30 p-4 rounded-xl">
+                    <Textarea
+                      value={rule.body}
+                      readOnly
+                      className="font-mono text-xs min-h-[150px] bg-transparent border-0 resize-none focus-visible:ring-0"
+                    />
+                  </div>
                 </CardContent>
               </Card>
             ))}
