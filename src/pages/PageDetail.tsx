@@ -21,6 +21,7 @@ interface Page {
   notes: string | null;
   last_crawled_at: string | null;
   last_schema_generated_at: string | null;
+  last_html_hash: string | null;
 }
 
 interface SchemaVersion {
@@ -86,22 +87,26 @@ export default function PageDetail() {
       const url = `${settings.fetch_base_url}${page.path}`;
       toast.info(`Fetching HTML from ${url}...`);
 
-      // In a real implementation, this would call an edge function
-      // For now, we'll just simulate the process
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const { error } = await supabase
-        .from("pages")
-        .update({ last_crawled_at: new Date().toISOString() })
-        .eq("id", page.id);
+      const { data, error } = await supabase.functions.invoke("fetch-html", {
+        body: { page_id: page.id },
+      });
 
       if (error) throw error;
 
-      toast.success("HTML fetched successfully");
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      if (data?.html_changed) {
+        toast.success(`HTML fetched successfully (${data.html_length} bytes, content changed)`);
+      } else {
+        toast.success(`HTML fetched successfully (${data.html_length} bytes, no changes)`);
+      }
+      
       fetchPageData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching HTML:", error);
-      toast.error("Failed to fetch HTML");
+      toast.error(error.message || "Failed to fetch HTML");
     } finally {
       setGenerating(false);
     }
@@ -243,10 +248,14 @@ export default function PageDetail() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Has FAQ</CardTitle>
+              <CardTitle className="text-sm">HTML Hash</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm">{page.has_faq ? "Yes" : "No"}</p>
+              <p className="text-xs font-mono">
+                {page.last_html_hash
+                  ? `${page.last_html_hash.substring(0, 16)}...`
+                  : "Not crawled"}
+              </p>
             </CardContent>
           </Card>
         </div>

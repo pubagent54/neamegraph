@@ -1,1 +1,4 @@
 project_id = "wzbmanfxlpjnrivbezib"
+
+[functions.fetch-html]
+verify_jwt = true
