@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, User, LayoutDashboard, FileText, Settings, GitBranch, Activity, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import pubAgentLogo from "@/assets/pub-agent-logo.png";
+import neameGraphLogo from "@/assets/neamegraph-logo.png";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, userRole, signOut } = useAuth();
@@ -47,13 +47,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-8">
-              <Link to="/dashboard" className="flex items-center gap-3">
-                <img src={pubAgentLogo} alt="Pub Agent" className="h-10 w-10" />
-                <div>
-                  <h1 className="text-lg font-bold">NeameGraph</h1>
-                  <p className="text-xs text-muted-foreground">by Pub Agent</p>
-                </div>
+            <div className="flex items-center gap-12">
+              <Link to="/dashboard" className="flex items-center">
+                <img src={neameGraphLogo} alt="NeameGraph powered by PubAgent" className="h-16 w-auto" />
               </Link>
               <nav className="hidden md:flex items-center gap-1">
                 {navItems.map((item) => {
