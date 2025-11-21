@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { SchemaSummary } from "@/components/SchemaSummary";
 
 interface Page {
   id: string;
@@ -418,11 +419,27 @@ export default function PageDetail() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <Textarea
-                      value={version.jsonld}
-                      readOnly
-                      className="font-mono text-xs min-h-[200px]"
-                    />
+                    <Tabs defaultValue="summary" className="w-full">
+                      <TabsList>
+                        <TabsTrigger value="summary">Summary</TabsTrigger>
+                        <TabsTrigger value="json">JSON</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="summary" className="mt-4">
+                        <SchemaSummary 
+                          jsonld={version.jsonld}
+                          section={page.section}
+                          createdAt={version.created_at}
+                          status={version.status}
+                        />
+                      </TabsContent>
+                      <TabsContent value="json" className="mt-4">
+                        <Textarea
+                          value={version.jsonld}
+                          readOnly
+                          className="font-mono text-xs min-h-[200px]"
+                        />
+                      </TabsContent>
+                    </Tabs>
                     {version.validation_notes && (
                       <p className="mt-2 text-sm text-muted-foreground">
                         {version.validation_notes}
