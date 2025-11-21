@@ -24,118 +24,100 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
   // Build the narrative based on the entity type and available data
   const renderIntro = () => {
     if (summary.keyFacts.type === "beer") {
-      return `This page tells search engines that ${entityName} is a Shepherd Neame beer brand, sitting within the main ${sectionName} section of the website.`;
-    } else if (summary.keyFacts.type === "article") {
-      return `This page tells search engines that this is a ${entityType} titled "${summary.keyFacts.headline || entityName}", published as part of Shepherd Neame's ${sectionName} content.`;
-    } else {
-      return `This page tells search engines that this is ${entityType === "WebPage" ? "a corporate page" : `an ${entityType}`} about ${entityName}, positioned within the ${sectionName} section.`;
-    }
-  };
-
-  const renderConnections = () => {
-    const parts = [];
-    
-    if (summary.connections.organization) {
-      parts.push("We link this page back to Shepherd Neame Limited as the publisher and parent organisation.");
-    }
-
-    if (summary.connections.collections.length > 0) {
-      const collectionNames = summary.connections.collections.map(c => c.name).join(" and ");
-      parts.push(`The page is positioned inside the ${collectionNames} so it's clearly treated as part of ${summary.connections.collections.length === 1 ? "this collection" : "these collections"} rather than a standalone piece.`);
-    }
-
-    return parts.join(" ");
-  };
-
-  const renderKeyFacts = () => {
-    if (summary.keyFacts.type === "beer") {
-      const facts = [];
+      // Build opening sentence with available facts
+      const parts = [];
+      parts.push(`${entityName} is`);
       
       if (summary.keyFacts.style) {
-        facts.push(`a ${summary.keyFacts.style}`);
+        parts.push(`a ${summary.keyFacts.style}`);
       }
       
       if (summary.keyFacts.abv) {
-        facts.push(`at ${summary.keyFacts.abv} ABV`);
+        parts.push(`at ${summary.keyFacts.abv} ABV`);
       }
       
-      if (summary.keyFacts.colour) {
-        facts.push(`${summary.keyFacts.colour} in colour`);
-      }
-
-      let description = `We describe ${entityName}${facts.length > 0 ? ` as ${facts.join(", ")}` : ""}.`;
-
-      const details = [];
-      if (summary.keyFacts.aroma) {
-        details.push(`with aromas of ${summary.keyFacts.aroma}`);
-      }
-      if (summary.keyFacts.taste) {
-        details.push(`and flavours of ${summary.keyFacts.taste}`);
-      }
-
-      if (details.length > 0) {
-        description += ` The schema captures sensory characteristics ${details.join(" ")}.`;
-      }
-
-      if (summary.keyFacts.waterSource) {
-        description += ` We also flag that it's brewed with water ${summary.keyFacts.waterSource}.`;
-      }
-
-      if (summary.keyFacts.hasImage || summary.keyFacts.hasLogo) {
-        const visual = [];
-        if (summary.keyFacts.hasImage) visual.push("a hero image");
-        if (summary.keyFacts.hasLogo) visual.push("a logo");
-        description += ` We provide ${visual.join(" and ")} so the brand is visually recognisable.`;
-      }
-
-      return description;
+      parts.push(`brewed by Shepherd Neame in Kent.`);
+      
+      return parts.join(" ").replace(" is a ", " is a ").replace(" is at ", " at ");
     } else if (summary.keyFacts.type === "article") {
-      let description = `The schema marks this as a ${entityType}`;
+      const headline = summary.keyFacts.headline || entityName;
+      const date = summary.keyFacts.datePublished ? new Date(summary.keyFacts.datePublished).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }) : null;
       
-      if (summary.keyFacts.headline) {
-        description += `, with the headline "${summary.keyFacts.headline}"`;
+      let story = `"${headline}" is ${summary.keyFacts.author ? `a piece by ${summary.keyFacts.author}` : 'an article'}`;
+      if (date) {
+        story += `, published on ${date}`;
       }
+      story += `, telling the story of Shepherd Neame's ${sectionName}.`;
       
-      if (summary.keyFacts.datePublished) {
-        const date = new Date(summary.keyFacts.datePublished).toLocaleDateString('en-GB', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric'
-        });
-        description += `, published on ${date}`;
-      }
-      
-      if (summary.keyFacts.author) {
-        description += ` and credited to ${summary.keyFacts.author}`;
-      }
-      
-      if (summary.keyFacts.publisher) {
-        description += `, with ${summary.keyFacts.publisher} as the publisher`;
-      }
-      
-      description += ".";
-      return description;
+      return story;
     } else {
-      let description = `We present this as ${entityType.startsWith("A") || entityType.startsWith("E") || entityType.startsWith("I") || entityType.startsWith("O") || entityType.startsWith("U") ? "an" : "a"} ${entityType}`;
-      
-      if (summary.keyFacts.about) {
-        description += ` focused on ${summary.keyFacts.about}`;
-      } else if (summary.connections.organization) {
-        description += ` focused on Shepherd Neame Limited`;
-      }
-      
-      description += ", so search engines understand it describes the company itself rather than a single product or news story.";
-      return description;
+      return `This page serves as ${entityType === "WebPage" ? "a key corporate page" : `an ${entityType}`} for Shepherd Neame Limited, ${summary.keyFacts.about ? `focused on ${summary.keyFacts.about}` : 'sharing essential information about the company'}.`;
     }
   };
 
-  const renderCompliance = () => {
+  const renderFlavourStory = () => {
+    if (summary.keyFacts.type !== "beer") return null;
+    
+    const sentences = [];
+    
+    // Build flavour and mouthfeel sentence
+    const flavourParts = [];
+    
+    if (summary.keyFacts.colour) {
+      flavourParts.push(`pours ${summary.keyFacts.colour}`);
+    }
+    
+    const tasteParts = [];
+    if (summary.keyFacts.aroma) {
+      tasteParts.push(summary.keyFacts.aroma);
+    }
+    if (summary.keyFacts.taste) {
+      tasteParts.push(summary.keyFacts.taste);
+    }
+    
+    if (tasteParts.length > 0) {
+      const tasteText = tasteParts.join(", with ");
+      if (flavourParts.length > 0) {
+        sentences.push(`It ${flavourParts[0]} and delivers ${tasteText}.`);
+      } else {
+        sentences.push(`It delivers ${tasteText}.`);
+      }
+    } else if (flavourParts.length > 0) {
+      sentences.push(`It ${flavourParts[0]}.`);
+    }
+    
+    return sentences.length > 0 ? sentences.join(" ") : null;
+  };
+
+  const renderProvenance = () => {
+    if (summary.keyFacts.type !== "beer") return null;
+    
+    const parts = [];
+    
+    if (summary.keyFacts.waterSource) {
+      parts.push(`brewed with water ${summary.keyFacts.waterSource}`);
+    }
+    
+    if (summary.keyFacts.hops) {
+      parts.push(`hopped with ${summary.keyFacts.hops}`);
+    }
+    
+    if (parts.length === 0) return null;
+    
+    return `It's ${parts.join(" and ")}.`;
+  };
+
+  const renderWhyItMatters = () => {
     if (summary.keyFacts.type === "beer") {
-      return "Importantly, this schema treats the beer as a brand and avoids any price or SKU information, so the corporate page stays clean and accurate.";
+      return "Behind the scenes, the schema tells search engines that this is a Shepherd Neame beer brand in the Beers section, not a product listing. It links back to Shepherd Neame Limited as the parent organisation and avoids any price or SKU data, so the corporate page stays clean and accurate.";
     } else if (summary.keyFacts.type === "article") {
-      return "The schema focuses on the editorial content without any commercial elements, keeping the page clearly positioned as news rather than advertising.";
+      return "The schema marks this clearly as editorial content from Shepherd Neame, linking back to the organisation and ensuring search engines understand this is news rather than advertising or product information.";
     } else {
-      return "We're being conservative with the data we include, only marking up information that's clearly present on the page and relevant to this corporate context.";
+      return "The schema connects this page to Shepherd Neame Limited as the parent organisation, helping search engines understand the corporate structure and how this page fits into the broader site architecture.";
     }
   };
 
@@ -143,33 +125,23 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
     <div className="prose prose-sm max-w-none space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-4">In plain English</h3>
-        <p className="text-foreground/90 leading-relaxed">
-          {renderIntro()}
-        </p>
+        <div className="space-y-4 text-foreground/90 leading-relaxed">
+          <p>{renderIntro()}</p>
+          
+          {summary.keyFacts.type === "beer" && renderFlavourStory() && (
+            <p>{renderFlavourStory()}</p>
+          )}
+          
+          {summary.keyFacts.type === "beer" && renderProvenance() && (
+            <p>{renderProvenance()}</p>
+          )}
+        </div>
       </div>
 
-      {(summary.connections.organization || summary.connections.collections.length > 0) && (
-        <div>
-          <h4 className="text-base font-semibold mb-3">How this page fits into the site</h4>
-          <p className="text-foreground/90 leading-relaxed">
-            {renderConnections()}
-          </p>
-        </div>
-      )}
-
-      {Object.keys(summary.keyFacts).length > 0 && (
-        <div>
-          <h4 className="text-base font-semibold mb-3">Key facts we're highlighting</h4>
-          <p className="text-foreground/90 leading-relaxed">
-            {renderKeyFacts()}
-          </p>
-        </div>
-      )}
-
       <div>
-        <h4 className="text-base font-semibold mb-3">Why this is safe and useful</h4>
+        <h4 className="text-base font-semibold mb-3">Why this matters for search & AI</h4>
         <p className="text-foreground/90 leading-relaxed">
-          {renderCompliance()}
+          {renderWhyItMatters()}
         </p>
       </div>
     </div>
