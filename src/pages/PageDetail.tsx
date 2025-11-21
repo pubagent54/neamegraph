@@ -114,7 +114,76 @@ export default function PageDetail() {
 
   const handleGenerateSchema = async () => {
     if (!page) return;
-    toast.info("Schema generation would be implemented via edge function");
+    setGenerating(true);
+
+    try {
+      toast.info("Generating schema with AI...");
+
+      const { data, error } = await supabase.functions.invoke("generate-schema", {
+        body: { page_id: page.id },
+      });
+
+      if (error) throw error;
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      toast.success(`Schema v${data.version_number} generated successfully`);
+      fetchPageData();
+    } catch (error: any) {
+      console.error("Error generating schema:", error);
+      toast.error(error.message || "Failed to generate schema");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleReject = async (versionId: string) => {
+    if (!canEdit) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Update the version to rejected
+      const { error: versionError } = await supabase
+        .from("schema_versions")
+        .update({
+          status: "rejected",
+        })
+        .eq("id", versionId);
+
+      if (versionError) throw versionError;
+
+      // Update page status
+      const { error: pageError } = await supabase
+        .from("pages")
+        .update({ 
+          status: "needs_rework",
+          last_modified_by_user_id: user?.id,
+        })
+        .eq("id", page.id);
+
+      if (pageError) throw pageError;
+
+      // Audit log
+      await supabase.from("audit_log").insert({
+        user_id: user?.id,
+        entity_type: "schema_version",
+        entity_id: versionId,
+        action: "reject_schema",
+        details: {
+          page_id: page.id,
+          page_path: page.path,
+        },
+      });
+
+      toast.success("Schema version rejected");
+      fetchPageData();
+    } catch (error) {
+      console.error("Error rejecting schema:", error);
+      toast.error("Failed to reject schema");
+    }
   };
 
   const handleApprove = async (versionId: string) => {
@@ -147,10 +216,25 @@ export default function PageDetail() {
       // Update page status
       const { error: pageError } = await supabase
         .from("pages")
-        .update({ status: "approved" })
+        .update({ 
+          status: "approved",
+          last_modified_by_user_id: user?.id,
+        })
         .eq("id", page.id);
 
       if (pageError) throw pageError;
+
+      // Audit log
+      await supabase.from("audit_log").insert({
+        user_id: user?.id,
+        entity_type: "schema_version",
+        entity_id: versionId,
+        action: "approve_schema",
+        details: {
+          page_id: page.id,
+          page_path: page.path,
+        },
+      });
 
       toast.success("Schema version approved");
       fetchPageData();
@@ -267,7 +351,11 @@ export default function PageDetail() {
               <Download className="mr-2 h-4 w-4" />
               Fetch HTML
             </Button>
-            <Button onClick={handleGenerateSchema} disabled={generating}>
+            <Button 
+              onClick={handleGenerateSchema} 
+              disabled={generating || !page.last_html_hash}
+              className="rounded-full"
+            >
               <RefreshCw className="mr-2 h-4 w-4" />
               Generate Schema
             </Button>
@@ -305,16 +393,26 @@ export default function PageDetail() {
                           {new Date(version.created_at).toLocaleString()}
                         </CardDescription>
                       </div>
-                      <div className="flex items-center gap-2">
+                       <div className="flex items-center gap-2">
                         <StatusBadge status={version.status} />
-                        {isAdmin && version.status === "draft" && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleApprove(version.id)}
-                          >
-                            <CheckCircle className="mr-2 h-4 w-4" />
-                            Approve
-                          </Button>
+                        {canEdit && version.status === "draft" && (
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={() => handleApprove(version.id)}
+                            >
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleReject(version.id)}
+                            >
+                              <XCircle className="mr-2 h-4 w-4" />
+                              Reject
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
