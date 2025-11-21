@@ -24,14 +24,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { path: "/pages", label: "Pages", icon: FileText },
-    { path: "/graph", label: "Graph", icon: GitBranch },
-    { path: "/audit", label: "Audit Log", icon: Activity },
+    { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, color: "text-blue-500" },
+    { path: "/pages", label: "Pages", icon: FileText, color: "text-green-500" },
+    { path: "/graph", label: "Graph", icon: GitBranch, color: "text-purple-500" },
+    { path: "/audit", label: "Audit Log", icon: Activity, color: "text-orange-500" },
     ...(userRole === "admin"
       ? [
-          { path: "/rules", label: "Rules", icon: Shield },
-          { path: "/settings", label: "Settings", icon: Settings },
+          { path: "/rules", label: "Rules", icon: Shield, color: "text-red-500" },
+          { path: "/settings", label: "Settings", icon: Settings, color: "text-gray-500" },
         ]
       : []),
   ];
@@ -49,7 +49,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-12">
               <Link to="/dashboard" className="flex items-center">
-                <img src={neameGraphLogo} alt="NeameGraph powered by PubAgent" className="h-16 w-auto" />
+                <img src={neameGraphLogo} alt="NeameGraph powered by PubAgent" className="h-20 w-auto" />
               </Link>
               <nav className="hidden md:flex items-center gap-1">
                 {navItems.map((item) => {
@@ -62,7 +62,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         size="sm"
                         className={`gap-2 rounded-full ${isActive ? 'shadow-sm' : ''}`}
                       >
-                        <Icon className="h-4 w-4" />
+                        <Icon className={`h-4 w-4 ${item.color}`} />
                         {item.label}
                       </Button>
                     </Link>
