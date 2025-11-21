@@ -11,6 +11,7 @@ import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle } from "lucide-rea
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { SchemaSummary } from "@/components/SchemaSummary";
+import { SchemaStory } from "@/components/SchemaStory";
 
 interface Page {
   id: string;
@@ -422,6 +423,7 @@ export default function PageDetail() {
                     <Tabs defaultValue="summary" className="w-full">
                       <TabsList>
                         <TabsTrigger value="summary">Summary</TabsTrigger>
+                        <TabsTrigger value="story">The story we're telling</TabsTrigger>
                         <TabsTrigger value="json">JSON</TabsTrigger>
                       </TabsList>
                       <TabsContent value="summary" className="mt-4">
@@ -430,6 +432,13 @@ export default function PageDetail() {
                           section={page.section}
                           createdAt={version.created_at}
                           status={version.status}
+                        />
+                      </TabsContent>
+                      <TabsContent value="story" className="mt-4">
+                        <SchemaStory 
+                          jsonld={version.jsonld}
+                          section={page.section}
+                          path={page.path}
                         />
                       </TabsContent>
                       <TabsContent value="json" className="mt-4">
