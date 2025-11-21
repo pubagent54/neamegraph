@@ -25,20 +25,22 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
   const renderIntro = () => {
     if (summary.keyFacts.type === "beer") {
       // Build opening sentence with available facts
-      const parts = [];
-      parts.push(`${entityName} is`);
+      const hasColour = !!summary.keyFacts.colour;
+      const hasStyle = !!summary.keyFacts.style;
+      const hasAbv = !!summary.keyFacts.abv;
       
-      if (summary.keyFacts.style) {
-        parts.push(`a ${summary.keyFacts.style}`);
+      // Choose pattern based on available data
+      if (hasColour && hasStyle && hasAbv) {
+        // Pattern: "{name} is a {colour} {style} from Shepherd Neame, sitting at {abv} ABV."
+        return `${entityName} is a ${summary.keyFacts.colour} ${summary.keyFacts.style} from Shepherd Neame, sitting at ${summary.keyFacts.abv} ABV.`;
+      } else if (hasStyle && hasAbv) {
+        // Pattern: "{name} is a {style} at {abv} ABV, brewed by Shepherd Neame in Kent."
+        return `${entityName} is a ${summary.keyFacts.style} at ${summary.keyFacts.abv} ABV, brewed by Shepherd Neame in Kent.`;
+      } else if (hasStyle) {
+        return `${entityName} is a ${summary.keyFacts.style}, brewed by Shepherd Neame in Kent.`;
+      } else {
+        return `${entityName} is brewed by Shepherd Neame in Kent.`;
       }
-      
-      if (summary.keyFacts.abv) {
-        parts.push(`at ${summary.keyFacts.abv} ABV`);
-      }
-      
-      parts.push(`brewed by Shepherd Neame in Kent.`);
-      
-      return parts.join(" ").replace(" is a ", " is a ").replace(" is at ", " at ");
     } else if (summary.keyFacts.type === "article") {
       const headline = summary.keyFacts.headline || entityName;
       const date = summary.keyFacts.datePublished ? new Date(summary.keyFacts.datePublished).toLocaleDateString('en-GB', {
@@ -62,71 +64,78 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
   const renderFlavourStory = () => {
     if (summary.keyFacts.type !== "beer") return null;
     
-    const sentences = [];
+    const hasColour = !!summary.keyFacts.colour;
+    const hasAroma = !!summary.keyFacts.aroma;
+    const hasTaste = !!summary.keyFacts.taste;
     
-    // Build flavour and mouthfeel sentence
-    const flavourParts = [];
+    if (!hasColour && !hasAroma && !hasTaste) return null;
     
-    if (summary.keyFacts.colour) {
-      flavourParts.push(`pours ${summary.keyFacts.colour}`);
+    // Build vivid flavor description
+    let description = "";
+    
+    if (hasColour && (hasAroma || hasTaste)) {
+      // Full pattern: "It pours {colour} and delivers {aroma/taste}..."
+      description = `It pours ${summary.keyFacts.colour} and delivers `;
+      
+      const flavorNotes = [];
+      if (hasAroma) flavorNotes.push(summary.keyFacts.aroma);
+      if (hasTaste) flavorNotes.push(summary.keyFacts.taste);
+      
+      description += flavorNotes.join(", with ") + ".";
+    } else if (hasColour) {
+      description = `It pours ${summary.keyFacts.colour}.`;
+    } else if (hasAroma || hasTaste) {
+      const flavorNotes = [];
+      if (hasAroma) flavorNotes.push(summary.keyFacts.aroma);
+      if (hasTaste) flavorNotes.push(summary.keyFacts.taste);
+      
+      description = `It delivers ${flavorNotes.join(", with ")}.`;
     }
     
-    const tasteParts = [];
-    if (summary.keyFacts.aroma) {
-      tasteParts.push(summary.keyFacts.aroma);
-    }
-    if (summary.keyFacts.taste) {
-      tasteParts.push(summary.keyFacts.taste);
-    }
-    
-    if (tasteParts.length > 0) {
-      const tasteText = tasteParts.join(", with ");
-      if (flavourParts.length > 0) {
-        sentences.push(`It ${flavourParts[0]} and delivers ${tasteText}.`);
-      } else {
-        sentences.push(`It delivers ${tasteText}.`);
-      }
-    } else if (flavourParts.length > 0) {
-      sentences.push(`It ${flavourParts[0]}.`);
-    }
-    
-    return sentences.length > 0 ? sentences.join(" ") : null;
+    return description;
   };
 
   const renderProvenance = () => {
     if (summary.keyFacts.type !== "beer") return null;
     
-    const parts = [];
+    const hasWater = !!summary.keyFacts.waterSource;
+    const hasHops = !!summary.keyFacts.hops;
+    const hasAwards = !!summary.keyFacts.awards;
+    const hasHeritage = !!summary.keyFacts.heritage;
     
-    if (summary.keyFacts.waterSource) {
-      parts.push(`brewed with water ${summary.keyFacts.waterSource}`);
-    }
+    if (!hasWater && !hasHops && !hasAwards && !hasHeritage) return null;
     
-    if (summary.keyFacts.hops) {
-      parts.push(`hopped with ${summary.keyFacts.hops}`);
-    }
+    // Build natural provenance narrative
+    let story = "";
     
-    // Add awards or heritage if present
-    const credentials = [];
-    if (summary.keyFacts.awards) {
-      credentials.push(summary.keyFacts.awards);
-    }
-    if (summary.keyFacts.heritage) {
-      credentials.push(summary.keyFacts.heritage);
-    }
-    
-    if (credentials.length > 0) {
-      const credentialText = credentials.join(", ");
-      if (parts.length > 0) {
-        return `It's ${parts.join(" and ")}, with a pedigree that includes ${credentialText}.`;
-      } else {
-        return `With a pedigree that includes ${credentialText}.`;
+    if (hasWater || hasHops) {
+      const brewingParts = [];
+      if (hasWater) {
+        brewingParts.push(`brewed with water ${summary.keyFacts.waterSource}`);
       }
+      if (hasHops) {
+        brewingParts.push(`hopped with ${summary.keyFacts.hops}`);
+      }
+      story = `It's ${brewingParts.join(" and ")}`;
     }
     
-    if (parts.length === 0) return null;
+    if (hasAwards || hasHeritage) {
+      const credentials = [];
+      if (hasAwards) credentials.push(summary.keyFacts.awards);
+      if (hasHeritage) credentials.push(summary.keyFacts.heritage);
+      
+      const pedigreeText = credentials.join(", ");
+      
+      if (story) {
+        story += `, with a pedigree that includes ${pedigreeText}.`;
+      } else {
+        story = `With a pedigree that includes ${pedigreeText}.`;
+      }
+    } else if (story) {
+      story += ".";
+    }
     
-    return `It's ${parts.join(" and ")}.`;
+    return story;
   };
 
   const renderWhyItMatters = () => {
