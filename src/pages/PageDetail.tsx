@@ -204,16 +204,16 @@ export default function PageDetail() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div>
-          <Button variant="ghost" onClick={() => navigate("/pages")} className="mb-4">
+          <Button variant="ghost" onClick={() => navigate("/pages")} className="mb-4 rounded-full">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Pages
           </Button>
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight font-mono">{page.path}</h1>
-              <p className="text-muted-foreground mt-1">
+              <h1 className="text-4xl font-bold tracking-tight font-mono mb-2">{page.path}</h1>
+              <p className="text-lg text-muted-foreground">
                 {page.section} • {page.page_type}
               </p>
             </div>
@@ -221,34 +221,34 @@ export default function PageDetail() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
+        <div className="grid gap-6 md:grid-cols-3">
+          <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
             <CardHeader>
-              <CardTitle className="text-sm">Last Crawled</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">Last Crawled</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm">
+              <p className="text-lg font-semibold">
                 {page.last_crawled_at
-                  ? new Date(page.last_crawled_at).toLocaleString()
+                  ? new Date(page.last_crawled_at).toLocaleDateString()
                   : "Never"}
               </p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
             <CardHeader>
-              <CardTitle className="text-sm">Last Schema Generated</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">Last Schema Generated</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm">
+              <p className="text-lg font-semibold">
                 {page.last_schema_generated_at
-                  ? new Date(page.last_schema_generated_at).toLocaleString()
+                  ? new Date(page.last_schema_generated_at).toLocaleDateString()
                   : "Never"}
               </p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
             <CardHeader>
-              <CardTitle className="text-sm">HTML Hash</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">HTML Hash</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs font-mono">
@@ -261,8 +261,9 @@ export default function PageDetail() {
         </div>
 
         {canEdit && (
-          <div className="flex gap-2">
-            <Button onClick={handleFetchHTML} disabled={generating}>
+          <div className="flex gap-3">
+            <Button onClick={handleFetchHTML} disabled={generating} className="rounded-full">
+
               <Download className="mr-2 h-4 w-4" />
               Fetch HTML
             </Button>

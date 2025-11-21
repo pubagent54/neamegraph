@@ -193,11 +193,11 @@ export default function Pages() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Pages</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-4xl font-bold tracking-tight mb-2">Pages</h1>
+            <p className="text-lg text-muted-foreground">
               Manage corporate pages and their schema
             </p>
           </div>
@@ -205,12 +205,12 @@ export default function Pages() {
             <div className="flex gap-2">
               <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button>
+                  <Button className="rounded-full">
                     <Plus className="mr-2 h-4 w-4" />
                     Add Page
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="rounded-2xl">
                   <DialogHeader>
                     <DialogTitle>Add New Page</DialogTitle>
                     <DialogDescription>
@@ -225,6 +225,7 @@ export default function Pages() {
                         placeholder="/beers/spitfire"
                         value={newPage.path}
                         onChange={(e) => setNewPage({ ...newPage, path: e.target.value })}
+                        className="rounded-xl"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -235,6 +236,7 @@ export default function Pages() {
                           placeholder="beers, news, etc."
                           value={newPage.section}
                           onChange={(e) => setNewPage({ ...newPage, section: e.target.value })}
+                          className="rounded-xl"
                         />
                       </div>
                       <div className="space-y-2">
@@ -244,6 +246,7 @@ export default function Pages() {
                           placeholder="beer_brand, etc."
                           value={newPage.page_type}
                           onChange={(e) => setNewPage({ ...newPage, page_type: e.target.value })}
+                          className="rounded-xl"
                         />
                       </div>
                     </div>
@@ -255,6 +258,7 @@ export default function Pages() {
                           type="number"
                           value={newPage.priority}
                           onChange={(e) => setNewPage({ ...newPage, priority: parseInt(e.target.value) || 1 })}
+                          className="rounded-xl"
                         />
                       </div>
                       <div className="flex items-center space-x-2 pt-8">
@@ -275,21 +279,21 @@ export default function Pages() {
                         placeholder="Optional notes about this page..."
                         value={newPage.notes}
                         onChange={(e) => setNewPage({ ...newPage, notes: e.target.value })}
-                        className="min-h-[80px]"
+                        className="min-h-[80px] rounded-xl"
                       />
                     </div>
-                    <Button onClick={handleAddPage} className="w-full">Add Page</Button>
+                    <Button onClick={handleAddPage} className="w-full rounded-full">Add Page</Button>
                   </div>
                 </DialogContent>
               </Dialog>
               <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline">
+                  <Button variant="outline" className="rounded-full">
                     <Upload className="mr-2 h-4 w-4" />
                     Bulk Add Pages
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="rounded-2xl">
                   <DialogHeader>
                     <DialogTitle>Bulk Add Pages</DialogTitle>
                     <DialogDescription>
@@ -300,30 +304,30 @@ export default function Pages() {
                     placeholder="/beers/spitfire&#10;/about-us&#10;/news/new-appointment"
                     value={bulkPaths}
                     onChange={(e) => setBulkPaths(e.target.value)}
-                    className="min-h-[200px]"
+                    className="min-h-[200px] rounded-xl"
                   />
-                  <Button onClick={handleBulkAdd}>Add Pages</Button>
+                  <Button onClick={handleBulkAdd} className="rounded-full">Add Pages</Button>
                 </DialogContent>
               </Dialog>
             </div>
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search pages..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 rounded-full bg-muted/30 border-0 focus-visible:ring-primary/20"
             />
           </div>
           <Select value={sectionFilter} onValueChange={setSectionFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] rounded-full bg-muted/30 border-0">
               <SelectValue placeholder="Filter by section" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-2xl">
               <SelectItem value="all">All Sections</SelectItem>
               {sections.map((section) => (
                 <SelectItem key={section} value={section!}>
@@ -333,10 +337,10 @@ export default function Pages() {
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] rounded-full bg-muted/30 border-0">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-2xl">
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="not_started">Not Started</SelectItem>
               <SelectItem value="ai_draft">AI Draft</SelectItem>
@@ -353,17 +357,17 @@ export default function Pages() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : (
-          <div className="border rounded-lg">
+          <div className="border-0 rounded-2xl overflow-hidden shadow-sm bg-card">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Path</TableHead>
-                  <TableHead>Section</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>FAQ</TableHead>
-                  <TableHead>Last Schema</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                <TableRow className="border-b bg-muted/30">
+                  <TableHead className="font-semibold">Path</TableHead>
+                  <TableHead className="font-semibold">Section</TableHead>
+                  <TableHead className="font-semibold">Type</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead className="font-semibold">FAQ</TableHead>
+                  <TableHead className="font-semibold">Last Schema</TableHead>
+                  <TableHead className="text-right font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -388,9 +392,9 @@ export default function Pages() {
                           ? new Date(page.last_schema_generated_at).toLocaleDateString()
                           : "Never"}
                       </TableCell>
-                      <TableCell className="text-right">
+                       <TableCell className="text-right">
                         <Link to={`/pages/${page.id}`}>
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" className="rounded-full">
                             View
                           </Button>
                         </Link>
@@ -403,7 +407,7 @@ export default function Pages() {
           </div>
         )}
 
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground px-2">
           Showing {filteredPages.length} of {pages.length} pages
         </p>
       </div>

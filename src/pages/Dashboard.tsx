@@ -110,53 +110,55 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <div className="space-y-8">
+      <div className="space-y-10">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-4xl font-bold tracking-tight mb-2">Dashboard</h1>
+          <p className="text-lg text-muted-foreground">
             Overview of your corporate schema management
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {statCards.map((card) => {
             const Icon = card.icon;
             return (
-              <Card key={card.title}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-                  <Icon className={`h-4 w-4 ${card.color}`} />
+              <Card key={card.title} className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30 hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
+                  <div className={`h-10 w-10 rounded-full bg-background/50 flex items-center justify-center`}>
+                    <Icon className={`h-5 w-5 ${card.color}`} />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{card.value}</div>
-                  <p className="text-xs text-muted-foreground">{card.description}</p>
+                  <div className="text-4xl font-bold mb-1">{card.value}</div>
+                  <p className="text-sm text-muted-foreground">{card.description}</p>
                 </CardContent>
               </Card>
             );
           })}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card className="rounded-2xl border-0 shadow-sm">
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
+              <CardTitle className="text-xl">Quick Actions</CardTitle>
               <CardDescription>Common tasks and views</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               <Link to="/pages">
-                <Button variant="outline" className="w-full justify-start">
+                <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
                   <FileText className="mr-2 h-4 w-4" />
                   View All Pages
                 </Button>
               </Link>
               <Link to="/pages?status=ai_draft">
-                <Button variant="outline" className="w-full justify-start">
+                <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
                   <Clock className="mr-2 h-4 w-4" />
                   Review AI Drafts
                 </Button>
               </Link>
               <Link to="/pages?status=needs_rework">
-                <Button variant="outline" className="w-full justify-start">
+                <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
                   <AlertCircle className="mr-2 h-4 w-4" />
                   Pages Needing Rework
                 </Button>
@@ -164,29 +166,44 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-2xl border-0 shadow-sm">
             <CardHeader>
-              <CardTitle>Getting Started</CardTitle>
+              <CardTitle className="text-xl">Getting Started</CardTitle>
               <CardDescription>Next steps for your workflow</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div>
-                <p className="font-medium mb-1">1. Add Pages</p>
-                <p className="text-muted-foreground">
-                  Import pages via CSV or sync from your sitemap
-                </p>
+            <CardContent className="space-y-5">
+              <div className="flex gap-4">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                  1
+                </div>
+                <div>
+                  <p className="font-semibold mb-1">Add Pages</p>
+                  <p className="text-sm text-muted-foreground">
+                    Import pages via CSV or sync from your sitemap
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-medium mb-1">2. Configure Rules</p>
-                <p className="text-muted-foreground">
-                  Set up AI prompts for schema generation
-                </p>
+              <div className="flex gap-4">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                  2
+                </div>
+                <div>
+                  <p className="font-semibold mb-1">Configure Rules</p>
+                  <p className="text-sm text-muted-foreground">
+                    Set up AI prompts for schema generation
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-medium mb-1">3. Generate Schema</p>
-                <p className="text-muted-foreground">
-                  Fetch HTML and create JSON-LD for your pages
-                </p>
+              <div className="flex gap-4">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                  3
+                </div>
+                <div>
+                  <p className="font-semibold mb-1">Generate Schema</p>
+                  <p className="text-sm text-muted-foreground">
+                    Fetch HTML and create JSON-LD for your pages
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, User, LayoutDashboard, FileText, Settings, GitBranch, Activity, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import pubAgentLogo from "@/assets/pub-agent-logo.png";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, userRole, signOut } = useAuth();
@@ -43,17 +44,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
+      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-8">
-              <Link to="/dashboard" className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-                  N
-                </div>
+              <Link to="/dashboard" className="flex items-center gap-3">
+                <img src={pubAgentLogo} alt="Pub Agent" className="h-10 w-10" />
                 <div>
                   <h1 className="text-lg font-bold">NeameGraph</h1>
-                  <p className="text-xs text-muted-foreground">Corporate Schema Control</p>
+                  <p className="text-xs text-muted-foreground">by Pub Agent</p>
                 </div>
               </Link>
               <nav className="hidden md:flex items-center gap-1">
@@ -65,7 +64,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <Button
                         variant={isActive ? "secondary" : "ghost"}
                         size="sm"
-                        className="gap-2"
+                        className={`gap-2 rounded-full ${isActive ? 'shadow-sm' : ''}`}
                       >
                         <Icon className="h-4 w-4" />
                         {item.label}
@@ -77,20 +76,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="gap-2">
+                <Button variant="ghost" className="gap-2 rounded-full">
                   <User className="h-4 w-4" />
                   <span className="hidden sm:inline">{user?.email}</span>
                   {userRole && (
-                    <Badge className={roleColors[userRole as keyof typeof roleColors]}>
+                    <Badge className={`${roleColors[userRole as keyof typeof roleColors]} rounded-full`}>
                       {userRole}
                     </Badge>
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="rounded-2xl">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
+                <DropdownMenuItem onClick={handleSignOut} className="rounded-lg">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
                 </DropdownMenuItem>
@@ -99,7 +98,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="container mx-auto px-4 py-8">{children}</main>
+      <main className="container mx-auto px-6 py-10">{children}</main>
     </div>
   );
 }
