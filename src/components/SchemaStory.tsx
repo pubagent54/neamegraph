@@ -106,6 +106,24 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
       parts.push(`hopped with ${summary.keyFacts.hops}`);
     }
     
+    // Add awards or heritage if present
+    const credentials = [];
+    if (summary.keyFacts.awards) {
+      credentials.push(summary.keyFacts.awards);
+    }
+    if (summary.keyFacts.heritage) {
+      credentials.push(summary.keyFacts.heritage);
+    }
+    
+    if (credentials.length > 0) {
+      const credentialText = credentials.join(", ");
+      if (parts.length > 0) {
+        return `It's ${parts.join(" and ")}, with a pedigree that includes ${credentialText}.`;
+      } else {
+        return `With a pedigree that includes ${credentialText}.`;
+      }
+    }
+    
     if (parts.length === 0) return null;
     
     return `It's ${parts.join(" and ")}.`;
