@@ -85,6 +85,11 @@ export default function Pages() {
 
       const { data: { user } } = await supabase.auth.getUser();
 
+      if (!user) {
+        toast.error("You must be logged in to add pages");
+        return;
+      }
+
       const { error } = await supabase.from("pages").insert({
         path: newPage.path,
         section: newPage.section || null,
@@ -93,8 +98,8 @@ export default function Pages() {
         priority: newPage.priority || null,
         notes: newPage.notes || null,
         status: "not_started" as const,
-        created_by_user_id: user?.id,
-        last_modified_by_user_id: user?.id,
+        created_by_user_id: user.id,
+        last_modified_by_user_id: user.id,
       });
 
       if (error) throw error;
@@ -128,9 +133,32 @@ export default function Pages() {
         return;
       }
 
+      // Check for existing paths
+      const { data: existingPages, error: fetchError } = await supabase
+        .from("pages")
+        .select("path")
+        .in("path", paths);
+
+      if (fetchError) throw fetchError;
+
+      const existingPaths = new Set(existingPages?.map(p => p.path) || []);
+      const newPaths = paths.filter(path => !existingPaths.has(path));
+
+      if (newPaths.length === 0) {
+        toast.info("All paths already exist in the database");
+        setBulkPaths("");
+        setBulkDialogOpen(false);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
 
-      const pagesToInsert = paths.map((path) => {
+      if (!user) {
+        toast.error("You must be logged in to add pages");
+        return;
+      }
+
+      const pagesToInsert = newPaths.map((path) => {
         let section = "other";
         let page_type = "other";
 
@@ -165,8 +193,9 @@ export default function Pages() {
           section,
           page_type,
           status: "not_started" as const,
-          created_by_user_id: user?.id,
-          last_modified_by_user_id: user?.id,
+          has_faq: false,
+          created_by_user_id: user.id,
+          last_modified_by_user_id: user.id,
         };
       });
 
@@ -174,7 +203,12 @@ export default function Pages() {
 
       if (error) throw error;
 
-      toast.success(`Added ${paths.length} pages successfully`);
+      const skippedCount = paths.length - newPaths.length;
+      if (skippedCount > 0) {
+        toast.success(`Added ${newPaths.length} new pages (${skippedCount} already existed)`);
+      } else {
+        toast.success(`Added ${newPaths.length} pages successfully`);
+      }
       setBulkPaths("");
       setBulkDialogOpen(false);
       fetchPages();
