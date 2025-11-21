@@ -71,20 +71,20 @@ export default function AuditLog() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Audit Log</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-4xl font-bold tracking-tight mb-2">Audit Log</h1>
+          <p className="text-lg text-muted-foreground">
             Track all system changes and user actions
           </p>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex gap-3">
           <Select value={entityTypeFilter} onValueChange={setEntityTypeFilter}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[200px] rounded-full bg-muted/30 border-0">
               <SelectValue placeholder="Filter by entity" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-2xl">
               <SelectItem value="all">All Entities</SelectItem>
               {entityTypes.map((type) => (
                 <SelectItem key={type} value={type}>
@@ -95,10 +95,10 @@ export default function AuditLog() {
           </Select>
 
           <Select value={actionFilter} onValueChange={setActionFilter}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[200px] rounded-full bg-muted/30 border-0">
               <SelectValue placeholder="Filter by action" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-2xl">
               <SelectItem value="all">All Actions</SelectItem>
               {actions.map((action) => (
                 <SelectItem key={action} value={action}>
@@ -114,7 +114,7 @@ export default function AuditLog() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : filteredLogs.length === 0 ? (
-          <Card>
+          <Card className="rounded-2xl border-0 shadow-sm">
             <CardContent className="py-12 text-center text-muted-foreground">
               No audit log entries found
             </CardContent>
@@ -168,7 +168,7 @@ export default function AuditLog() {
           </div>
         )}
 
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground px-2">
           Showing {filteredLogs.length} of {logs.length} entries
         </p>
       </div>

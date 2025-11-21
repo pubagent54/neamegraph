@@ -63,10 +63,10 @@ export default function Graph() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Knowledge Graph</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-4xl font-bold tracking-tight mb-2">Knowledge Graph</h1>
+          <p className="text-lg text-muted-foreground">
             Visual representation of schema entities and relationships
           </p>
         </div>
@@ -76,58 +76,58 @@ export default function Graph() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : nodes.length === 0 ? (
-          <Card>
+          <Card className="rounded-2xl border-0 shadow-sm">
             <CardContent className="py-12 text-center text-muted-foreground">
               No graph data available yet. Generate and approve schemas to build the graph.
             </CardContent>
           </Card>
         ) : (
           <>
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card>
+            <div className="grid gap-6 md:grid-cols-3">
+              <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
                 <CardHeader>
-                  <CardTitle className="text-sm">Total Nodes</CardTitle>
+                  <CardTitle className="text-sm text-muted-foreground">Total Nodes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{nodes.length}</p>
+                  <p className="text-4xl font-bold">{nodes.length}</p>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
                 <CardHeader>
-                  <CardTitle className="text-sm">Total Relationships</CardTitle>
+                  <CardTitle className="text-sm text-muted-foreground">Total Relationships</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{edges.length}</p>
+                  <p className="text-4xl font-bold">{edges.length}</p>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
                 <CardHeader>
-                  <CardTitle className="text-sm">Entity Types</CardTitle>
+                  <CardTitle className="text-sm text-muted-foreground">Entity Types</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{Object.keys(nodesByType).length}</p>
+                  <p className="text-4xl font-bold">{Object.keys(nodesByType).length}</p>
                 </CardContent>
               </Card>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               {Object.entries(nodesByType).map(([type, typeNodes]) => (
-                <Card key={type}>
+                <Card key={type} className="rounded-2xl border-0 shadow-sm">
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle>{type}</CardTitle>
-                      <Badge variant="secondary">{typeNodes.length} nodes</Badge>
+                      <CardTitle className="text-xl">{type}</CardTitle>
+                      <Badge variant="secondary" className="rounded-full">{typeNodes.length} nodes</Badge>
                     </div>
                     <CardDescription>
                       Entities of type {type}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {typeNodes.map((node) => (
                         <div
                           key={node.id}
-                          className="flex items-center justify-between p-3 rounded-lg border"
+                          className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
                         >
                           <div className="flex-1">
                             <p className="font-medium">{node.label || node.schema_id}</p>
