@@ -568,22 +568,6 @@ export default function PageDetail() {
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Is Home Page Checkbox */}
-              <div className="flex items-center space-x-2 pt-8">
-                <Checkbox
-                  id="isHomePage"
-                  checked={editableIsHomePage}
-                  onCheckedChange={(checked) => setEditableIsHomePage(checked === true)}
-                  disabled={!canEdit}
-                />
-                <Label
-                  htmlFor="isHomePage"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  Is Home Page
-                </Label>
-              </div>
             </div>
 
             {/* Logo URL with Preview */}
