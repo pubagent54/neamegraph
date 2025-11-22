@@ -164,7 +164,16 @@ Notes: ${page.notes || "none"}
 HTML Content:
 ${trimmedHtml}
 
-Return ONLY the JSON-LD object. No explanations, no markdown, just the raw JSON.
+CRITICAL REQUIREMENTS - Your response MUST include:
+1. An "@context" field set to "https://schema.org"
+2. An "@graph" array containing all entities
+3. An Organization node with EXACTLY these properties:
+   - "@type": ["Organization", "Corporation"]
+   - "@id": "https://www.shepherdneame.co.uk/#organization"
+   - "name": "Shepherd Neame Limited"
+   - "url": "https://www.shepherdneame.co.uk"
+
+Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just the raw JSON starting with { and ending with }.
 `;
 
     console.log("Calling Lovable AI...");
