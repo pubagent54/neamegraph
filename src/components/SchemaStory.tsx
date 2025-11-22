@@ -24,21 +24,73 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
   const entityType = summary.mainEntity?.type || "page";
   const sectionName = section || "the site";
 
-  // Normalise page-type detection so we don't rely solely on keyFacts.type
-  const isBeerPage =
-    section === "beers" ||
-    summary.keyFacts.type === "beer" ||
-    summary.mainEntity?.type === "Brand";
+  // --- Rich beer story paragraph ---------------------------------------------
 
-  const isArticlePage =
-    summary.keyFacts.type === "article" ||
-    summary.mainEntity?.type === "NewsArticle" ||
-    summary.mainEntity?.type === "BlogPosting";
+  const renderRichBeerStory = () => {
+    if (summary.keyFacts.type !== "beer") return null;
 
-  // --- Plain-language intro --------------------------------------------------
+    const {
+      style,
+      colour,
+      abv,
+      aroma,
+      taste,
+      hops,
+      heritage,
+      serveRecommendation,
+      awards,
+      waterSource,
+    } = summary.keyFacts;
+
+    const bits: string[] = [];
+
+    // First sentence – what the page is doing
+    const stylePart = style ? `, a ${style}` : "";
+    const heritagePart = heritage ? `, ${heritage}` : "";
+    bits.push(
+      `This page tells the story of ${entityName}${stylePart} brewed by Shepherd Neame${heritagePart}.`
+    );
+
+    // Second sentence – flavour & colour
+    const flavourParts: string[] = [];
+    if (colour) flavourParts.push(`${colour.toLowerCase()} in the glass`);
+    if (aroma) flavourParts.push(`with aromas of ${aroma}`);
+    if (taste) flavourParts.push(`and a palate described as ${taste}`);
+    if (flavourParts.length) {
+      bits.push(
+        `It is presented as ${flavourParts.join(", ")}${
+          abv ? `, sitting at ${abv} ABV` : ""
+        }.`
+      );
+    } else if (abv) {
+      bits.push(`It is positioned as a ${style || "beer"} at ${abv} ABV.`);
+    }
+
+    // Third sentence – hops, water, serve rec, awards
+    const provenanceParts: string[] = [];
+    if (hops) provenanceParts.push(`built on hops including ${hops}`);
+    if (waterSource) provenanceParts.push(`brewed with water ${waterSource}`);
+    if (provenanceParts.length) {
+      bits.push(`The page emphasises it as ${provenanceParts.join(" and ")}.`);
+    }
+
+    if (serveRecommendation) {
+      bits.push(`There is a serving suggestion to ${serveRecommendation}.`);
+    }
+
+    if (awards) {
+      bits.push(
+        `Awards and credentials on the page reinforce its pedigree, including ${awards}.`
+      );
+    }
+
+    return bits.join(" ");
+  };
+
+  // --- Plain-language intro (short, factual) ---------------------------------
 
   const renderIntro = () => {
-    if (isBeerPage) {
+    if (summary.keyFacts.type === "beer") {
       const { style, colour, abv } = summary.keyFacts;
 
       const hasColour = !!colour;
@@ -46,7 +98,6 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
       const hasAbv = !!abv;
 
       if (hasColour && hasStyle && hasAbv) {
-        // e.g. "1698 Bottle Conditioned Ale is a copper-bronze Kentish strong ale from Shepherd Neame, sitting at 6.5% ABV."
         return `${entityName} is a ${colour} ${style} from Shepherd Neame, sitting at ${abv} ABV.`;
       } else if (hasStyle && hasAbv) {
         return `${entityName} is a ${style} at ${abv} ABV, brewed by Shepherd Neame in Kent.`;
@@ -57,7 +108,7 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
       }
     }
 
-    if (isArticlePage) {
+    if (summary.keyFacts.type === "article") {
       const headline = summary.keyFacts.headline || entityName;
       const date = summary.keyFacts.datePublished
         ? new Date(summary.keyFacts.datePublished).toLocaleDateString(
@@ -76,23 +127,27 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
       if (date) {
         story += `, published on ${date}`;
       }
-      story += `, telling part of Shepherd Neame’s ${sectionName} story.`;
+      story += `, telling part of Shepherd Neame's ${sectionName} story.`;
 
       return story;
     }
 
     // Generic corporate page
-    return `This page serves as a key corporate page for Shepherd Neame Limited, ${
+    return `This page serves as ${
+      entityType === "WebPage"
+        ? "a key corporate page"
+        : `an ${entityType} page`
+    } for Shepherd Neame Limited, ${
       summary.keyFacts.about
         ? `focused on ${summary.keyFacts.about}.`
         : "sharing important information about the company."
     }`;
   };
 
-  // --- Beer flavour / sensory story ------------------------------------------
+  // --- Beer flavour / sensory story (shorter add-on) -------------------------
 
   const renderFlavourStory = () => {
-    if (!isBeerPage) return null;
+    if (summary.keyFacts.type !== "beer") return null;
 
     const { colour, aroma, taste } = summary.keyFacts;
 
@@ -122,10 +177,10 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
     return description;
   };
 
-  // --- Beer provenance: hops, water, awards, heritage ------------------------
+  // --- Beer provenance: hops, water, awards, heritage (short add-on) ---------
 
   const renderProvenance = () => {
-    if (!isBeerPage) return null;
+    if (summary.keyFacts.type !== "beer") return null;
 
     const { waterSource, hops, awards, heritage } = summary.keyFacts;
 
@@ -146,7 +201,7 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
       if (hasHops) {
         brewingParts.push(`hopped with ${hops}`);
       }
-      story = `It’s ${brewingParts.join(" and ")}`;
+      story = `It's ${brewingParts.join(" and ")}`;
     }
 
     if (hasAwards || hasHeritage) {
@@ -171,30 +226,152 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
   // --- How the page fits into the site ---------------------------------------
 
   const renderHowFits = () => {
-    if (isBeerPage) {
-      return `This page sits in the beers section of the Shepherd Neame site and marks ${entityName} as one of the brewery’s core beer brands. In the schema it links back to Shepherd Neame Limited as the parent organisation and into the Shepherd Neame beers collection, so search engines can see it as part of the wider range rather than an isolated product page.`;
+    if (summary.keyFacts.type === "beer") {
+      return `This page sits in the beers section of the Shepherd Neame site and marks ${entityName} as one of the brewery's core beer brands. In the schema it links back to Shepherd Neame Limited as the parent organisation and into the Shepherd Neame beers collection, so search engines can see it as part of the wider range rather than an isolated product page.`;
     }
 
-    if (isArticlePage) {
-      return `This page is part of Shepherd Neame’s editorial content, sitting within the ${sectionName} area and linked back to Shepherd Neame Limited as publisher. That tells search engines it belongs to the brewery’s news and storytelling layer, alongside other articles on the site.`;
+    if (summary.keyFacts.type === "article") {
+      return `This page is part of Shepherd Neame's editorial content, sitting within the ${sectionName} area and linked back to Shepherd Neame Limited as publisher. That tells search engines it belongs to the brewery's news and storytelling layer, alongside other articles on the site.`;
     }
 
     // Generic corporate page
-    return `This page forms part of the Shepherd Neame corporate site and is linked back to Shepherd Neame Limited as the parent organisation. That makes it clear that this content belongs to the brewery’s corporate story, alongside other sections such as beers, pubs, history, sustainability and investors.`;
+    return `This page forms part of the Shepherd Neame corporate site and is linked back to Shepherd Neame Limited as the parent organisation. That makes it clear that this content belongs to the brewery's corporate story, alongside other sections such as beers, pubs, history, sustainability and investors.`;
   };
 
   // --- Why the schema is safe & useful ---------------------------------------
 
   const renderWhySafe = () => {
-    if (isBeerPage) {
-      return `For this beer brand, the schema sticks to what’s clearly on the page: the brand name, its place in the beers collection, key details like style, colour, ABV and flavour notes, plus any provenance or awards that are explicitly mentioned. It avoids any price, SKU or ecommerce-style data, so search engines see this as a corporate brand page, not a sales listing. That gives AI and search a rich, trustworthy view of the beer without over-claiming.`;
+    if (summary.keyFacts.type === "beer") {
+      return `For this beer brand, the schema sticks to what's clearly on the page: the brand name, its place in the beers collection, key details like style, colour, ABV and flavour notes, plus any provenance or awards that are explicitly mentioned. It avoids any price, SKU or ecommerce-style data, so search engines see this as a corporate brand page, not a sales listing. That gives AI and search a rich, trustworthy view of the beer without over-claiming.`;
     }
 
-    if (isArticlePage) {
-      return `For editorial content, the schema simply marks this out as a news or blog-style article from Shepherd Neame, with dates, headline and publisher where available. That helps search engines and AI understand it as part of the brewery’s storytelling rather than advertising or product information, while staying firmly within the facts visible on the page.`;
+    if (summary.keyFacts.type === "article") {
+      return `For editorial content, the schema simply marks this out as a news or blog-style article from Shepherd Neame, with dates, headline and publisher where available. That helps search engines and AI understand it as part of the brewery's storytelling rather than advertising or product information, while staying firmly within the facts visible on the page.`;
     }
 
-    return `For this kind of corporate page, the structured data focuses on the essentials: that it belongs to Shepherd Neame Limited, what the page is about, and where it sits in the overall site. Keeping to those on-page facts gives search engines and AI a clean, trustworthy signal about how this content fits into the wider Shepherd Neame story, without over-claiming or introducing details that visitors can’t see.`;
+    return `For this kind of corporate page, the structured data focuses on the essentials: that it belongs to Shepherd Neame Limited, what the page is about, and where it sits in the overall site. Keeping to those on-page facts gives search engines and AI a clean, trustworthy signal about how this content fits into the wider Shepherd Neame story, without over-claiming or introducing details that visitors can't see.`;
+  };
+
+  // --- What search & AI can understand from this schema ----------------------
+
+  const renderWhatSearchUnderstands = () => {
+    if (summary.keyFacts.type === "beer") {
+      const {
+        style,
+        abv,
+        colour,
+        ibu,
+        hops,
+        aroma,
+        taste,
+        awards,
+        heritage,
+        waterSource,
+      } = summary.keyFacts;
+
+      const facts: string[] = [];
+
+      if (style || abv || colour) {
+        const bits: string[] = [];
+        if (style) bits.push(style);
+        if (colour) bits.push(colour.toLowerCase());
+        if (abv) bits.push(`${abv} ABV`);
+        facts.push(
+          `that ${entityName} is a ${bits.join(
+            ", "
+          )} beer brand brewed by Shepherd Neame`
+        );
+      } else {
+        facts.push(`that ${entityName} is a Shepherd Neame beer brand`);
+      }
+
+      if (ibu) {
+        facts.push(`that it has a bitterness level of ${ibu} IBU`);
+      }
+
+      if (hops) {
+        facts.push(`that it is hopped with ${hops}`);
+      }
+
+      if (aroma || taste) {
+        const flavourBits: string[] = [];
+        if (aroma) flavourBits.push(aroma);
+        if (taste) flavourBits.push(taste);
+        facts.push(`that its flavour profile includes ${flavourBits.join(" and ")}`);
+      }
+
+      if (waterSource) {
+        facts.push(`that it is brewed with water ${waterSource}`);
+      }
+
+      if (awards || heritage) {
+        const credBits: string[] = [];
+        if (awards) credBits.push(awards);
+        if (heritage) credBits.push(heritage);
+        facts.push(`that it carries pedigree and credentials such as ${credBits.join(
+          " and "
+        )}`);
+      }
+
+      const joinedFacts =
+        facts.length === 1
+          ? facts[0]
+          : facts.slice(0, -1).join(", ") + " and " + facts[facts.length - 1];
+
+      return `From this schema, search engines and AI can safely understand ${joinedFacts}, and that it sits inside the Shepherd Neame beers collection under Shepherd Neame Limited as the parent organisation.`;
+    }
+
+    if (summary.keyFacts.type === "article") {
+      const headline = summary.keyFacts.headline || entityName;
+      const bits: string[] = [
+        `that "${headline}" is an editorial article`,
+        "that it is published by Shepherd Neame Limited",
+      ];
+
+      if (summary.keyFacts.datePublished) {
+        bits.push(
+          `that it was published on ${new Date(
+            summary.keyFacts.datePublished
+          ).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}`
+        );
+      }
+
+      if (summary.keyFacts.author) {
+        bits.push(`that it is authored by ${summary.keyFacts.author}`);
+      }
+
+      const joinedFacts =
+        bits.length === 1
+          ? bits[0]
+          : bits.slice(0, -1).join(", ") + " and " + bits[bits.length - 1];
+
+      return `From this schema, search engines and AI can clearly see ${joinedFacts}, and that it belongs within Shepherd Neame's ${sectionName} content rather than being a product or offer.`;
+    }
+
+    // Generic corporate / other
+    const about = summary.keyFacts.about;
+    const facts: string[] = [];
+
+    if (about) {
+      facts.push(`that this page is about ${about}`);
+    } else {
+      facts.push("that this is a corporate information page");
+    }
+
+    if (summary.validation.hasOrganization) {
+      facts.push("that it is owned by Shepherd Neame Limited");
+    }
+
+    const joinedFacts =
+      facts.length === 1
+        ? facts[0]
+        : facts.slice(0, -1).join(", ") + " and " + facts[facts.length - 1];
+
+    return `From this schema, search engines and AI can reliably understand ${joinedFacts}, and how it sits alongside other sections of the Shepherd Neame site such as beers, pubs, history, sustainability and investors.`;
   };
 
   // --- Render ----------------------------------------------------------------
@@ -204,11 +381,14 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
       <div>
         <h3 className="text-lg font-semibold mb-4">In plain English</h3>
         <div className="space-y-3 text-foreground/90 leading-relaxed">
+          {summary.keyFacts.type === "beer" && renderRichBeerStory() && (
+            <p>{renderRichBeerStory()}</p>
+          )}
           <p>{renderIntro()}</p>
-          {isBeerPage && renderFlavourStory() && (
+          {summary.keyFacts.type === "beer" && renderFlavourStory() && (
             <p>{renderFlavourStory()}</p>
           )}
-          {isBeerPage && renderProvenance() && (
+          {summary.keyFacts.type === "beer" && renderProvenance() && (
             <p>{renderProvenance()}</p>
           )}
         </div>
@@ -229,6 +409,15 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
         </h3>
         <p className="text-foreground/90 leading-relaxed">
           {renderWhySafe()}
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">
+          How search &amp; AI read this schema
+        </h3>
+        <p className="text-foreground/90 leading-relaxed">
+          {renderWhatSearchUnderstands()}
         </p>
       </div>
     </div>
