@@ -122,16 +122,21 @@ export type Database = {
       }
       pages: {
         Row: {
+          category: string | null
           created_at: string
           created_by_user_id: string | null
           discovered_at: string | null
+          faq_mode: string
           has_faq: boolean
+          hero_image_url: string | null
           id: string
+          is_home_page: boolean
           last_crawled_at: string | null
           last_html_hash: string | null
           last_modified_by_user_id: string | null
           last_schema_generated_at: string | null
           last_schema_hash: string | null
+          logo_url: string | null
           notes: string | null
           page_type: string | null
           path: string
@@ -141,16 +146,21 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           created_by_user_id?: string | null
           discovered_at?: string | null
+          faq_mode?: string
           has_faq?: boolean
+          hero_image_url?: string | null
           id?: string
+          is_home_page?: boolean
           last_crawled_at?: string | null
           last_html_hash?: string | null
           last_modified_by_user_id?: string | null
           last_schema_generated_at?: string | null
           last_schema_hash?: string | null
+          logo_url?: string | null
           notes?: string | null
           page_type?: string | null
           path: string
@@ -160,16 +170,21 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           created_by_user_id?: string | null
           discovered_at?: string | null
+          faq_mode?: string
           has_faq?: boolean
+          hero_image_url?: string | null
           id?: string
+          is_home_page?: boolean
           last_crawled_at?: string | null
           last_html_hash?: string | null
           last_modified_by_user_id?: string | null
           last_schema_generated_at?: string | null
           last_schema_hash?: string | null
+          logo_url?: string | null
           notes?: string | null
           page_type?: string | null
           path?: string

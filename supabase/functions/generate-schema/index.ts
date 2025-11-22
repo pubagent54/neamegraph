@@ -146,7 +146,31 @@ serve(async (req) => {
     const schemaEngineVersion = settings.schema_engine_version || "v1";
     
     if (schemaEngineVersion === "v2") {
-      // For now, return an error
+      // Validate v2 requirements
+      const v2PageTypes = ["EstatePage", "GovernancePage", "CommunityPage", "SiteHomePage"];
+      
+      if (!page.page_type || !v2PageTypes.includes(page.page_type)) {
+        return new Response(
+          JSON.stringify({ 
+            error: "Corporate v2 schema generation requires a valid Page Type (EstatePage, GovernancePage, CommunityPage, or SiteHomePage). Please set the Page Type before generating schema.",
+            validation_errors: ["Missing or invalid page_type for v2"]
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check category requirement (all types except SiteHomePage need a category)
+      if (page.page_type !== "SiteHomePage" && !page.category) {
+        return new Response(
+          JSON.stringify({ 
+            error: `Corporate v2 schema generation requires a Category for ${page.page_type}. Please set the Category before generating schema.`,
+            validation_errors: ["Missing category for v2"]
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // For now, return an error - v2 generation not implemented yet
       return new Response(
         JSON.stringify({ 
           error: "Corporate v2 engine not implemented yet. Please use v1 - Classic in the meantime." 

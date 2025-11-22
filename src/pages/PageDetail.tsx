@@ -24,6 +24,11 @@ interface Page {
   last_crawled_at: string | null;
   last_schema_generated_at: string | null;
   last_html_hash: string | null;
+  category: string | null;
+  logo_url: string | null;
+  hero_image_url: string | null;
+  faq_mode: string;
+  is_home_page: boolean;
 }
 
 interface SchemaVersion {
@@ -301,13 +306,15 @@ export default function PageDetail() {
               <h1 className="text-4xl font-bold tracking-tight font-mono mb-2">{page.path}</h1>
               <p className="text-lg text-muted-foreground">
                 {page.section} • {page.page_type}
+                {page.category && ` • ${page.category}`}
+                {page.is_home_page && " • Home Page"}
               </p>
             </div>
             <StatusBadge status={page.status} />
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-4">
           <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
             <CardHeader>
               <CardTitle className="text-sm text-muted-foreground">Last Crawled</CardTitle>
@@ -334,6 +341,16 @@ export default function PageDetail() {
           </Card>
           <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
             <CardHeader>
+              <CardTitle className="text-sm text-muted-foreground">FAQ Mode</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg font-semibold capitalize">
+                {page.faq_mode || "auto"}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
+            <CardHeader>
               <CardTitle className="text-sm text-muted-foreground">HTML Hash</CardTitle>
             </CardHeader>
             <CardContent>
@@ -345,6 +362,31 @@ export default function PageDetail() {
             </CardContent>
           </Card>
         </div>
+
+        {(page.logo_url || page.hero_image_url) && (
+          <div className="grid gap-6 md:grid-cols-2">
+            {page.logo_url && (
+              <Card className="rounded-2xl border-0 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-sm text-muted-foreground">Logo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <img src={page.logo_url} alt="Logo" className="max-w-[200px] max-h-[100px] object-contain" />
+                </CardContent>
+              </Card>
+            )}
+            {page.hero_image_url && (
+              <Card className="rounded-2xl border-0 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-sm text-muted-foreground">Hero Image</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <img src={page.hero_image_url} alt="Hero" className="w-full max-h-[200px] object-cover rounded-lg" />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
         {canEdit && (
           <div className="flex gap-3">
