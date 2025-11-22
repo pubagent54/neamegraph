@@ -142,6 +142,20 @@ serve(async (req) => {
     const canonicalBaseUrl = settings.canonical_base_url.replace(/\/$/, "");
     const canonicalUrl = `${canonicalBaseUrl}${page.path}`;
 
+    // Check schema engine version
+    const schemaEngineVersion = settings.schema_engine_version || "v1";
+    
+    if (schemaEngineVersion === "v2") {
+      // For now, return an error
+      return new Response(
+        JSON.stringify({ 
+          error: "Corporate v2 engine not implemented yet. Please use v1 - Classic in the meantime." 
+        }),
+        { status: 501, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Continue with v1 logic below...
     // 2. Call Lovable AI
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {

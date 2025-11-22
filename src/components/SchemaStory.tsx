@@ -42,7 +42,7 @@ export function SchemaStory({ jsonld, section, path }: SchemaStoryProps) {
         : [];
 
       // Prefer the Brand node that matches the main entity, otherwise first Brand
-      const mainId = summary.mainEntity?.id;
+      const mainId = summary.mainEntity?.id || "";
       let brandNode: any =
         graph.find((node: any) => {
           const types = node?.["@type"];

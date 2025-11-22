@@ -4,6 +4,7 @@ export interface SchemaSummary {
   mainEntity: {
     type: string;
     name: string;
+    id?: string;
   } | null;
   connections: {
     organization: boolean;
@@ -61,6 +62,7 @@ export function parseSchemaForSummary(
       ? {
           type: normaliseTypes(mainEntity).join(", "),
           name: mainEntity.name || "Unnamed entity",
+          id: mainEntity["@id"],
         }
       : null;
 

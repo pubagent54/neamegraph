@@ -312,6 +312,7 @@ export type Database = {
           id: string
           preview_auth_password: string | null
           preview_auth_user: string | null
+          schema_engine_version: string
           sitemap_url: string | null
           updated_at: string
         }
@@ -322,6 +323,7 @@ export type Database = {
           id?: string
           preview_auth_password?: string | null
           preview_auth_user?: string | null
+          schema_engine_version?: string
           sitemap_url?: string | null
           updated_at?: string
         }
@@ -332,6 +334,7 @@ export type Database = {
           id?: string
           preview_auth_password?: string | null
           preview_auth_user?: string | null
+          schema_engine_version?: string
           sitemap_url?: string | null
           updated_at?: string
         }

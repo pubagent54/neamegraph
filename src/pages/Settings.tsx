@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Save, RefreshCw } from "lucide-react";
 
@@ -15,6 +16,7 @@ interface Settings {
   sitemap_url: string | null;
   preview_auth_user: string | null;
   preview_auth_password: string | null;
+  schema_engine_version: string;
 }
 
 export default function Settings() {
@@ -57,6 +59,7 @@ export default function Settings() {
           sitemap_url: settings.sitemap_url,
           preview_auth_user: settings.preview_auth_user,
           preview_auth_password: settings.preview_auth_password,
+          schema_engine_version: settings.schema_engine_version,
         })
         .eq("id", settings.id);
 
@@ -171,6 +174,37 @@ export default function Settings() {
               />
               <p className="text-xs text-muted-foreground">
                 Used for automatic page discovery
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl">Schema Engine</CardTitle>
+            <CardDescription>
+              Select which generation engine to use
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="schema-engine">Engine Version</Label>
+              <Select
+                value={settings.schema_engine_version}
+                onValueChange={(value) =>
+                  setSettings({ ...settings, schema_engine_version: value })
+                }
+              >
+                <SelectTrigger id="schema-engine" className="rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="v1">v1 - Classic</SelectItem>
+                  <SelectItem value="v2">v2 - Corporate</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Choose the schema generation engine
               </p>
             </div>
           </CardContent>
