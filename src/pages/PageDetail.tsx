@@ -7,11 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatusBadge } from "@/components/StatusBadge";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle, Save } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { SchemaSummary } from "@/components/SchemaSummary";
 import { SchemaStory } from "@/components/SchemaStory";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Page {
   id: string;
@@ -42,6 +46,37 @@ interface SchemaVersion {
   validation_notes: string | null;
 }
 
+const V2_PAGE_TYPES = [
+  { value: 'EstatePage', label: 'Estate Page' },
+  { value: 'GovernancePage', label: 'Governance Page' },
+  { value: 'CommunityPage', label: 'Community Page' },
+  { value: 'SiteHomePage', label: 'Site Home Page' },
+];
+
+const V2_CATEGORIES: Record<string, { value: string; label: string }[]> = {
+  EstatePage: [
+    { value: 'Overview', label: 'Overview' },
+    { value: 'Collections', label: 'Collections' },
+    { value: 'EthosAndSuppliers', label: 'Ethos and Suppliers' },
+  ],
+  GovernancePage: [
+    { value: 'About', label: 'About' },
+    { value: 'Legal', label: 'Legal' },
+    { value: 'TradeAndSupply', label: 'Trade and Supply' },
+  ],
+  CommunityPage: [
+    { value: 'ShepsGiving', label: 'Sheps Giving' },
+    { value: 'CharityAndDonations', label: 'Charity and Donations' },
+    { value: 'ArtsAndCulture', label: 'Arts and Culture' },
+    { value: 'CommunityOverview', label: 'Community Overview' },
+  ],
+};
+
+const FAQ_MODES = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'ignore', label: 'Ignore' },
+];
+
 export default function PageDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -50,6 +85,13 @@ export default function PageDetail() {
   const [versions, setVersions] = useState<SchemaVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [editablePageType, setEditablePageType] = useState<string | null>(null);
+  const [editableCategory, setEditableCategory] = useState<string | null>(null);
+  const [editableLogoUrl, setEditableLogoUrl] = useState<string>('');
+  const [editableHeroImageUrl, setEditableHeroImageUrl] = useState<string>('');
+  const [editableFaqMode, setEditableFaqMode] = useState<string>('auto');
+  const [editableIsHomePage, setEditableIsHomePage] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
@@ -76,6 +118,14 @@ export default function PageDetail() {
 
       setPage(pageResult.data);
       setVersions(versionsResult.data || []);
+      
+      // Initialize v2 metadata state
+      setEditablePageType(pageResult.data.page_type);
+      setEditableCategory(pageResult.data.category);
+      setEditableLogoUrl(pageResult.data.logo_url || '');
+      setEditableHeroImageUrl(pageResult.data.hero_image_url || '');
+      setEditableFaqMode(pageResult.data.faq_mode || 'auto');
+      setEditableIsHomePage(pageResult.data.is_home_page || false);
     } catch (error) {
       console.error("Error fetching page data:", error);
       toast.error("Failed to fetch page data");
@@ -270,6 +320,38 @@ export default function PageDetail() {
     }
   };
 
+  const handleSaveV2Metadata = async () => {
+    if (!page || !canEdit) return;
+    setIsSaving(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from('pages')
+        .update({
+          page_type: editablePageType,
+          category: editableCategory,
+          logo_url: editableLogoUrl || null,
+          hero_image_url: editableHeroImageUrl || null,
+          faq_mode: editableFaqMode,
+          is_home_page: editableIsHomePage,
+          last_modified_by_user_id: user?.id,
+        })
+        .eq('id', page.id);
+
+      if (error) throw error;
+
+      toast.success('Corporate v2 metadata saved successfully');
+      await fetchPageData();
+    } catch (error) {
+      console.error('Error saving v2 metadata:', error);
+      toast.error('Failed to save v2 metadata');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -411,6 +493,164 @@ export default function PageDetail() {
             )}
           </div>
         )}
+
+        {/* Corporate v2 Metadata Section */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Corporate v2 Metadata (Optional)</CardTitle>
+            <CardDescription>
+              These fields are used by the v2 Corporate schema engine.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Page Type */}
+              <div className="space-y-2">
+                <Label htmlFor="pageType">Page Type</Label>
+                <Select
+                  value={editablePageType || ''}
+                  onValueChange={setEditablePageType}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger id="pageType">
+                    <SelectValue placeholder="Select page type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {V2_PAGE_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Category - conditional based on Page Type */}
+              {editablePageType && editablePageType !== 'SiteHomePage' && (
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select
+                    value={editableCategory || ''}
+                    onValueChange={setEditableCategory}
+                    disabled={!canEdit}
+                  >
+                    <SelectTrigger id="category">
+                      <SelectValue placeholder="Select category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(V2_CATEGORIES[editablePageType] || []).map((cat) => (
+                        <SelectItem key={cat.value} value={cat.value}>
+                          {cat.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* FAQ Mode */}
+              <div className="space-y-2">
+                <Label htmlFor="faqMode">FAQ Mode</Label>
+                <Select
+                  value={editableFaqMode}
+                  onValueChange={setEditableFaqMode}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger id="faqMode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FAQ_MODES.map((mode) => (
+                      <SelectItem key={mode.value} value={mode.value}>
+                        {mode.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Is Home Page Checkbox */}
+              <div className="flex items-center space-x-2 pt-8">
+                <Checkbox
+                  id="isHomePage"
+                  checked={editableIsHomePage}
+                  onCheckedChange={(checked) => setEditableIsHomePage(checked === true)}
+                  disabled={!canEdit}
+                />
+                <Label
+                  htmlFor="isHomePage"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Is Home Page
+                </Label>
+              </div>
+            </div>
+
+            {/* Logo URL with Preview */}
+            <div className="space-y-2">
+              <Label htmlFor="logoUrl">Logo URL</Label>
+              <Input
+                id="logoUrl"
+                type="text"
+                placeholder="https://example.com/logo.png"
+                value={editableLogoUrl}
+                onChange={(e) => setEditableLogoUrl(e.target.value)}
+                disabled={!canEdit}
+              />
+              {editableLogoUrl && (
+                <div className="mt-2 p-4 border rounded-lg bg-muted/30">
+                  <img
+                    src={editableLogoUrl}
+                    alt="Logo preview"
+                    className="max-w-[200px] max-h-[100px] object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Hero Image URL with Preview */}
+            <div className="space-y-2">
+              <Label htmlFor="heroImageUrl">Hero Image URL</Label>
+              <Input
+                id="heroImageUrl"
+                type="text"
+                placeholder="https://example.com/hero.jpg"
+                value={editableHeroImageUrl}
+                onChange={(e) => setEditableHeroImageUrl(e.target.value)}
+                disabled={!canEdit}
+              />
+              {editableHeroImageUrl && (
+                <div className="mt-2 p-4 border rounded-lg bg-muted/30">
+                  <img
+                    src={editableHeroImageUrl}
+                    alt="Hero image preview"
+                    className="w-full max-h-[200px] object-cover rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Save Button */}
+            {canEdit && (
+              <div className="flex justify-end pt-4">
+                <Button
+                  onClick={handleSaveV2Metadata}
+                  disabled={isSaving}
+                  className="rounded-full"
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  {isSaving ? 'Saving...' : 'Save v2 Metadata'}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Tabs defaultValue="schema" className="w-full">
           <TabsList>
