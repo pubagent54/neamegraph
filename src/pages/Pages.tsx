@@ -28,6 +28,17 @@ const PAGE_TYPES = [
   "faq_page", "collection", "other"
 ];
 
+const V2_PAGE_TYPES = ["EstatePage", "GovernancePage", "CommunityPage", "SiteHomePage"];
+
+const V2_CATEGORIES = {
+  EstatePage: ["Overview", "Collections", "EthosAndSuppliers"],
+  GovernancePage: ["About", "Legal", "TradeAndSupply"],
+  CommunityPage: ["ShepsGiving", "CharityAndDonations", "ArtsAndCulture", "CommunityOverview"],
+  SiteHomePage: [],
+};
+
+const FAQ_MODES = ["auto", "ignore"];
+
 const STATUS_OPTIONS = [
   "not_started", "ai_draft", "needs_review", "approved", "implemented", "needs_rework"
 ];
@@ -41,6 +52,11 @@ interface Page {
   has_faq: boolean;
   priority: number | null;
   last_schema_generated_at: string | null;
+  category: string | null;
+  logo_url: string | null;
+  hero_image_url: string | null;
+  faq_mode: string;
+  is_home_page: boolean;
 }
 
 export default function Pages() {
@@ -65,6 +81,13 @@ export default function Pages() {
     has_faq: false,
     priority: 1,
     notes: "",
+    // V2 fields
+    v2_page_type: "",
+    category: "",
+    logo_url: "",
+    hero_image_url: "",
+    faq_mode: "auto",
+    is_home_page: false,
   });
   const [searchParams] = useSearchParams();
   const { userRole } = useAuth();
@@ -119,13 +142,18 @@ export default function Pages() {
       const { error } = await supabase.from("pages").insert({
         path: newPage.path,
         section: newPage.section || null,
-        page_type: newPage.page_type || null,
+        page_type: newPage.v2_page_type || newPage.page_type || null,
         has_faq: newPage.has_faq,
         priority: newPage.priority || null,
         notes: newPage.notes || null,
         status: "not_started" as const,
         created_by_user_id: user.id,
         last_modified_by_user_id: user.id,
+        category: newPage.category || null,
+        logo_url: newPage.logo_url || null,
+        hero_image_url: newPage.hero_image_url || null,
+        faq_mode: newPage.faq_mode || "auto",
+        is_home_page: newPage.is_home_page,
       });
 
       if (error) throw error;
@@ -138,6 +166,12 @@ export default function Pages() {
         has_faq: false,
         priority: 1,
         notes: "",
+        v2_page_type: "",
+        category: "",
+        logo_url: "",
+        hero_image_url: "",
+        faq_mode: "auto",
+        is_home_page: false,
       });
       setAddDialogOpen(false);
       fetchPages();
@@ -533,6 +567,99 @@ export default function Pages() {
                         className="min-h-[80px] rounded-xl"
                       />
                     </div>
+
+                    {/* V2 Corporate Fields */}
+                    <div className="border-t pt-4 space-y-4">
+                      <h4 className="font-semibold text-sm text-muted-foreground">Corporate v2 Metadata (Optional)</h4>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="v2_page_type">Page Type (v2)</Label>
+                          <Select value={newPage.v2_page_type} onValueChange={(value) => setNewPage({ ...newPage, v2_page_type: value, category: "" })}>
+                            <SelectTrigger className="rounded-xl">
+                              <SelectValue placeholder="Select type..." />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl">
+                              {V2_PAGE_TYPES.map((type) => (
+                                <SelectItem key={type} value={type}>{type}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {newPage.v2_page_type && newPage.v2_page_type !== "SiteHomePage" && (
+                          <div className="space-y-2">
+                            <Label htmlFor="category">Category</Label>
+                            <Select value={newPage.category} onValueChange={(value) => setNewPage({ ...newPage, category: value })}>
+                              <SelectTrigger className="rounded-xl">
+                                <SelectValue placeholder="Select category..." />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-2xl">
+                                {(V2_CATEGORIES[newPage.v2_page_type as keyof typeof V2_CATEGORIES] || []).map((cat) => (
+                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="logo_url">Logo URL</Label>
+                          <Input
+                            id="logo_url"
+                            placeholder="https://..."
+                            value={newPage.logo_url}
+                            onChange={(e) => setNewPage({ ...newPage, logo_url: e.target.value })}
+                            className="rounded-xl"
+                          />
+                          {newPage.logo_url && (
+                            <img src={newPage.logo_url} alt="Logo preview" className="w-16 h-16 object-contain border rounded-lg" />
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="hero_image_url">Hero Image URL</Label>
+                          <Input
+                            id="hero_image_url"
+                            placeholder="https://..."
+                            value={newPage.hero_image_url}
+                            onChange={(e) => setNewPage({ ...newPage, hero_image_url: e.target.value })}
+                            className="rounded-xl"
+                          />
+                          {newPage.hero_image_url && (
+                            <img src={newPage.hero_image_url} alt="Hero preview" className="w-full h-16 object-cover border rounded-lg" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="faq_mode">FAQ Mode</Label>
+                          <Select value={newPage.faq_mode} onValueChange={(value) => setNewPage({ ...newPage, faq_mode: value })}>
+                            <SelectTrigger className="rounded-xl">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl">
+                              {FAQ_MODES.map((mode) => (
+                                <SelectItem key={mode} value={mode}>{mode === "auto" ? "Auto" : "Ignore"}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center space-x-2 pt-8">
+                          <input
+                            type="checkbox"
+                            id="is_home_page"
+                            checked={newPage.is_home_page}
+                            onChange={(e) => setNewPage({ ...newPage, is_home_page: e.target.checked })}
+                            className="rounded border-input"
+                          />
+                          <Label htmlFor="is_home_page" className="cursor-pointer">Is Home Page</Label>
+                        </div>
+                      </div>
+                    </div>
+
                     <Button onClick={handleAddPage} className="w-full rounded-full">Add Page</Button>
                   </div>
                 </DialogContent>
