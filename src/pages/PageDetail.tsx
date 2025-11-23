@@ -796,8 +796,8 @@ export default function PageDetail() {
                       <TabsContent value="story" className="mt-4">
                         <SchemaStory 
                           jsonld={version.jsonld}
-                          section={page.section}
-                          path={page.path}
+                          pageType={page.page_type}
+                          category={page.category}
                         />
                       </TabsContent>
                       <TabsContent value="json" className="mt-4">
