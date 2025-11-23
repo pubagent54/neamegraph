@@ -96,6 +96,7 @@ export default function PageDetail() {
   const [editableIsHomePage, setEditableIsHomePage] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isV2MetadataOpen, setIsV2MetadataOpen] = useState(false);
+  const [usedRule, setUsedRule] = useState<{ name: string; page_type: string | null; category: string | null } | null>(null);
 
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
@@ -213,6 +214,11 @@ export default function PageDetail() {
 
       if (data?.error) {
         throw new Error(data.error);
+      }
+
+      // Store the used rule info if provided
+      if (data?.used_rule) {
+        setUsedRule(data.used_rule);
       }
 
       toast.success(`Schema v${data.version_number} generated successfully`);
@@ -500,25 +506,38 @@ export default function PageDetail() {
         )}
 
         {canEdit && (
-          <div className="flex gap-3">
-            <Button onClick={handleFetchHTML} disabled={generating} className="rounded-full">
+          <div className="space-y-2">
+            <div className="flex gap-3">
+              <Button onClick={handleFetchHTML} disabled={generating} className="rounded-full">
 
-              <Download className="mr-2 h-4 w-4" />
-              Fetch HTML
-            </Button>
-            <Button 
-              onClick={handleGenerateSchema} 
-              disabled={generating || !page.last_html_hash}
-              className="rounded-full"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Generate Schema
-            </Button>
-            {isAdmin && page.status === "approved" && (
-              <Button onClick={handleMarkImplemented} variant="outline">
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Mark as Implemented
+                <Download className="mr-2 h-4 w-4" />
+                Fetch HTML
               </Button>
+              <Button 
+                onClick={handleGenerateSchema} 
+                disabled={generating || !page.last_html_hash}
+                className="rounded-full"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Generate Schema
+              </Button>
+              {isAdmin && page.status === "approved" && (
+                <Button onClick={handleMarkImplemented} variant="outline">
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Mark as Implemented
+                </Button>
+              )}
+            </div>
+            {usedRule && (
+              <p className="text-xs text-muted-foreground">
+                Using rules: <span className="font-medium">{usedRule.name}</span>
+                {usedRule.page_type && (
+                  <span className="ml-1">
+                    ({V2_PAGE_TYPES.find(pt => pt.value === usedRule.page_type)?.label || usedRule.page_type}
+                    {usedRule.category && ` · ${V2_CATEGORIES[usedRule.page_type]?.find(c => c.value === usedRule.category)?.label || usedRule.category}`})
+                  </span>
+                )}
+              </p>
             )}
           </div>
         )}
