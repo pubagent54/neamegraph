@@ -15,8 +15,8 @@ interface GenerateSchemaRequest {
  */
 async function loadV2Rules(pageType: string | null, category: string | null): Promise<string> {
   try {
-    // Always load global rules
-    const globalRulesPath = new URL("../../../rules/global.md", import.meta.url).pathname;
+    // Always load global rules (now in the function's local rules/ directory)
+    const globalRulesPath = new URL("./rules/global.md", import.meta.url).pathname;
     const globalRules = await Deno.readTextFile(globalRulesPath);
     
     // If no pageType, return just global rules
@@ -38,8 +38,8 @@ async function loadV2Rules(pageType: string | null, category: string | null): Pr
       return globalRules;
     }
     
-    // Load the pageType rules file
-    const pageTypeRulesPath = new URL(`../../../rules/${pageTypeFile}`, import.meta.url).pathname;
+    // Load the pageType rules file (now in the function's local rules/ directory)
+    const pageTypeRulesPath = new URL(`./rules/${pageTypeFile}`, import.meta.url).pathname;
     const pageTypeRules = await Deno.readTextFile(pageTypeRulesPath);
     
     // Extract [BASELINE] section
