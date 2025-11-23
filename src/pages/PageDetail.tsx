@@ -50,29 +50,17 @@ interface SchemaVersion {
 }
 
 const V2_PAGE_TYPES = [
-  { value: 'EstatePage', label: 'Estate Page' },
-  { value: 'GovernancePage', label: 'Governance Page' },
-  { value: 'CommunityPage', label: 'Community Page' },
-  { value: 'SiteHomePage', label: 'Site Home Page' },
+  'Estate Page',
+  'Governance Page',
+  'Community Page',
+  'Site Home Page',
 ];
 
-const V2_CATEGORIES: Record<string, { value: string; label: string }[]> = {
-  EstatePage: [
-    { value: 'Overview', label: 'Overview' },
-    { value: 'Collections', label: 'Collections' },
-    { value: 'EthosAndSuppliers', label: 'Ethos and Suppliers' },
-  ],
-  GovernancePage: [
-    { value: 'About', label: 'About' },
-    { value: 'Legal', label: 'Legal' },
-    { value: 'TradeAndSupply', label: 'Trade and Supply' },
-  ],
-  CommunityPage: [
-    { value: 'ShepsGiving', label: 'Sheps Giving' },
-    { value: 'CharityAndDonations', label: 'Charity and Donations' },
-    { value: 'ArtsAndCulture', label: 'Arts and Culture' },
-    { value: 'CommunityOverview', label: 'Community Overview' },
-  ],
+const V2_CATEGORIES: Record<string, string[]> = {
+  'Estate Page': ['Overview', 'Collections', 'Ethos and Suppliers'],
+  'Governance Page': ['About', 'Legal', 'Trade and Supply'],
+  'Community Page': ['ShepsGiving', 'Charity and Donations', 'Arts and Culture', 'Community Overview'],
+  'Site Home Page': ['Home'],
 };
 
 const FAQ_MODES = [
@@ -105,16 +93,14 @@ export default function PageDetail() {
     const parts: string[] = [];
     
     if (editablePageType) {
-      const pageTypeLabel = V2_PAGE_TYPES.find(t => t.value === editablePageType)?.label || editablePageType;
-      parts.push(pageTypeLabel);
+      parts.push(editablePageType);
     } else {
       parts.push("Page Type not set");
     }
     
-    if (editablePageType && editablePageType !== 'SiteHomePage') {
+    if (editablePageType && editablePageType !== 'Site Home Page') {
       if (editableCategory) {
-        const categoryLabel = V2_CATEGORIES[editablePageType]?.find(c => c.value === editableCategory)?.label || editableCategory;
-        parts.push(categoryLabel);
+        parts.push(editableCategory);
       } else {
         parts.push("Category not set");
       }
@@ -533,8 +519,8 @@ export default function PageDetail() {
                 Using rules: <span className="font-medium">{usedRule.name}</span>
                 {usedRule.page_type && (
                   <span className="ml-1">
-                    ({V2_PAGE_TYPES.find(pt => pt.value === usedRule.page_type)?.label || usedRule.page_type}
-                    {usedRule.category && ` · ${V2_CATEGORIES[usedRule.page_type]?.find(c => c.value === usedRule.category)?.label || usedRule.category}`})
+                    ({usedRule.page_type}
+                    {usedRule.category && ` · ${usedRule.category}`})
                   </span>
                 )}
               </p>
@@ -601,8 +587,8 @@ export default function PageDetail() {
                       </SelectTrigger>
                       <SelectContent>
                         {V2_PAGE_TYPES.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
+                          <SelectItem key={type} value={type}>
+                            {type}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -610,7 +596,7 @@ export default function PageDetail() {
                   </div>
 
                   {/* Category - conditional based on Page Type */}
-                  {editablePageType && editablePageType !== 'SiteHomePage' && (
+                  {editablePageType && editablePageType !== 'Site Home Page' && (
                     <div className="space-y-2">
                       <Label htmlFor="category">Category</Label>
                       <Select
@@ -623,8 +609,8 @@ export default function PageDetail() {
                         </SelectTrigger>
                         <SelectContent>
                           {(V2_CATEGORIES[editablePageType] || []).map((cat) => (
-                            <SelectItem key={cat.value} value={cat.value}>
-                              {cat.label}
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
                             </SelectItem>
                           ))}
                         </SelectContent>
