@@ -581,18 +581,26 @@ export default function PageDetail() {
                 onChange={(e) => setEditableLogoUrl(e.target.value)}
                 disabled={!canEdit}
               />
-              {editableLogoUrl && (
-                <div className="mt-2 p-4 border rounded-lg bg-muted/30">
+              {editableLogoUrl ? (
+                <div className="mt-2 h-24 w-32 rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center">
                   <img
                     src={editableLogoUrl}
                     alt="Logo preview"
-                    className="max-w-[200px] max-h-[100px] object-contain"
+                    className="h-full w-full object-cover"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const parent = target.parentElement;
+                      if (parent && !parent.querySelector('.preview-text')) {
+                        const text = document.createElement('span');
+                        text.className = 'preview-text text-xs text-muted-foreground';
+                        text.textContent = 'No preview';
+                        parent.appendChild(text);
+                      }
                     }}
                   />
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Hero Image URL with Preview */}
@@ -606,18 +614,26 @@ export default function PageDetail() {
                 onChange={(e) => setEditableHeroImageUrl(e.target.value)}
                 disabled={!canEdit}
               />
-              {editableHeroImageUrl && (
-                <div className="mt-2 p-4 border rounded-lg bg-muted/30">
+              {editableHeroImageUrl ? (
+                <div className="mt-2 h-24 w-32 rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center">
                   <img
                     src={editableHeroImageUrl}
                     alt="Hero image preview"
-                    className="w-full max-h-[200px] object-cover rounded-lg"
+                    className="h-full w-full object-cover"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const parent = target.parentElement;
+                      if (parent && !parent.querySelector('.preview-text')) {
+                        const text = document.createElement('span');
+                        text.className = 'preview-text text-xs text-muted-foreground';
+                        text.textContent = 'No preview';
+                        parent.appendChild(text);
+                      }
                     }}
                   />
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Save Button */}
