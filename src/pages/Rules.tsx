@@ -37,29 +37,17 @@ interface Rule {
 }
 
 const V2_PAGE_TYPES = [
-  { value: 'EstatePage', label: 'Estate Page' },
-  { value: 'GovernancePage', label: 'Governance Page' },
-  { value: 'CommunityPage', label: 'Community Page' },
-  { value: 'SiteHomePage', label: 'Site Home Page' },
+  'Estate Page',
+  'Governance Page',
+  'Community Page',
+  'Site Home Page',
 ];
 
-const V2_CATEGORIES: Record<string, { value: string; label: string }[]> = {
-  EstatePage: [
-    { value: 'Overview', label: 'Overview' },
-    { value: 'Collections', label: 'Collections' },
-    { value: 'EthosAndSuppliers', label: 'Ethos and Suppliers' },
-  ],
-  GovernancePage: [
-    { value: 'About', label: 'About' },
-    { value: 'Legal', label: 'Legal' },
-    { value: 'TradeAndSupply', label: 'Trade and Supply' },
-  ],
-  CommunityPage: [
-    { value: 'ShepsGiving', label: 'Sheps Giving' },
-    { value: 'CharityAndDonations', label: 'Charity and Donations' },
-    { value: 'ArtsAndCulture', label: 'Arts and Culture' },
-    { value: 'CommunityOverview', label: 'Community Overview' },
-  ],
+const V2_CATEGORIES: Record<string, string[]> = {
+  'Estate Page': ['Overview', 'Collections', 'Ethos and Suppliers'],
+  'Governance Page': ['About', 'Legal', 'Trade and Supply'],
+  'Community Page': ['ShepsGiving', 'Charity and Donations', 'Arts and Culture', 'Community Overview'],
+  'Site Home Page': ['Home'],
 };
 
 export default function Rules() {
@@ -330,8 +318,8 @@ export default function Rules() {
                       <SelectContent>
                         <SelectItem value="">None</SelectItem>
                         {V2_PAGE_TYPES.map((pt) => (
-                          <SelectItem key={pt.value} value={pt.value}>
-                            {pt.label}
+                          <SelectItem key={pt} value={pt}>
+                            {pt}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -345,7 +333,7 @@ export default function Rules() {
                       onValueChange={(value) => {
                         setFormData({ ...formData, category: value });
                       }}
-                      disabled={!formData.page_type || formData.page_type === 'SiteHomePage'}
+                      disabled={!formData.page_type || formData.page_type === 'Site Home Page'}
                     >
                       <SelectTrigger id="category" className="rounded-xl">
                         <SelectValue placeholder="Select category" />
@@ -353,8 +341,8 @@ export default function Rules() {
                       <SelectContent>
                         <SelectItem value="">None</SelectItem>
                         {formData.page_type && V2_CATEGORIES[formData.page_type]?.map((cat) => (
-                          <SelectItem key={cat.value} value={cat.value}>
-                            {cat.label}
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -414,8 +402,8 @@ export default function Rules() {
                         )}
                         {rule.page_type && (
                           <Badge variant="outline" className="rounded-full">
-                            {V2_PAGE_TYPES.find(pt => pt.value === rule.page_type)?.label || rule.page_type}
-                            {rule.category && ` · ${V2_CATEGORIES[rule.page_type]?.find(c => c.value === rule.category)?.label || rule.category}`}
+                            {rule.page_type}
+                            {rule.category && ` · ${rule.category}`}
                           </Badge>
                         )}
                       </div>

@@ -28,13 +28,13 @@ const PAGE_TYPES = [
   "faq_page", "collection", "other"
 ];
 
-const V2_PAGE_TYPES = ["EstatePage", "GovernancePage", "CommunityPage", "SiteHomePage"];
+const V2_PAGE_TYPES = ['Estate Page', 'Governance Page', 'Community Page', 'Site Home Page'];
 
-const V2_CATEGORIES = {
-  EstatePage: ["Overview", "Collections", "EthosAndSuppliers"],
-  GovernancePage: ["About", "Legal", "TradeAndSupply"],
-  CommunityPage: ["ShepsGiving", "CharityAndDonations", "ArtsAndCulture", "CommunityOverview"],
-  SiteHomePage: [],
+const V2_CATEGORIES: Record<string, string[]> = {
+  'Estate Page': ['Overview', 'Collections', 'Ethos and Suppliers'],
+  'Governance Page': ['About', 'Legal', 'Trade and Supply'],
+  'Community Page': ['ShepsGiving', 'Charity and Donations', 'Arts and Culture', 'Community Overview'],
+  'Site Home Page': ['Home'],
 };
 
 const FAQ_MODES = ["auto", "ignore"];
@@ -587,7 +587,7 @@ export default function Pages() {
                           </Select>
                         </div>
                         
-                        {newPage.v2_page_type && newPage.v2_page_type !== "SiteHomePage" && (
+                        {newPage.v2_page_type && newPage.v2_page_type !== "Site Home Page" && (
                           <div className="space-y-2">
                             <Label htmlFor="category">Category</Label>
                             <Select value={newPage.category} onValueChange={(value) => setNewPage({ ...newPage, category: value })}>
@@ -810,8 +810,8 @@ export default function Pages() {
                     </TableHead>
                   )}
                   <TableHead className="font-semibold">Path</TableHead>
-                  <TableHead className="font-semibold">Section</TableHead>
-                  <TableHead className="font-semibold">Type</TableHead>
+                  <TableHead className="font-semibold">Page Type</TableHead>
+                  <TableHead className="font-semibold">Category</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
                   <TableHead className="font-semibold">FAQ</TableHead>
                   <TableHead className="font-semibold w-24">Priority</TableHead>
@@ -839,42 +839,10 @@ export default function Pages() {
                       )}
                       <TableCell className="font-mono text-sm">{getPathDisplay(page.path)}</TableCell>
                       <TableCell>
-                        {canEdit ? (
-                          <Select
-                            value={page.section || "other"}
-                            onValueChange={(value) => handleInlineUpdate(page.id, "section", value)}
-                          >
-                            <SelectTrigger className="w-[140px] h-8 rounded-lg">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl">
-                              {SECTIONS.map((section) => (
-                                <SelectItem key={section} value={section}>{section}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          page.section || "—"
-                        )}
+                        <span className="text-sm">{page.page_type || "—"}</span>
                       </TableCell>
                       <TableCell>
-                        {canEdit ? (
-                          <Select
-                            value={page.page_type || "other"}
-                            onValueChange={(value) => handleInlineUpdate(page.id, "page_type", value)}
-                          >
-                            <SelectTrigger className="w-[160px] h-8 rounded-lg">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl">
-                              {PAGE_TYPES.map((type) => (
-                                <SelectItem key={type} value={type}>{type}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          page.page_type || "—"
-                        )}
+                        <span className="text-sm">{page.category || "—"}</span>
                       </TableCell>
                       <TableCell>
                         {canEdit ? (
