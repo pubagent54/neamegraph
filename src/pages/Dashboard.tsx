@@ -63,7 +63,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from("settings")
         .select("id, schema_engine_version")
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
       if (data) {
@@ -72,6 +72,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("Error fetching schema engine:", error);
+      toast.error("Failed to load schema engine settings");
     }
   };
 
