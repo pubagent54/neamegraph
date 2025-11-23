@@ -151,20 +151,29 @@ serve(async (req) => {
     
     if (schemaEngineVersion === "v2") {
       // Validate v2 requirements
-      const v2PageTypes = ["EstatePage", "GovernancePage", "CommunityPage", "SiteHomePage"];
+      const v2PageTypes = [
+        "Pubs & Hotels Estate",
+        "Beers",
+        "Brewery",
+        "History",
+        "Environment",
+        "About",
+        "Careers",
+        "News"
+      ];
       
       if (!page.page_type || !v2PageTypes.includes(page.page_type)) {
         return new Response(
           JSON.stringify({ 
-            error: "Corporate v2 schema generation requires a valid Page Type (EstatePage, GovernancePage, CommunityPage, or SiteHomePage). Please set the Page Type before generating schema.",
+            error: "Corporate v2 schema generation requires a valid Page Type. Please set the Page Type before generating schema.",
             validation_errors: ["Missing or invalid page_type for v2"]
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Check category requirement (all types except SiteHomePage need a category)
-      if (page.page_type !== "SiteHomePage" && !page.category) {
+      // All page types now require a category
+      if (!page.category) {
         return new Response(
           JSON.stringify({ 
             error: `Corporate v2 schema generation requires a Category for ${page.page_type}. Please set the Category before generating schema.`,
