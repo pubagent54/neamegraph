@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatusBadge } from "@/components/StatusBadge";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle, Save } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle, Save, ChevronDown } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { SchemaSummary } from "@/components/SchemaSummary";
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Page {
   id: string;
@@ -92,9 +93,35 @@ export default function PageDetail() {
   const [editableFaqMode, setEditableFaqMode] = useState<string>('auto');
   const [editableIsHomePage, setEditableIsHomePage] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isV2MetadataOpen, setIsV2MetadataOpen] = useState(false);
 
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
+
+  const getV2MetadataSummary = () => {
+    const parts: string[] = [];
+    
+    if (editablePageType) {
+      const pageTypeLabel = V2_PAGE_TYPES.find(t => t.value === editablePageType)?.label || editablePageType;
+      parts.push(pageTypeLabel);
+    } else {
+      parts.push("Page Type not set");
+    }
+    
+    if (editablePageType && editablePageType !== 'SiteHomePage') {
+      if (editableCategory) {
+        const categoryLabel = V2_CATEGORIES[editablePageType]?.find(c => c.value === editableCategory)?.label || editableCategory;
+        parts.push(categoryLabel);
+      } else {
+        parts.push("Category not set");
+      }
+    }
+    
+    const faqModeLabel = FAQ_MODES.find(m => m.value === editableFaqMode)?.label || editableFaqMode;
+    parts.push(`FAQ: ${faqModeLabel}`);
+    
+    return parts.join(" · ");
+  };
 
   useEffect(() => {
     if (id) {
@@ -495,162 +522,199 @@ export default function PageDetail() {
         )}
 
         {/* Corporate v2 Metadata Section */}
-        <Card className="rounded-2xl border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle>Corporate v2 Metadata (Optional)</CardTitle>
-            <CardDescription>
-              These fields are used by the v2 Corporate schema engine.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Page Type */}
-              <div className="space-y-2">
-                <Label htmlFor="pageType">Page Type</Label>
-                <Select
-                  value={editablePageType || ''}
-                  onValueChange={setEditablePageType}
-                  disabled={!canEdit}
-                >
-                  <SelectTrigger id="pageType">
-                    <SelectValue placeholder="Select page type..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {V2_PAGE_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <Collapsible
+          open={isV2MetadataOpen}
+          onOpenChange={setIsV2MetadataOpen}
+          className="rounded-2xl"
+        >
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <CardTitle className="flex items-center gap-2">
+                      Corporate v2 Metadata
+                      <ChevronDown 
+                        className={`h-4 w-4 transition-transform duration-200 ${
+                          isV2MetadataOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </CardTitle>
+                    <CardDescription>
+                      {isV2MetadataOpen 
+                        ? "These fields are used by the v2 Corporate schema engine."
+                        : getV2MetadataSummary()
+                      }
+                    </CardDescription>
+                  </div>
+                  {!isV2MetadataOpen && canEdit && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="ml-4"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsV2MetadataOpen(true);
+                      }}
+                    >
+                      Edit metadata
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
 
-              {/* Category - conditional based on Page Type */}
-              {editablePageType && editablePageType !== 'SiteHomePage' && (
+            <CollapsibleContent>
+              <CardContent className="space-y-6 pt-0">
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Page Type */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pageType">Page Type</Label>
+                    <Select
+                      value={editablePageType || ''}
+                      onValueChange={setEditablePageType}
+                      disabled={!canEdit}
+                    >
+                      <SelectTrigger id="pageType">
+                        <SelectValue placeholder="Select page type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {V2_PAGE_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Category - conditional based on Page Type */}
+                  {editablePageType && editablePageType !== 'SiteHomePage' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Category</Label>
+                      <Select
+                        value={editableCategory || ''}
+                        onValueChange={setEditableCategory}
+                        disabled={!canEdit}
+                      >
+                        <SelectTrigger id="category">
+                          <SelectValue placeholder="Select category..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(V2_CATEGORIES[editablePageType] || []).map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* FAQ Mode */}
+                  <div className="space-y-2">
+                    <Label htmlFor="faqMode">FAQ Mode</Label>
+                    <Select
+                      value={editableFaqMode}
+                      onValueChange={setEditableFaqMode}
+                      disabled={!canEdit}
+                    >
+                      <SelectTrigger id="faqMode">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FAQ_MODES.map((mode) => (
+                          <SelectItem key={mode.value} value={mode.value}>
+                            {mode.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Logo URL with Preview */}
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select
-                    value={editableCategory || ''}
-                    onValueChange={setEditableCategory}
+                  <Label htmlFor="logoUrl">Logo URL</Label>
+                  <Input
+                    id="logoUrl"
+                    type="text"
+                    placeholder="https://example.com/logo.png"
+                    value={editableLogoUrl}
+                    onChange={(e) => setEditableLogoUrl(e.target.value)}
                     disabled={!canEdit}
-                  >
-                    <SelectTrigger id="category">
-                      <SelectValue placeholder="Select category..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(V2_CATEGORIES[editablePageType] || []).map((cat) => (
-                        <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* FAQ Mode */}
-              <div className="space-y-2">
-                <Label htmlFor="faqMode">FAQ Mode</Label>
-                <Select
-                  value={editableFaqMode}
-                  onValueChange={setEditableFaqMode}
-                  disabled={!canEdit}
-                >
-                  <SelectTrigger id="faqMode">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FAQ_MODES.map((mode) => (
-                      <SelectItem key={mode.value} value={mode.value}>
-                        {mode.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Logo URL with Preview */}
-            <div className="space-y-2">
-              <Label htmlFor="logoUrl">Logo URL</Label>
-              <Input
-                id="logoUrl"
-                type="text"
-                placeholder="https://example.com/logo.png"
-                value={editableLogoUrl}
-                onChange={(e) => setEditableLogoUrl(e.target.value)}
-                disabled={!canEdit}
-              />
-              {editableLogoUrl ? (
-                <div className="mt-2 h-24 w-32 rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center">
-                  <img
-                    src={editableLogoUrl}
-                    alt="Logo preview"
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent && !parent.querySelector('.preview-text')) {
-                        const text = document.createElement('span');
-                        text.className = 'preview-text text-xs text-muted-foreground';
-                        text.textContent = 'No preview';
-                        parent.appendChild(text);
-                      }
-                    }}
                   />
+                  {editableLogoUrl ? (
+                    <div className="mt-2 h-24 w-32 rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center">
+                      <img
+                        src={editableLogoUrl}
+                        alt="Logo preview"
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent && !parent.querySelector('.preview-text')) {
+                            const text = document.createElement('span');
+                            text.className = 'preview-text text-xs text-muted-foreground';
+                            text.textContent = 'No preview';
+                            parent.appendChild(text);
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
 
-            {/* Hero Image URL with Preview */}
-            <div className="space-y-2">
-              <Label htmlFor="heroImageUrl">Hero Image URL</Label>
-              <Input
-                id="heroImageUrl"
-                type="text"
-                placeholder="https://example.com/hero.jpg"
-                value={editableHeroImageUrl}
-                onChange={(e) => setEditableHeroImageUrl(e.target.value)}
-                disabled={!canEdit}
-              />
-              {editableHeroImageUrl ? (
-                <div className="mt-2 h-24 w-32 rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center">
-                  <img
-                    src={editableHeroImageUrl}
-                    alt="Hero image preview"
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent && !parent.querySelector('.preview-text')) {
-                        const text = document.createElement('span');
-                        text.className = 'preview-text text-xs text-muted-foreground';
-                        text.textContent = 'No preview';
-                        parent.appendChild(text);
-                      }
-                    }}
+                {/* Hero Image URL with Preview */}
+                <div className="space-y-2">
+                  <Label htmlFor="heroImageUrl">Hero Image URL</Label>
+                  <Input
+                    id="heroImageUrl"
+                    type="text"
+                    placeholder="https://example.com/hero.jpg"
+                    value={editableHeroImageUrl}
+                    onChange={(e) => setEditableHeroImageUrl(e.target.value)}
+                    disabled={!canEdit}
                   />
+                  {editableHeroImageUrl ? (
+                    <div className="mt-2 h-24 w-32 rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center">
+                      <img
+                        src={editableHeroImageUrl}
+                        alt="Hero image preview"
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent && !parent.querySelector('.preview-text')) {
+                            const text = document.createElement('span');
+                            text.className = 'preview-text text-xs text-muted-foreground';
+                            text.textContent = 'No preview';
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
 
-            {/* Save Button */}
-            {canEdit && (
-              <div className="flex justify-end pt-4">
-                <Button
-                  onClick={handleSaveV2Metadata}
-                  disabled={isSaving}
-                  className="rounded-full"
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  {isSaving ? 'Saving...' : 'Save v2 Metadata'}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                {/* Save Button */}
+                {canEdit && (
+                  <div className="flex justify-end pt-4">
+                    <Button
+                      onClick={handleSaveV2Metadata}
+                      disabled={isSaving}
+                      className="rounded-full"
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      {isSaving ? 'Saving...' : 'Save v2 Metadata'}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         <Tabs defaultValue="schema" className="w-full">
           <TabsList>
