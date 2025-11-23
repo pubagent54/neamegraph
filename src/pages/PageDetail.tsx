@@ -815,9 +815,29 @@ export default function PageDetail() {
                               Copy JSON
                             </Button>
                           </div>
-                          <pre className="rounded-lg border border-border bg-muted p-4 overflow-auto max-h-[600px] text-sm font-mono select-text">
-                            {version.jsonld}
-                          </pre>
+                          <textarea
+                            readOnly
+                            value={version.jsonld}
+                            className="w-full rounded-lg border border-border bg-muted p-4 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            style={{ 
+                              minHeight: '400px',
+                              maxHeight: '600px',
+                              overflow: 'auto',
+                              whiteSpace: 'pre',
+                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+                            }}
+                            onClick={(e) => {
+                              // Ensure the textarea can be focused and selected
+                              e.currentTarget.focus();
+                            }}
+                            onKeyDown={(e) => {
+                              // Handle Cmd+A / Ctrl+A to select all content in this textarea
+                              if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+                                e.preventDefault();
+                                e.currentTarget.select();
+                              }
+                            }}
+                          />
                         </div>
                       </TabsContent>
                     </Tabs>
