@@ -283,7 +283,7 @@ Hero Image URL: ${page.hero_image_url || "none"}
 HTML Content:
 ${trimmedHtml}
 
-Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just the raw JSON starting with { and ending with }.
+CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include markdown code blocks, explanations, or any other text. The response must be parseable by JSON.parse().
 `;
 
       console.log("Calling Lovable AI for v2 schema generation...");
@@ -353,20 +353,33 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
       let v2Jsonld;
       try {
         let jsonContent = v2GeneratedContent.trim();
+        
+        // Remove markdown code blocks if present
         if (jsonContent.startsWith("```")) {
-          const match = jsonContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+          const match = jsonContent.match(/```(?:json|jsonld)?\s*([\s\S]*?)```/);
           if (match) {
             jsonContent = match[1].trim();
           }
         }
         
+        // Remove any leading/trailing text that's not JSON
+        const jsonStart = jsonContent.indexOf('{');
+        const jsonEnd = jsonContent.lastIndexOf('}');
+        
+        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+          jsonContent = jsonContent.substring(jsonStart, jsonEnd + 1);
+        }
+        
+        // Try to parse
         v2Jsonld = JSON.parse(jsonContent);
       } catch (parseError) {
         console.error("Failed to parse v2 AI response as JSON:", parseError);
+        console.error("AI response (first 1000 chars):", v2GeneratedContent.substring(0, 1000));
         return new Response(
           JSON.stringify({
-            error: "AI did not return valid JSON",
-            details: v2GeneratedContent.substring(0, 500)
+            error: "AI did not return valid JSON. The schema generation prompt may need refinement, or the AI may be having difficulty with this page content.",
+            details: v2GeneratedContent.substring(0, 500),
+            parseError: parseError instanceof Error ? parseError.message : String(parseError)
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
