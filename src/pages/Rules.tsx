@@ -37,17 +37,25 @@ interface Rule {
 }
 
 const V2_PAGE_TYPES = [
-  'Estate Page',
-  'Governance Page',
-  'Community Page',
-  'Site Home Page',
+  'Pubs & Hotels Estate',
+  'Beers',
+  'Brewery',
+  'History',
+  'Environment',
+  'About',
+  'Careers',
+  'News',
 ];
 
 const V2_CATEGORIES: Record<string, string[]> = {
-  'Estate Page': ['Overview', 'Collections', 'Ethos and Suppliers'],
-  'Governance Page': ['About', 'Legal', 'Trade and Supply'],
-  'Community Page': ['ShepsGiving', 'Charity and Donations', 'Arts and Culture', 'Community Overview'],
-  'Site Home Page': ['Home'],
+  'Pubs & Hotels Estate': ['About', 'Collection Page'],
+  'Beers': ['Drink Brands', 'Collection Page'],
+  'Brewery': ['Brewing Process', 'Visitors Centre'],
+  'History': ['History'],
+  'Environment': ['Sustainability', 'Community'],
+  'About': ['Legal', 'Direct to Trade'],
+  'Careers': ['Working for Shepherd Neame', 'Pub Tenancies'],
+  'News': ['Pubs & Hotels', 'Community', 'Beer and Drink Brands'],
 };
 
 export default function Rules() {
@@ -333,7 +341,7 @@ export default function Rules() {
                       onValueChange={(value) => {
                         setFormData({ ...formData, category: value });
                       }}
-                      disabled={!formData.page_type || formData.page_type === 'Site Home Page'}
+                      disabled={!formData.page_type}
                     >
                       <SelectTrigger id="category" className="rounded-xl">
                         <SelectValue placeholder="Select category" />
