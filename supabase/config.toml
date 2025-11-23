@@ -5,3 +5,10 @@ verify_jwt = true
 
 [functions.generate-schema]
 verify_jwt = true
+static_files = [
+  "./functions/generate-schema/rules/global.md",
+  "./functions/generate-schema/rules/estate.md",
+  "./functions/generate-schema/rules/governance.md",
+  "./functions/generate-schema/rules/community.md",
+  "./functions/generate-schema/rules/siteHomePage.md"
+]
