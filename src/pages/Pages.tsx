@@ -28,13 +28,26 @@ const PAGE_TYPES = [
   "faq_page", "collection", "other"
 ];
 
-const V2_PAGE_TYPES = ['Estate Page', 'Governance Page', 'Community Page', 'Site Home Page'];
+const V2_PAGE_TYPES = [
+  'Pubs & Hotels Estate',
+  'Beers',
+  'Brewery',
+  'History',
+  'Environment',
+  'About',
+  'Careers',
+  'News',
+];
 
 const V2_CATEGORIES: Record<string, string[]> = {
-  'Estate Page': ['Overview', 'Collections', 'Ethos and Suppliers'],
-  'Governance Page': ['About', 'Legal', 'Trade and Supply'],
-  'Community Page': ['ShepsGiving', 'Charity and Donations', 'Arts and Culture', 'Community Overview'],
-  'Site Home Page': ['Home'],
+  'Pubs & Hotels Estate': ['About', 'Collection Page'],
+  'Beers': ['Drink Brands', 'Collection Page'],
+  'Brewery': ['Brewing Process', 'Visitors Centre'],
+  'History': ['History'],
+  'Environment': ['Sustainability', 'Community'],
+  'About': ['Legal', 'Direct to Trade'],
+  'Careers': ['Working for Shepherd Neame', 'Pub Tenancies'],
+  'News': ['Pubs & Hotels', 'Community', 'Beer and Drink Brands'],
 };
 
 const FAQ_MODES = ["auto", "ignore"];
