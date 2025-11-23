@@ -218,6 +218,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          rules_backup: string | null
         }
         Insert: {
           body: string
@@ -226,6 +227,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          rules_backup?: string | null
         }
         Update: {
           body?: string
@@ -234,6 +236,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          rules_backup?: string | null
         }
         Relationships: [
           {

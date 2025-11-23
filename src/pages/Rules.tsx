@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -9,22 +10,29 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Copy, Edit2, Plus } from "lucide-react";
+import { CheckCircle, Copy, Edit2, Plus, RotateCcw } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Rule {
   id: string;
   name: string;
   body: string;
+  rules_backup: string | null;
   is_active: boolean;
   created_at: string;
+  created_by_user_id: string | null;
 }
 
 export default function Rules() {
+  const { userRole } = useAuth();
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [formData, setFormData] = useState({ name: "", body: "" });
+  const [originalBodies, setOriginalBodies] = useState<Record<string, string>>({});
+  
+  const isAdmin = userRole === "admin";
 
   useEffect(() => {
     fetchRules();
@@ -39,6 +47,13 @@ export default function Rules() {
 
       if (error) throw error;
       setRules(data || []);
+      
+      // Store original bodies for inline editing
+      const bodies: Record<string, string> = {};
+      (data || []).forEach((rule) => {
+        bodies[rule.id] = rule.body;
+      });
+      setOriginalBodies(bodies);
     } catch (error) {
       console.error("Error fetching rules:", error);
       toast.error("Failed to fetch rules");
@@ -47,14 +62,41 @@ export default function Rules() {
     }
   };
 
+  const handleInlineUpdate = async (ruleId: string, newBody: string) => {
+    try {
+      const originalBody = originalBodies[ruleId];
+      
+      const { error } = await supabase
+        .from("rules")
+        .update({
+          body: newBody,
+          rules_backup: originalBody,
+        })
+        .eq("id", ruleId);
+
+      if (error) throw error;
+      
+      toast.success("Rules updated");
+      await fetchRules();
+    } catch (error) {
+      console.error("Error updating rules:", error);
+      toast.error("Failed to update rules");
+    }
+  };
+
   const handleSave = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (editingRule) {
+        // Before updating, backup the current body
         const { error } = await supabase
           .from("rules")
-          .update({ name: formData.name, body: formData.body })
+          .update({ 
+            name: formData.name, 
+            body: formData.body,
+            rules_backup: editingRule.body // Backup current rules before updating
+          })
           .eq("id", editingRule.id);
 
         if (error) throw error;
@@ -79,6 +121,32 @@ export default function Rules() {
     } catch (error) {
       console.error("Error saving rule:", error);
       toast.error("Failed to save rule");
+    }
+  };
+
+  const handleRestoreBackup = async (rule: Rule) => {
+    if (!rule.rules_backup) {
+      toast.error("No backup available");
+      return;
+    }
+
+    try {
+      // Move current rules to backup, restore backup as current
+      const { error } = await supabase
+        .from("rules")
+        .update({
+          rules_backup: rule.body,
+          body: rule.rules_backup,
+        })
+        .eq("id", rule.id);
+
+      if (error) throw error;
+      
+      toast.success("Backup restored successfully");
+      fetchRules();
+    } catch (error) {
+      console.error("Error restoring backup:", error);
+      toast.error("Failed to restore backup");
     }
   };
 
@@ -250,14 +318,74 @@ export default function Rules() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="bg-muted/30 p-4 rounded-xl">
-                    <Textarea
-                      value={rule.body}
-                      readOnly
-                      className="font-mono text-xs min-h-[150px] bg-transparent border-0 resize-none focus-visible:ring-0"
-                    />
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium">Schema Rules (prompt)</h3>
+                      {rule.created_at && (
+                        <span className="text-xs text-muted-foreground">
+                          Last updated {new Date(rule.created_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="bg-muted/30 p-4 rounded-xl border border-border/50">
+                      <Textarea
+                        value={rule.body}
+                        readOnly={!isAdmin}
+                        onChange={(e) => {
+                          if (isAdmin) {
+                            const updatedRules = rules.map((r) =>
+                              r.id === rule.id ? { ...r, body: e.target.value } : r
+                            );
+                            setRules(updatedRules);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (isAdmin && rule.body !== originalBodies[rule.id]) {
+                            handleInlineUpdate(rule.id, rule.body);
+                          }
+                        }}
+                        className={`font-mono text-sm min-h-[180px] bg-background/50 border-0 resize-none ${
+                          isAdmin ? "focus-visible:ring-1 focus-visible:ring-primary" : "focus-visible:ring-0"
+                        }`}
+                      />
+                    </div>
+                    {!isAdmin && (
+                      <p className="text-xs text-muted-foreground italic">
+                        These rules can only be edited by an admin.
+                      </p>
+                    )}
                   </div>
+
+                  {rule.rules_backup && (
+                    <Collapsible className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground">
+                            View previous rules (backup)
+                          </Button>
+                        </CollapsibleTrigger>
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRestoreBackup(rule)}
+                            className="text-xs rounded-full"
+                          >
+                            <RotateCcw className="h-3 w-3 mr-1" />
+                            Restore backup as current rules
+                          </Button>
+                        )}
+                      </div>
+                      <CollapsibleContent>
+                        <div className="bg-muted/20 p-3 rounded-lg border border-border/30">
+                          <pre className="font-mono text-xs whitespace-pre-wrap break-words text-muted-foreground">
+                            {rule.rules_backup}
+                          </pre>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
                 </CardContent>
               </Card>
             ))}
