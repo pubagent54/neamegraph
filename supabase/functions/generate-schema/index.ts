@@ -10,6 +10,64 @@ interface GenerateSchemaRequest {
   page_id: string;
 }
 
+/**
+ * Load and concatenate rules for a given page based on PageType and Category
+ */
+async function loadV2Rules(pageType: string | null, category: string | null): Promise<string> {
+  try {
+    // Always load global rules
+    const globalRulesPath = new URL("../../../rules/global.md", import.meta.url).pathname;
+    const globalRules = await Deno.readTextFile(globalRulesPath);
+    
+    // If no pageType, return just global rules
+    if (!pageType) {
+      return globalRules;
+    }
+    
+    // Map pageType to filename
+    const pageTypeFileMap: Record<string, string> = {
+      "EstatePage": "estate.md",
+      "GovernancePage": "governance.md",
+      "CommunityPage": "community.md",
+      "SiteHomePage": "siteHomePage.md",
+    };
+    
+    const pageTypeFile = pageTypeFileMap[pageType];
+    if (!pageTypeFile) {
+      console.warn(`Unknown pageType: ${pageType}, using global rules only`);
+      return globalRules;
+    }
+    
+    // Load the pageType rules file
+    const pageTypeRulesPath = new URL(`../../../rules/${pageTypeFile}`, import.meta.url).pathname;
+    const pageTypeRules = await Deno.readTextFile(pageTypeRulesPath);
+    
+    // Extract [BASELINE] section
+    const baselineMatch = pageTypeRules.match(/\[BASELINE\]([\s\S]*?)(?=\[CATEGORY:|$)/);
+    const baselineRules = baselineMatch ? baselineMatch[1].trim() : "";
+    
+    // Extract [CATEGORY: X] section if category is provided
+    let categoryRules = "";
+    if (category && pageType !== "SiteHomePage") {
+      const categoryPattern = new RegExp(`\\[CATEGORY:\\s*${category}\\]([\\s\\S]*?)(?=\\[CATEGORY:|$)`);
+      const categoryMatch = pageTypeRules.match(categoryPattern);
+      categoryRules = categoryMatch ? categoryMatch[1].trim() : "";
+      
+      if (!categoryRules) {
+        console.warn(`Category section not found: ${category} for ${pageType}`);
+      }
+    }
+    
+    // Concatenate: global + baseline + category
+    const parts = [globalRules, baselineRules, categoryRules].filter(p => p.length > 0);
+    return parts.join("\n\n---\n\n");
+    
+  } catch (error) {
+    console.error("Error loading v2 rules:", error);
+    throw new Error(`Failed to load v2 rules: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -170,12 +228,230 @@ serve(async (req) => {
         );
       }
 
-      // For now, return an error - v2 generation not implemented yet
-      return new Response(
-        JSON.stringify({ 
-          error: "Corporate v2 engine not implemented yet. Please use v1 - Classic in the meantime." 
+      // Load v2 rules based on page metadata
+      console.log(`Loading v2 rules for pageType: ${page.page_type}, category: ${page.category}`);
+      let v2Rules: string;
+      try {
+        v2Rules = await loadV2Rules(page.page_type, page.category);
+        console.log(`v2 rules loaded, length: ${v2Rules.length}`);
+      } catch (error) {
+        console.error("Failed to load v2 rules:", error);
+        return new Response(
+          JSON.stringify({ 
+            error: "Failed to load schema generation rules",
+            details: error instanceof Error ? error.message : String(error)
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Build v2 user message with rules at the top
+      const v2UserMessage = `
+${v2Rules}
+
+---
+
+Generate JSON-LD schema for the following page:
+
+Canonical URL: ${canonicalUrl}
+Path: ${page.path}
+Page Type: ${page.page_type}
+Category: ${page.category || "N/A"}
+FAQ Mode: ${page.faq_mode || "auto"}
+Logo URL: ${page.logo_url || "none"}
+Hero Image URL: ${page.hero_image_url || "none"}
+
+HTML Content:
+${trimmedHtml}
+
+Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just the raw JSON starting with { and ending with }.
+`;
+
+      console.log("Calling Lovable AI for v2 schema generation...");
+
+      // Call Lovable AI with v2 rules
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+      if (!LOVABLE_API_KEY) {
+        return new Response(
+          JSON.stringify({ error: "LOVABLE_API_KEY not configured" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const v2AiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: "You are a corporate schema.org JSON-LD generator. Follow all rules provided." },
+            { role: "user", content: v2UserMessage }
+          ],
         }),
-        { status: 501, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      });
+
+      if (!v2AiResponse.ok) {
+        const errorText = await v2AiResponse.text();
+        console.error("AI API error (v2):", v2AiResponse.status, errorText);
+        
+        if (v2AiResponse.status === 429) {
+          return new Response(
+            JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        if (v2AiResponse.status === 402) {
+          return new Response(
+            JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ error: "AI API error" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const v2AiData = await v2AiResponse.json();
+      const v2GeneratedContent = v2AiData.choices?.[0]?.message?.content;
+
+      if (!v2GeneratedContent) {
+        console.error("No content in v2 AI response");
+        return new Response(
+          JSON.stringify({ error: "AI returned no content" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log("v2 AI response received, length:", v2GeneratedContent.length);
+
+      // Parse and validate v2 response
+      let v2Jsonld;
+      try {
+        let jsonContent = v2GeneratedContent.trim();
+        if (jsonContent.startsWith("```")) {
+          const match = jsonContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (match) {
+            jsonContent = match[1].trim();
+          }
+        }
+        
+        v2Jsonld = JSON.parse(jsonContent);
+      } catch (parseError) {
+        console.error("Failed to parse v2 AI response as JSON:", parseError);
+        return new Response(
+          JSON.stringify({
+            error: "AI did not return valid JSON",
+            details: v2GeneratedContent.substring(0, 500)
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Basic v2 validation
+      const v2ValidationErrors: string[] = [];
+
+      if (!v2Jsonld["@context"]) {
+        v2ValidationErrors.push("Missing @context");
+      }
+
+      if (!v2Jsonld["@graph"] || !Array.isArray(v2Jsonld["@graph"])) {
+        v2ValidationErrors.push("Missing or invalid @graph array");
+      }
+
+      if (v2ValidationErrors.length > 0) {
+        console.error("v2 Validation errors:", v2ValidationErrors);
+        return new Response(
+          JSON.stringify({
+            error: "Schema validation failed",
+            validation_errors: v2ValidationErrors
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Save v2 schema version
+      const v2JsonldString = JSON.stringify(v2Jsonld, null, 2);
+
+      const encoder = new TextEncoder();
+      const data = encoder.encode(v2JsonldString);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const v2SchemaHash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+
+      const { data: existingVersions, error: versionsError } = await supabase
+        .from("schema_versions")
+        .select("version_number")
+        .eq("page_id", page_id)
+        .order("version_number", { ascending: false })
+        .limit(1);
+
+      const nextVersionNumber = existingVersions && existingVersions.length > 0
+        ? existingVersions[0].version_number + 1
+        : 1;
+
+      const { data: v2SchemaVersion, error: v2SchemaError } = await supabase
+        .from("schema_versions")
+        .insert({
+          page_id: page_id,
+          version_number: nextVersionNumber,
+          jsonld: v2JsonldString,
+          status: "draft",
+          created_by_user_id: user.id,
+          rules_id: null, // v2 doesn't use the rules table
+          google_rr_passed: false,
+        })
+        .select()
+        .single();
+
+      if (v2SchemaError) {
+        console.error("Error saving v2 schema version:", v2SchemaError);
+        return new Response(
+          JSON.stringify({ error: "Failed to save schema version" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      await supabase
+        .from("pages")
+        .update({
+          last_schema_generated_at: new Date().toISOString(),
+          last_schema_hash: v2SchemaHash,
+          status: "ai_draft",
+          last_modified_by_user_id: user.id,
+        })
+        .eq("id", page_id);
+
+      await supabase.from("audit_log").insert({
+        user_id: user.id,
+        entity_type: "schema_version",
+        entity_id: v2SchemaVersion.id,
+        action: "generate_schema",
+        details: {
+          page_id: page_id,
+          page_path: page.path,
+          version_number: nextVersionNumber,
+          engine_version: "v2",
+          page_type: page.page_type,
+          category: page.category,
+        },
+      });
+
+      console.log("v2 Schema generation completed successfully");
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          schema_version: v2SchemaVersion,
+          version_number: nextVersionNumber,
+          engine_version: "v2",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
