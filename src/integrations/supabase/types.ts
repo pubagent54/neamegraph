@@ -213,29 +213,35 @@ export type Database = {
       rules: {
         Row: {
           body: string
+          category: string | null
           created_at: string
           created_by_user_id: string | null
           id: string
           is_active: boolean
           name: string
+          page_type: string | null
           rules_backup: string | null
         }
         Insert: {
           body: string
+          category?: string | null
           created_at?: string
           created_by_user_id?: string | null
           id?: string
           is_active?: boolean
           name: string
+          page_type?: string | null
           rules_backup?: string | null
         }
         Update: {
           body?: string
+          category?: string | null
           created_at?: string
           created_by_user_id?: string | null
           id?: string
           is_active?: boolean
           name?: string
+          page_type?: string | null
           rules_backup?: string | null
         }
         Relationships: [

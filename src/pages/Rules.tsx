@@ -10,8 +10,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Copy, Edit2, Plus, RotateCcw } from "lucide-react";
+import { CheckCircle, Copy, Edit2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Rule {
   id: string;
@@ -21,7 +32,35 @@ interface Rule {
   is_active: boolean;
   created_at: string;
   created_by_user_id: string | null;
+  page_type: string | null;
+  category: string | null;
 }
+
+const V2_PAGE_TYPES = [
+  { value: 'EstatePage', label: 'Estate Page' },
+  { value: 'GovernancePage', label: 'Governance Page' },
+  { value: 'CommunityPage', label: 'Community Page' },
+  { value: 'SiteHomePage', label: 'Site Home Page' },
+];
+
+const V2_CATEGORIES: Record<string, { value: string; label: string }[]> = {
+  EstatePage: [
+    { value: 'Overview', label: 'Overview' },
+    { value: 'Collections', label: 'Collections' },
+    { value: 'EthosAndSuppliers', label: 'Ethos and Suppliers' },
+  ],
+  GovernancePage: [
+    { value: 'About', label: 'About' },
+    { value: 'Legal', label: 'Legal' },
+    { value: 'TradeAndSupply', label: 'Trade and Supply' },
+  ],
+  CommunityPage: [
+    { value: 'ShepsGiving', label: 'Sheps Giving' },
+    { value: 'CharityAndDonations', label: 'Charity and Donations' },
+    { value: 'ArtsAndCulture', label: 'Arts and Culture' },
+    { value: 'CommunityOverview', label: 'Community Overview' },
+  ],
+};
 
 export default function Rules() {
   const { userRole } = useAuth();
@@ -29,8 +68,15 @@ export default function Rules() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
-  const [formData, setFormData] = useState({ name: "", body: "" });
+  const [formData, setFormData] = useState({ 
+    name: "", 
+    body: "", 
+    page_type: "", 
+    category: "" 
+  });
   const [originalBodies, setOriginalBodies] = useState<Record<string, string>>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [ruleToDelete, setRuleToDelete] = useState<Rule | null>(null);
   
   const isAdmin = userRole === "admin";
 
@@ -95,6 +141,8 @@ export default function Rules() {
           .update({ 
             name: formData.name, 
             body: formData.body,
+            page_type: formData.page_type || null,
+            category: formData.category || null,
             rules_backup: editingRule.body // Backup current rules before updating
           })
           .eq("id", editingRule.id);
@@ -107,6 +155,8 @@ export default function Rules() {
           .insert({
             name: formData.name,
             body: formData.body,
+            page_type: formData.page_type || null,
+            category: formData.category || null,
             created_by_user_id: user?.id,
           });
 
@@ -116,11 +166,32 @@ export default function Rules() {
 
       setDialogOpen(false);
       setEditingRule(null);
-      setFormData({ name: "", body: "" });
+      setFormData({ name: "", body: "", page_type: "", category: "" });
       fetchRules();
     } catch (error) {
       console.error("Error saving rule:", error);
       toast.error("Failed to save rule");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!ruleToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from("rules")
+        .delete()
+        .eq("id", ruleToDelete.id);
+
+      if (error) throw error;
+
+      toast.success("Rule deleted");
+      setDeleteDialogOpen(false);
+      setRuleToDelete(null);
+      fetchRules();
+    } catch (error) {
+      console.error("Error deleting rule:", error);
+      toast.error("Failed to delete rule");
     }
   };
 
@@ -175,6 +246,8 @@ export default function Rules() {
     setFormData({
       name: `${rule.name} (Copy)`,
       body: rule.body,
+      page_type: rule.page_type || "",
+      category: rule.category || "",
     });
     setEditingRule(null);
     setDialogOpen(true);
@@ -184,15 +257,22 @@ export default function Rules() {
     setFormData({
       name: rule.name,
       body: rule.body,
+      page_type: rule.page_type || "",
+      category: rule.category || "",
     });
     setEditingRule(rule);
     setDialogOpen(true);
   };
 
   const openNewDialog = () => {
-    setFormData({ name: "", body: "" });
+    setFormData({ name: "", body: "", page_type: "", category: "" });
     setEditingRule(null);
     setDialogOpen(true);
+  };
+
+  const openDeleteDialog = (rule: Rule) => {
+    setRuleToDelete(rule);
+    setDeleteDialogOpen(true);
   };
 
   return (
@@ -234,6 +314,54 @@ export default function Rules() {
                     className="rounded-xl"
                   />
                 </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="page_type">Page Type (Corporate v2)</Label>
+                    <Select
+                      value={formData.page_type}
+                      onValueChange={(value) => {
+                        setFormData({ ...formData, page_type: value, category: "" });
+                      }}
+                    >
+                      <SelectTrigger id="page_type" className="rounded-xl">
+                        <SelectValue placeholder="Select page type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {V2_PAGE_TYPES.map((pt) => (
+                          <SelectItem key={pt.value} value={pt.value}>
+                            {pt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Select
+                      value={formData.category}
+                      onValueChange={(value) => {
+                        setFormData({ ...formData, category: value });
+                      }}
+                      disabled={!formData.page_type || formData.page_type === 'SiteHomePage'}
+                    >
+                      <SelectTrigger id="category" className="rounded-xl">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {formData.page_type && V2_CATEGORIES[formData.page_type]?.map((cat) => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="body">Prompt Body</Label>
                   <Textarea
@@ -284,6 +412,12 @@ export default function Rules() {
                             Active
                           </Badge>
                         )}
+                        {rule.page_type && (
+                          <Badge variant="outline" className="rounded-full">
+                            {V2_PAGE_TYPES.find(pt => pt.value === rule.page_type)?.label || rule.page_type}
+                            {rule.category && ` · ${V2_CATEGORIES[rule.page_type]?.find(c => c.value === rule.category)?.label || rule.category}`}
+                          </Badge>
+                        )}
                       </div>
                       <CardDescription>
                         Created {new Date(rule.created_at).toLocaleDateString()}
@@ -306,6 +440,16 @@ export default function Rules() {
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openDeleteDialog(rule)}
+                          className="rounded-full text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                       {!rule.is_active && (
                         <Button
                           size="sm"
@@ -392,6 +536,23 @@ export default function Rules() {
           </div>
         )}
       </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete rule?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete "{ruleToDelete?.name}"? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete rule
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }

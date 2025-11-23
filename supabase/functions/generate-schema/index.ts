@@ -10,64 +10,6 @@ interface GenerateSchemaRequest {
   page_id: string;
 }
 
-/**
- * Load and concatenate rules for a given page based on PageType and Category
- */
-async function loadV2Rules(pageType: string | null, category: string | null): Promise<string> {
-  try {
-    // Always load global rules (now in the function's local rules/ directory)
-    const globalRulesPath = new URL("./rules/global.md", import.meta.url).pathname;
-    const globalRules = await Deno.readTextFile(globalRulesPath);
-    
-    // If no pageType, return just global rules
-    if (!pageType) {
-      return globalRules;
-    }
-    
-    // Map pageType to filename
-    const pageTypeFileMap: Record<string, string> = {
-      "EstatePage": "estate.md",
-      "GovernancePage": "governance.md",
-      "CommunityPage": "community.md",
-      "SiteHomePage": "siteHomePage.md",
-    };
-    
-    const pageTypeFile = pageTypeFileMap[pageType];
-    if (!pageTypeFile) {
-      console.warn(`Unknown pageType: ${pageType}, using global rules only`);
-      return globalRules;
-    }
-    
-    // Load the pageType rules file (now in the function's local rules/ directory)
-    const pageTypeRulesPath = new URL(`./rules/${pageTypeFile}`, import.meta.url).pathname;
-    const pageTypeRules = await Deno.readTextFile(pageTypeRulesPath);
-    
-    // Extract [BASELINE] section
-    const baselineMatch = pageTypeRules.match(/\[BASELINE\]([\s\S]*?)(?=\[CATEGORY:|$)/);
-    const baselineRules = baselineMatch ? baselineMatch[1].trim() : "";
-    
-    // Extract [CATEGORY: X] section if category is provided
-    let categoryRules = "";
-    if (category && pageType !== "SiteHomePage") {
-      const categoryPattern = new RegExp(`\\[CATEGORY:\\s*${category}\\]([\\s\\S]*?)(?=\\[CATEGORY:|$)`);
-      const categoryMatch = pageTypeRules.match(categoryPattern);
-      categoryRules = categoryMatch ? categoryMatch[1].trim() : "";
-      
-      if (!categoryRules) {
-        console.warn(`Category section not found: ${category} for ${pageType}`);
-      }
-    }
-    
-    // Concatenate: global + baseline + category
-    const parts = [globalRules, baselineRules, categoryRules].filter(p => p.length > 0);
-    return parts.join("\n\n---\n\n");
-    
-  } catch (error) {
-    console.error("Error loading v2 rules:", error);
-    throw new Error(`Failed to load v2 rules: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -151,19 +93,26 @@ serve(async (req) => {
       );
     }
 
-    // Load the active rule
-    const { data: activeRule, error: ruleError } = await supabase
-      .from("rules")
-      .select("*")
-      .eq("is_active", true)
-      .single();
+    // Check schema engine version first to determine which rules to load
+    const schemaEngineVersion = settings.schema_engine_version || "v1";
+    
+    // For v1, load the active rule from rules table
+    let activeRule = null;
+    if (schemaEngineVersion === "v1") {
+      const { data: rule, error: ruleError } = await supabase
+        .from("rules")
+        .select("*")
+        .eq("is_active", true)
+        .single();
 
-    if (ruleError || !activeRule) {
-      console.error("Error fetching active rule:", ruleError);
-      return new Response(
-        JSON.stringify({ error: "No active rule found. Please activate a rule first." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      if (ruleError || !rule) {
+        console.error("Error fetching active rule:", ruleError);
+        return new Response(
+          JSON.stringify({ error: "No active rule found. Please activate a rule first." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      activeRule = rule;
     }
 
     // Fetch the HTML again (we could store it but for now we refetch)
@@ -199,9 +148,6 @@ serve(async (req) => {
     // Build canonical_url
     const canonicalBaseUrl = settings.canonical_base_url.replace(/\/$/, "");
     const canonicalUrl = `${canonicalBaseUrl}${page.path}`;
-
-    // Check schema engine version
-    const schemaEngineVersion = settings.schema_engine_version || "v1";
     
     if (schemaEngineVersion === "v2") {
       // Validate v2 requirements
@@ -228,22 +174,86 @@ serve(async (req) => {
         );
       }
 
-      // Load v2 rules based on page metadata
+      // Load v2 rules from the rules table based on page metadata
       console.log(`Loading v2 rules for pageType: ${page.page_type}, category: ${page.category}`);
-      let v2Rules: string;
-      try {
-        v2Rules = await loadV2Rules(page.page_type, page.category);
-        console.log(`v2 rules loaded, length: ${v2Rules.length}`);
-      } catch (error) {
-        console.error("Failed to load v2 rules:", error);
+      
+      // First try to find exact match
+      let { data: matchedRule, error: matchError } = await supabase
+        .from("rules")
+        .select("*")
+        .eq("page_type", page.page_type)
+        .eq("category", page.category || "")
+        .maybeSingle();
+
+      // If no exact match and we have a category, try without category (baseline)
+      if (!matchedRule && page.category) {
+        const { data: baselineRule } = await supabase
+          .from("rules")
+          .select("*")
+          .eq("page_type", page.page_type)
+          .is("category", null)
+          .maybeSingle();
+        
+        if (baselineRule) {
+          matchedRule = baselineRule;
+          console.log(`Using baseline rule for ${page.page_type}`);
+        }
+      }
+
+      // If still no match, try to find any rule for this page type
+      if (!matchedRule) {
+        const { data: anyPageTypeRule } = await supabase
+          .from("rules")
+          .select("*")
+          .eq("page_type", page.page_type)
+          .limit(1)
+          .maybeSingle();
+        
+        if (anyPageTypeRule) {
+          matchedRule = anyPageTypeRule;
+          console.log(`Using any available rule for ${page.page_type}`);
+        }
+      }
+
+      // If still no match, fall back to active rule or any rule
+      if (!matchedRule) {
+        const { data: fallbackRule } = await supabase
+          .from("rules")
+          .select("*")
+          .eq("is_active", true)
+          .maybeSingle();
+        
+        if (!fallbackRule) {
+          // Last resort: get any rule
+          const { data: anyRule } = await supabase
+            .from("rules")
+            .select("*")
+            .limit(1)
+            .maybeSingle();
+          
+          matchedRule = anyRule;
+        } else {
+          matchedRule = fallbackRule;
+        }
+        
+        if (matchedRule) {
+          console.log(`Using fallback rule: ${matchedRule.name}`);
+        }
+      }
+
+      if (!matchedRule) {
         return new Response(
           JSON.stringify({ 
-            error: "Failed to load schema generation rules",
-            details: error instanceof Error ? error.message : String(error)
+            error: "No rules found. Please create at least one rule set."
           }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      const v2Rules = matchedRule.body;
+      const usedRuleId = matchedRule.id;
+      console.log(`Using rule: ${matchedRule.name} (${matchedRule.page_type || 'any'} · ${matchedRule.category || 'baseline'})`);
+      console.log(`v2 rules loaded, length: ${v2Rules.length}`);
 
       // Build v2 user message with rules at the top
       const v2UserMessage = `
@@ -403,7 +413,7 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
           jsonld: v2JsonldString,
           status: "draft",
           created_by_user_id: user.id,
-          rules_id: null, // v2 doesn't use the rules table
+          rules_id: usedRuleId,
           google_rr_passed: false,
         })
         .select()
@@ -450,6 +460,12 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
           schema_version: v2SchemaVersion,
           version_number: nextVersionNumber,
           engine_version: "v2",
+          used_rule: {
+            id: matchedRule.id,
+            name: matchedRule.name,
+            page_type: matchedRule.page_type,
+            category: matchedRule.category,
+          },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
