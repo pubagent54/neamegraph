@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatusBadge } from "@/components/StatusBadge";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle, Save, ChevronDown } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle, Save, ChevronDown, Copy } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { SchemaSummary } from "@/components/SchemaSummary";
@@ -17,8 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 interface Page {
   id: string;
@@ -803,22 +801,23 @@ export default function PageDetail() {
                         />
                       </TabsContent>
                       <TabsContent value="json" className="mt-4">
-                        <div className="rounded-lg overflow-hidden border border-border">
-                          <SyntaxHighlighter
-                            language="json"
-                            style={vscDarkPlus}
-                            customStyle={{
-                              margin: 0,
-                              padding: "1rem",
-                              fontSize: "0.875rem",
-                              lineHeight: "1.5",
-                              background: "hsl(var(--muted))",
-                            }}
-                            wrapLongLines={true}
-                            showLineNumbers={false}
-                          >
+                        <div className="space-y-2">
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                navigator.clipboard.writeText(version.jsonld);
+                                toast.success("Schema JSON copied");
+                              }}
+                            >
+                              <Copy className="mr-2 h-4 w-4" />
+                              Copy JSON
+                            </Button>
+                          </div>
+                          <pre className="rounded-lg border border-border bg-muted p-4 overflow-auto max-h-[600px] text-sm font-mono select-text">
                             {version.jsonld}
-                          </SyntaxHighlighter>
+                          </pre>
                         </div>
                       </TabsContent>
                     </Tabs>
