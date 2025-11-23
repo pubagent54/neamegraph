@@ -53,7 +53,7 @@ const V2_CATEGORIES: Record<string, string[]> = {
   'Brewery': ['Brewing Process', 'Visitors Centre'],
   'History': ['History'],
   'Environment': ['Sustainability', 'Community'],
-  'About': ['Legal', 'Direct to Trade'],
+  'About': ['Legal', 'Direct to Trade', 'General'],
   'Careers': ['Working for Shepherd Neame', 'Pub Tenancies'],
   'News': ['Pubs & Hotels', 'Community', 'Beer and Drink Brands'],
 };
