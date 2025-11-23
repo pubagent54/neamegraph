@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 interface Page {
   id: string;
@@ -788,11 +790,23 @@ export default function PageDetail() {
                         />
                       </TabsContent>
                       <TabsContent value="json" className="mt-4">
-                        <Textarea
-                          value={version.jsonld}
-                          readOnly
-                          className="font-mono text-xs min-h-[200px]"
-                        />
+                        <div className="rounded-lg overflow-hidden border border-border">
+                          <SyntaxHighlighter
+                            language="json"
+                            style={vscDarkPlus}
+                            customStyle={{
+                              margin: 0,
+                              padding: "1rem",
+                              fontSize: "0.875rem",
+                              lineHeight: "1.5",
+                              background: "hsl(var(--muted))",
+                            }}
+                            wrapLongLines={true}
+                            showLineNumbers={false}
+                          >
+                            {version.jsonld}
+                          </SyntaxHighlighter>
+                        </div>
                       </TabsContent>
                     </Tabs>
                     {version.validation_notes && (
