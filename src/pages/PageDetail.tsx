@@ -233,7 +233,7 @@ export default function PageDetail() {
     // HOMEPAGE PROTECTION - Block AI generation for homepage
     // ========================================
     if (page.is_home_page) {
-      toast.info("Homepage schema is managed manually – AI generation is disabled.");
+      toast.info("Homepage schema is managed manually – NeameGraph Brain generation is disabled.");
       return;
     }
     
@@ -263,7 +263,7 @@ export default function PageDetail() {
     setGenerating(true);
 
     try {
-      toast.info("Generating schema with AI...");
+      toast.info("NeameGraph Brain is generating schema...");
 
       const { data, error } = await supabase.functions.invoke("generate-schema", {
         body: { page_id: page.id },

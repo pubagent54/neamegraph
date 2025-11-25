@@ -119,7 +119,7 @@ export default function Dashboard() {
       color: "text-muted-foreground",
     },
     {
-      title: "AI Draft",
+      title: "Brain Draft",
       value: stats.draft,
       icon: Clock,
       description: "Awaiting review",
@@ -259,7 +259,7 @@ export default function Dashboard() {
               <Link to="/pages?status=ai_draft">
                 <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
                   <Clock className="mr-2 h-4 w-4" />
-                  Review AI Drafts
+                  Review Brain Drafts
                 </Button>
               </Link>
               <Link to="/pages?status=needs_rework">
@@ -295,7 +295,7 @@ export default function Dashboard() {
                 <div>
                   <p className="font-semibold mb-1">Configure Rules</p>
                   <p className="text-sm text-muted-foreground">
-                    Set up AI prompts for schema generation
+                    Set up NeameGraph Brain prompts for schema generation
                   </p>
                 </div>
               </div>
