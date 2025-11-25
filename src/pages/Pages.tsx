@@ -56,6 +56,12 @@ const STATUS_OPTIONS = [
   "not_started", "ai_draft", "needs_review", "approved", "implemented", "needs_rework"
 ];
 
+const DOMAINS = ["Corporate", "Beer", "Pub"];
+
+// ========================================
+// Domain field: Corporate, Beer, or Pub
+// All existing pages default to 'Corporate' to preserve current behavior
+// ========================================
 interface Page {
   id: string;
   path: string;
@@ -70,6 +76,15 @@ interface Page {
   hero_image_url: string | null;
   faq_mode: string;
   is_home_page: boolean;
+  domain: string; // 'Corporate', 'Beer', or 'Pub'
+  // NOTE: beer_* fields (beer_abv, beer_style, beer_launch_year, beer_official_url)
+  // are stored in the pages table as a first step. These may later be moved
+  // to a dedicated Beer entity table – don't over-optimise around their
+  // current location.
+  beer_abv: number | null;
+  beer_style: string | null;
+  beer_launch_year: number | null;
+  beer_official_url: string | null;
 }
 
 export default function Pages() {
@@ -78,6 +93,7 @@ export default function Pages() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [pageTypeFilter, setPageTypeFilter] = useState<string>("all");
+  const [domainFilter, setDomainFilter] = useState<string>("all");
   const [bulkPaths, setBulkPaths] = useState("");
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -539,7 +555,8 @@ export default function Pages() {
     const matchesSearch = page.path.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || page.status === statusFilter;
     const matchesPageType = pageTypeFilter === "all" || page.page_type === pageTypeFilter;
-    return matchesSearch && matchesStatus && matchesPageType;
+    const matchesDomain = domainFilter === "all" || page.domain === domainFilter;
+    return matchesSearch && matchesStatus && matchesPageType && matchesDomain;
   });
 
   const getPathDisplay = (path: string) => {
@@ -804,6 +821,19 @@ export default function Pages() {
               <SelectItem value="needs_rework">Needs Rework</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={domainFilter} onValueChange={setDomainFilter}>
+            <SelectTrigger className="w-[180px] rounded-full bg-muted/30 border-0">
+              <SelectValue placeholder="Filter by domain" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="all">All Domains</SelectItem>
+              {DOMAINS.map((domain) => (
+                <SelectItem key={domain} value={domain}>
+                  {domain}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {selectedPageIds.size > 0 && canEdit && (
@@ -886,6 +916,7 @@ export default function Pages() {
                     </TableHead>
                   )}
                   <TableHead className="font-semibold">Path</TableHead>
+                  <TableHead className="font-semibold">Domain</TableHead>
                   <TableHead className="font-semibold">Page Type</TableHead>
                   <TableHead className="font-semibold">Category</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
@@ -898,7 +929,7 @@ export default function Pages() {
               <TableBody>
                 {filteredPages.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canEdit ? 9 : 8} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={canEdit ? 10 : 9} className="text-center text-muted-foreground py-8">
                       No pages found
                     </TableCell>
                   </TableRow>
@@ -914,6 +945,14 @@ export default function Pages() {
                         </TableCell>
                       )}
                       <TableCell className="font-mono text-sm">{getPathDisplay(page.path)}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border
+                          {page.domain === 'Corporate' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
+                           page.domain === 'Beer' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                           'bg-purple-50 text-purple-700 border-purple-200'}">
+                          {page.domain || 'Corporate'}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <span className="text-sm">{page.page_type || "—"}</span>
                       </TableCell>

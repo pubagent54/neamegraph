@@ -59,7 +59,7 @@ serve(async (req) => {
     // 1. Load page context
     const { data: page, error: pageError } = await supabase
       .from("pages")
-      .select("*")
+      .select("id, path, section, page_type, category, faq_mode, logo_url, hero_image_url, is_home_page, domain, beer_abv, beer_style, beer_launch_year, beer_official_url, last_html_hash, has_faq, notes")
       .eq("id", page_id)
       .single();
 
@@ -70,6 +70,39 @@ serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // ========================================
+    // DOMAIN LANE LOGIC
+    // ----------------------------------------
+    // 'Corporate' - Uses existing v2 Corporate schema engine (UNCHANGED)
+    // 'Beer' - Beer brand pages (schema engine coming soon - UI blocks this)
+    // 'Pub' - Individual pub/hotel pages (Phase 2 - UI blocks this)
+    // ========================================
+
+    // Defensive check: UI should prevent these calls, but handle gracefully if reached
+    const pageDomain = page.domain || 'Corporate'; // Default to Corporate for existing records
+    
+    if (pageDomain === 'Pub') {
+      console.log("Pub lane - should not reach edge function (UI should block)");
+      return new Response(
+        JSON.stringify({ error: "Pub schema generation is not yet implemented (Phase 2)" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (pageDomain === 'Beer') {
+      console.log("Beer lane - should not reach edge function (UI should show stub)");
+      return new Response(
+        JSON.stringify({ error: "Beer schema engine coming soon – no schema generated yet" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ========================================
+    // CORPORATE LANE (domain = 'Corporate')
+    // Uses the existing v2 Corporate schema engine UNCHANGED
+    // All logic below this point is the existing v2 implementation
+    // ========================================
 
     // Check if HTML has been fetched
     if (!page.last_html_hash) {

@@ -18,6 +18,13 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
+// ========================================
+// DOMAIN LANE LOGIC
+// ----------------------------------------
+// 'Corporate' - Full schema generation using existing v2 Corporate engine
+// 'Beer' - Shows beer metadata panel, Generate Schema shows stub message
+// 'Pub' - Shows placeholder, Generate Schema button disabled
+// ========================================
 interface Page {
   id: string;
   path: string;
@@ -34,6 +41,11 @@ interface Page {
   hero_image_url: string | null;
   faq_mode: string;
   is_home_page: boolean;
+  domain: string; // 'Corporate', 'Beer', or 'Pub'
+  beer_abv: number | null;
+  beer_style: string | null;
+  beer_launch_year: number | null;
+  beer_official_url: string | null;
 }
 
 interface SchemaVersion {
@@ -91,6 +103,15 @@ export default function PageDetail() {
   const [isSaving, setIsSaving] = useState(false);
   const [isV2MetadataOpen, setIsV2MetadataOpen] = useState(false);
   const [usedRule, setUsedRule] = useState<{ name: string; page_type: string | null; category: string | null } | null>(null);
+  
+  // Domain state
+  const [editableDomain, setEditableDomain] = useState<string>('Corporate');
+  
+  // Beer metadata state
+  const [editableBeerAbv, setEditableBeerAbv] = useState<string>('');
+  const [editableBeerStyle, setEditableBeerStyle] = useState<string>('');
+  const [editableBeerLaunchYear, setEditableBeerLaunchYear] = useState<string>('');
+  const [editableBeerOfficialUrl, setEditableBeerOfficialUrl] = useState<string>('');
 
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
@@ -141,6 +162,9 @@ export default function PageDetail() {
       setPage(pageResult.data);
       setVersions(versionsResult.data || []);
       
+      // Initialize domain state
+      setEditableDomain(pageResult.data.domain || 'Corporate');
+      
       // Initialize v2 metadata state
       setEditablePageType(pageResult.data.page_type);
       setEditableCategory(pageResult.data.category);
@@ -148,6 +172,12 @@ export default function PageDetail() {
       setEditableHeroImageUrl(pageResult.data.hero_image_url || '');
       setEditableFaqMode(pageResult.data.faq_mode || 'auto');
       setEditableIsHomePage(pageResult.data.is_home_page || false);
+      
+      // Initialize beer metadata state
+      setEditableBeerAbv(pageResult.data.beer_abv?.toString() || '');
+      setEditableBeerStyle(pageResult.data.beer_style || '');
+      setEditableBeerLaunchYear(pageResult.data.beer_launch_year?.toString() || '');
+      setEditableBeerOfficialUrl(pageResult.data.beer_official_url || '');
     } catch (error) {
       console.error("Error fetching page data:", error);
       toast.error("Failed to fetch page data");
@@ -193,6 +223,24 @@ export default function PageDetail() {
 
   const handleGenerateSchema = async () => {
     if (!page) return;
+    
+    // ========================================
+    // DOMAIN LANE LOGIC - Handle different domains
+    // ========================================
+    
+    // Pub lane: UI blocks this, shouldn't be called
+    if (page.domain === 'Pub') {
+      toast.error("Pub module is Phase 2 – not implemented yet");
+      return;
+    }
+    
+    // Beer lane: Show stub message, don't call edge function
+    if (page.domain === 'Beer') {
+      toast.info("Beer schema engine coming soon – no schema generated yet");
+      return;
+    }
+    
+    // Corporate lane: Use existing v2 Corporate schema engine
     setGenerating(true);
 
     try {
@@ -347,6 +395,33 @@ export default function PageDetail() {
     }
   };
 
+  const handleSaveDomain = async () => {
+    if (!page || !canEdit) return;
+    setIsSaving(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from('pages')
+        .update({
+          domain: editableDomain,
+          last_modified_by_user_id: user?.id,
+        })
+        .eq('id', page.id);
+
+      if (error) throw error;
+
+      toast.success('Domain updated successfully');
+      await fetchPageData();
+    } catch (error) {
+      console.error('Error saving domain:', error);
+      toast.error('Failed to save domain');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveV2Metadata = async () => {
     if (!page || !canEdit) return;
     setIsSaving(true);
@@ -374,6 +449,36 @@ export default function PageDetail() {
     } catch (error) {
       console.error('Error saving v2 metadata:', error);
       toast.error('Failed to save v2 metadata');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveBeerMetadata = async () => {
+    if (!page || !canEdit) return;
+    setIsSaving(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from('pages')
+        .update({
+          beer_abv: editableBeerAbv ? parseFloat(editableBeerAbv) : null,
+          beer_style: editableBeerStyle || null,
+          beer_launch_year: editableBeerLaunchYear ? parseInt(editableBeerLaunchYear) : null,
+          beer_official_url: editableBeerOfficialUrl || null,
+          last_modified_by_user_id: user?.id,
+        })
+        .eq('id', page.id);
+
+      if (error) throw error;
+
+      toast.success('Beer metadata saved successfully');
+      await fetchPageData();
+    } catch (error) {
+      console.error('Error saving beer metadata:', error);
+      toast.error('Failed to save beer metadata');
     } finally {
       setIsSaving(false);
     }
@@ -501,14 +606,19 @@ export default function PageDetail() {
           <div className="space-y-2">
             <div className="flex gap-3">
               <Button onClick={handleFetchHTML} disabled={generating} className="rounded-full">
-
                 <Download className="mr-2 h-4 w-4" />
                 Fetch HTML
               </Button>
               <Button 
                 onClick={handleGenerateSchema} 
-                disabled={generating || !page.last_html_hash}
+                disabled={generating || !page.last_html_hash || page.domain === 'Pub'}
                 className="rounded-full"
+                title={
+                  page.domain === 'Pub' ? "Pub module is Phase 2 – not implemented yet" :
+                  page.domain === 'Beer' ? "Beer schema engine coming soon" :
+                  !page.last_html_hash ? "Fetch HTML first" :
+                  "Generate schema"
+                }
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Generate Schema
@@ -520,7 +630,17 @@ export default function PageDetail() {
                 </Button>
               )}
             </div>
-            {usedRule && (
+            {page.domain === 'Pub' && (
+              <p className="text-xs text-muted-foreground">
+                Pub module is Phase 2 – not implemented yet
+              </p>
+            )}
+            {page.domain === 'Beer' && (
+              <p className="text-xs text-muted-foreground">
+                Beer schema engine coming soon – no schema generated yet
+              </p>
+            )}
+            {usedRule && page.domain === 'Corporate' && (
               <p className="text-xs text-muted-foreground">
                 Using rules: <span className="font-medium">{usedRule.name}</span>
                 {usedRule.page_type && (
@@ -534,12 +654,57 @@ export default function PageDetail() {
           </div>
         )}
 
-        {/* Corporate v2 Metadata Section */}
-        <Collapsible
-          open={isV2MetadataOpen}
-          onOpenChange={setIsV2MetadataOpen}
-          className="rounded-2xl"
-        >
+        {/* Domain Selector - Prominent, always visible */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle>Page Domain</CardTitle>
+            <CardDescription>
+              Select the domain lane for this page
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4">
+              <Select
+                value={editableDomain}
+                onValueChange={setEditableDomain}
+                disabled={!canEdit}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Corporate">Corporate</SelectItem>
+                  <SelectItem value="Beer">Beer</SelectItem>
+                  <SelectItem value="Pub">Pub</SelectItem>
+                </SelectContent>
+              </Select>
+              {canEdit && editableDomain !== page.domain && (
+                <Button 
+                  onClick={handleSaveDomain} 
+                  disabled={isSaving}
+                  size="sm"
+                  className="rounded-full"
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  {isSaving ? "Saving..." : "Save Domain"}
+                </Button>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {editableDomain === 'Corporate' && "Uses existing v2 Corporate schema engine"}
+              {editableDomain === 'Beer' && "Beer schema engine coming soon"}
+              {editableDomain === 'Pub' && "Pub module is Phase 2 – not implemented yet"}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Corporate v2 Metadata Section - only show for Corporate domain */}
+        {page.domain === 'Corporate' && (
+          <Collapsible
+            open={isV2MetadataOpen}
+            onOpenChange={setIsV2MetadataOpen}
+            className="rounded-2xl"
+          >
           <Card className="rounded-2xl border-0 shadow-sm">
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
@@ -728,6 +893,97 @@ export default function PageDetail() {
             </CollapsibleContent>
           </Card>
         </Collapsible>
+        )}
+
+        {/* Beer Metadata Section - only show for Beer domain */}
+        {page.domain === 'Beer' && (
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle>Beer Metadata</CardTitle>
+              <CardDescription>
+                These fields will be used by the Beer schema engine (coming soon)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="beerAbv">ABV (%)</Label>
+                  <Input
+                    id="beerAbv"
+                    type="number"
+                    step="0.1"
+                    placeholder="4.5"
+                    value={editableBeerAbv}
+                    onChange={(e) => setEditableBeerAbv(e.target.value)}
+                    disabled={!canEdit}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="beerStyle">Style</Label>
+                  <Input
+                    id="beerStyle"
+                    type="text"
+                    placeholder="IPA, Lager, Pale Ale..."
+                    value={editableBeerStyle}
+                    onChange={(e) => setEditableBeerStyle(e.target.value)}
+                    disabled={!canEdit}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="beerLaunchYear">Launch Year</Label>
+                  <Input
+                    id="beerLaunchYear"
+                    type="number"
+                    placeholder="2020"
+                    value={editableBeerLaunchYear}
+                    onChange={(e) => setEditableBeerLaunchYear(e.target.value)}
+                    disabled={!canEdit}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="beerOfficialUrl">Official Beer URL</Label>
+                  <Input
+                    id="beerOfficialUrl"
+                    type="text"
+                    placeholder="https://..."
+                    value={editableBeerOfficialUrl}
+                    onChange={(e) => setEditableBeerOfficialUrl(e.target.value)}
+                    disabled={!canEdit}
+                  />
+                </div>
+              </div>
+              {canEdit && (
+                <div className="flex justify-end pt-4">
+                  <Button
+                    onClick={handleSaveBeerMetadata}
+                    disabled={isSaving}
+                    className="rounded-full"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    {isSaving ? 'Saving...' : 'Save Beer Metadata'}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pub Placeholder - only show for Pub domain */}
+        {page.domain === 'Pub' && (
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle>Pub Module</CardTitle>
+              <CardDescription>
+                Phase 2 – not implemented yet
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                The Pub module will be added in a future release. This will include schema generation for individual pub and hotel pages.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="schema" className="w-full">
           <TabsList>
