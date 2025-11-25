@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Link, useSearchParams } from "react-router-dom";
-import { Plus, Search, Upload, Trash2, Edit } from "lucide-react";
+import { Plus, Search, Upload, Trash2, Edit, CheckCircle2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -848,10 +848,49 @@ export default function Pages() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm">{page.page_type || "—"}</span>
+                        {canEdit ? (
+                          <Select
+                            value={page.page_type || "none"}
+                            onValueChange={(value) => handleInlineUpdate(page.id, "page_type", value === "none" ? null : value)}
+                          >
+                            <SelectTrigger className="w-[180px] h-8 rounded-lg">
+                              <SelectValue placeholder="—" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl max-h-[300px]">
+                              <SelectItem value="none">—</SelectItem>
+                              {V2_PAGE_TYPES.map((type) => (
+                                <SelectItem key={type} value={type}>
+                                  {type}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-sm">{page.page_type || "—"}</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm">{page.category || "—"}</span>
+                        {canEdit ? (
+                          <Select
+                            value={page.category || "none"}
+                            onValueChange={(value) => handleInlineUpdate(page.id, "category", value === "none" ? null : value)}
+                            disabled={!page.page_type}
+                          >
+                            <SelectTrigger className="w-[160px] h-8 rounded-lg">
+                              <SelectValue placeholder="—" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl max-h-[300px]">
+                              <SelectItem value="none">—</SelectItem>
+                              {page.page_type && V2_CATEGORIES[page.page_type]?.map((cat) => (
+                                <SelectItem key={cat} value={cat}>
+                                  {cat}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-sm">{page.category || "—"}</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {canEdit ? (
@@ -885,9 +924,16 @@ export default function Pages() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {page.last_schema_generated_at
-                          ? new Date(page.last_schema_generated_at).toLocaleDateString()
-                          : "Never"}
+                        <div className="flex items-center gap-2">
+                          {page.last_schema_generated_at && (
+                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-500 flex-shrink-0" />
+                          )}
+                          <span>
+                            {page.last_schema_generated_at
+                              ? new Date(page.last_schema_generated_at).toLocaleDateString()
+                              : "Never"}
+                          </span>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
