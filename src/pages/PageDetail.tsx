@@ -113,6 +113,10 @@ export default function PageDetail() {
   const [editableBeerStyle, setEditableBeerStyle] = useState<string>('');
   const [editableBeerLaunchYear, setEditableBeerLaunchYear] = useState<string>('');
   const [editableBeerOfficialUrl, setEditableBeerOfficialUrl] = useState<string>('');
+  
+  // Homepage manual schema editing
+  const [isEditingHomepageSchema, setIsEditingHomepageSchema] = useState(false);
+  const [editedHomepageSchema, setEditedHomepageSchema] = useState<string>('');
 
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
@@ -224,6 +228,14 @@ export default function PageDetail() {
 
   const handleGenerateSchema = async () => {
     if (!page) return;
+    
+    // ========================================
+    // HOMEPAGE PROTECTION - Block AI generation for homepage
+    // ========================================
+    if (page.is_home_page) {
+      toast.info("Homepage schema is managed manually – AI generation is disabled.");
+      return;
+    }
     
     // ========================================
     // DOMAIN LANE LOGIC - Handle different domains
@@ -491,6 +503,54 @@ export default function PageDetail() {
     }
   };
 
+  const handleSaveHomepageSchema = async (versionId: string) => {
+    if (!isAdmin || !page || !page.is_home_page) return;
+    
+    setIsSaving(true);
+    try {
+      // Validate JSON
+      JSON.parse(editedHomepageSchema);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Update the existing schema version
+      const { error } = await supabase
+        .from('schema_versions')
+        .update({
+          jsonld: editedHomepageSchema,
+        })
+        .eq('id', versionId);
+
+      if (error) throw error;
+
+      // Audit log
+      await supabase.from("audit_log").insert({
+        user_id: user?.id,
+        entity_type: "schema_version",
+        entity_id: versionId,
+        action: "update",
+        details: {
+          page_id: page.id,
+          page_path: page.path,
+          note: "Manual homepage schema edit",
+        },
+      });
+
+      toast.success('Homepage schema saved successfully');
+      setIsEditingHomepageSchema(false);
+      await fetchPageData();
+    } catch (error: any) {
+      console.error('Error saving homepage schema:', error);
+      if (error.message?.includes('JSON')) {
+        toast.error('Invalid JSON format');
+      } else {
+        toast.error('Failed to save homepage schema');
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -673,8 +733,15 @@ export default function PageDetail() {
             <div className="flex items-center gap-4">
               <Select
                 value={editableDomain}
-                onValueChange={setEditableDomain}
-                disabled={!canEdit}
+                onValueChange={(value) => {
+                  // Block domain change for homepage
+                  if (page.is_home_page && value !== 'Corporate') {
+                    toast.error("Homepage must stay in the Corporate domain.");
+                    return;
+                  }
+                  setEditableDomain(value);
+                }}
+                disabled={!canEdit || page.is_home_page}
               >
                 <SelectTrigger className="w-[200px]">
                   <SelectValue />
@@ -1081,12 +1148,52 @@ export default function PageDetail() {
                       </TabsContent>
                       <TabsContent value="json" className="mt-4">
                         <div className="space-y-2">
-                          <div className="flex justify-end">
+                          <div className="flex justify-between items-center">
+                            {/* Homepage manual editing for admins only */}
+                            {page.is_home_page && isAdmin && !isEditingHomepageSchema && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEditedHomepageSchema(version.jsonld);
+                                  setIsEditingHomepageSchema(true);
+                                }}
+                              >
+                                Edit homepage schema
+                              </Button>
+                            )}
+                            {page.is_home_page && isAdmin && isEditingHomepageSchema && (
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleSaveHomepageSchema(version.id)}
+                                  disabled={isSaving}
+                                >
+                                  <Save className="mr-2 h-4 w-4" />
+                                  {isSaving ? 'Saving...' : 'Save'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setIsEditingHomepageSchema(false);
+                                    setEditedHomepageSchema('');
+                                  }}
+                                  disabled={isSaving}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            )}
+                            {(!page.is_home_page || !isEditingHomepageSchema) && (
+                              <div className="flex-1" />
+                            )}
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                navigator.clipboard.writeText(version.jsonld);
+                                const textToCopy = isEditingHomepageSchema ? editedHomepageSchema : version.jsonld;
+                                navigator.clipboard.writeText(textToCopy);
                                 toast.success("Schema JSON copied");
                               }}
                             >
@@ -1094,29 +1201,53 @@ export default function PageDetail() {
                               Copy JSON
                             </Button>
                           </div>
-                          <textarea
-                            readOnly
-                            value={version.jsonld}
-                            className="w-full rounded-lg border border-border bg-muted p-4 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                            style={{ 
-                              minHeight: '400px',
-                              maxHeight: '600px',
-                              overflow: 'auto',
-                              whiteSpace: 'pre',
-                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
-                            }}
-                            onClick={(e) => {
-                              // Ensure the textarea can be focused and selected
-                              e.currentTarget.focus();
-                            }}
-                            onKeyDown={(e) => {
-                              // Handle Cmd+A / Ctrl+A to select all content in this textarea
-                              if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
-                                e.preventDefault();
-                                e.currentTarget.select();
-                              }
-                            }}
-                          />
+                          
+                          {/* Read-only textarea for non-homepage or non-admin */}
+                          {(!page.is_home_page || !isAdmin || !isEditingHomepageSchema) && (
+                            <textarea
+                              readOnly
+                              value={version.jsonld}
+                              className="w-full rounded-lg border border-border bg-muted p-4 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                              style={{ 
+                                minHeight: '400px',
+                                maxHeight: '600px',
+                                overflow: 'auto',
+                                whiteSpace: 'pre',
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+                              }}
+                              onClick={(e) => {
+                                e.currentTarget.focus();
+                              }}
+                              onKeyDown={(e) => {
+                                if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+                                  e.preventDefault();
+                                  e.currentTarget.select();
+                                }
+                              }}
+                            />
+                          )}
+                          
+                          {/* Editable textarea for homepage admin editing */}
+                          {page.is_home_page && isAdmin && isEditingHomepageSchema && (
+                            <textarea
+                              value={editedHomepageSchema}
+                              onChange={(e) => setEditedHomepageSchema(e.target.value)}
+                              className="w-full rounded-lg border border-border bg-background p-4 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                              style={{ 
+                                minHeight: '400px',
+                                maxHeight: '600px',
+                                overflow: 'auto',
+                                whiteSpace: 'pre',
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+                              }}
+                            />
+                          )}
+                          
+                          {page.is_home_page && !isAdmin && (
+                            <p className="text-xs text-muted-foreground">
+                              Homepage schema is managed manually by admins only.
+                            </p>
+                          )}
                         </div>
                       </TabsContent>
                     </Tabs>
