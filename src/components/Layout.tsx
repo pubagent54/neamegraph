@@ -45,11 +45,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4">
+        <div className="container mx-auto px-8 py-5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-12">
-              <Link to="/dashboard" className="flex items-center">
-                <img src={neameGraphLogo} alt="NeameGraph powered by PubAgent" className="h-20 w-auto" />
+            <div className="flex items-center gap-16">
+              <Link to="/dashboard" className="flex items-center transition-transform hover:scale-105">
+                <img src={neameGraphLogo} alt="NeameGraph powered by PubAgent" className="h-28 w-auto" />
               </Link>
               <nav className="hidden md:flex items-center gap-1">
                 {navItems.map((item) => {
