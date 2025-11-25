@@ -8,13 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Link, useSearchParams } from "react-router-dom";
-import { Plus, Search, Upload, Trash2, Edit, CheckCircle2 } from "lucide-react";
+import { Plus, Search, Upload, Trash2, Edit, CheckCircle2, Circle } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const SECTIONS = [
   "beers", "pubs", "stay", "news", "history", "sustainability",
@@ -61,6 +62,34 @@ const STATUS_OPTIONS = [
   "approved",       // Approved
   "implemented"     // Implemented (always last)
 ];
+
+// Status configuration for labels and dot colors
+const STATUS_CONFIG = {
+  not_started: { 
+    label: "Not Started", 
+    dotClass: "bg-muted-foreground"
+  },
+  ai_draft: { 
+    label: "Brain Draft", 
+    dotClass: "bg-status-draft"
+  },
+  needs_review: { 
+    label: "Needs Review", 
+    dotClass: "bg-status-review"
+  },
+  needs_rework: { 
+    label: "Needs Rework", 
+    dotClass: "bg-status-error"
+  },
+  approved: { 
+    label: "Approved", 
+    dotClass: "bg-status-approved"
+  },
+  implemented: { 
+    label: "Implemented", 
+    dotClass: "bg-status-implemented"
+  },
+} as const;
 
 const DOMAINS = ["Corporate", "Beer", "Pub"];
 
@@ -900,23 +929,53 @@ export default function Pages() {
                       </TableCell>
                       <TableCell>
                         {canEdit ? (
-                          <Select
-                            value={page.status}
-                            onValueChange={(value) => handleInlineUpdate(page.id, "status", value)}
-                          >
-                            <SelectTrigger className="w-[140px] h-8 rounded-lg">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl">
-                              {STATUS_OPTIONS.map((status) => (
-                                <SelectItem key={status} value={status}>
-                                  <StatusBadge status={status as any} />
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <Select
+                                value={page.status}
+                                onValueChange={(value) => handleInlineUpdate(page.id, "status", value)}
+                              >
+                                <TooltipTrigger asChild>
+                                  <SelectTrigger 
+                                    className="w-8 h-8 rounded-full p-0 border-0 hover:bg-accent"
+                                    aria-label={STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.label || page.status}
+                                  >
+                                    <span
+                                      className={`inline-block w-3 h-3 rounded-full ${STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.dotClass || "bg-muted-foreground"}`}
+                                    />
+                                  </SelectTrigger>
+                                </TooltipTrigger>
+                                <SelectContent className="rounded-xl">
+                                  {STATUS_OPTIONS.map((status) => (
+                                    <SelectItem key={status} value={status}>
+                                      <StatusBadge status={status as any} />
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <TooltipContent>
+                                <p>{STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.label || page.status}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         ) : (
-                          <StatusBadge status={page.status} />
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-full"
+                                  aria-label={STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.label || page.status}
+                                >
+                                  <span
+                                    className={`inline-block w-3 h-3 rounded-full ${STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.dotClass || "bg-muted-foreground"}`}
+                                  />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.label || page.status}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                       </TableCell>
                       <TableCell>
