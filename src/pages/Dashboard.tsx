@@ -5,8 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { FileText, CheckCircle2, AlertCircle, Clock, Rocket, Settings as SettingsIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
 
 interface Stats {
   total: number;
@@ -32,12 +30,9 @@ export default function Dashboard() {
     pub: 0,
   });
   const [loading, setLoading] = useState(true);
-  const [schemaEngine, setSchemaEngine] = useState<string>("v1");
-  const [settingsId, setSettingsId] = useState<string>("");
 
   useEffect(() => {
     fetchStats();
-    fetchSchemaEngine();
   }, []);
 
   const fetchStats = async () => {
@@ -65,41 +60,6 @@ export default function Dashboard() {
       console.error("Error fetching stats:", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchSchemaEngine = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("settings")
-        .select("id, schema_engine_version")
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) {
-        setSchemaEngine(data.schema_engine_version || "v1");
-        setSettingsId(data.id);
-      }
-    } catch (error) {
-      console.error("Error fetching schema engine:", error);
-      toast.error("Failed to load schema engine settings");
-    }
-  };
-
-  const handleEngineChange = async (value: string) => {
-    try {
-      const { error } = await supabase
-        .from("settings")
-        .update({ schema_engine_version: value })
-        .eq("id", settingsId);
-
-      if (error) throw error;
-
-      setSchemaEngine(value);
-      toast.success(`Schema engine changed to ${value === "v1" ? "Classic" : "Corporate"}`);
-    } catch (error) {
-      console.error("Error updating schema engine:", error);
-      toast.error("Failed to update schema engine");
     }
   };
 
@@ -229,18 +189,12 @@ export default function Dashboard() {
                 <SettingsIcon className="h-5 w-5" />
                 Schema Engine
               </CardTitle>
-              <CardDescription>Select generation engine</CardDescription>
             </CardHeader>
             <CardContent>
-              <Select value={schemaEngine} onValueChange={handleEngineChange}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="v1">v1 - Classic</SelectItem>
-                  <SelectItem value="v2">v2 - Corporate</SelectItem>
-                </SelectContent>
-              </Select>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                NeameGraph is using the Corporate v2 schema engine for this app. 
+                This is locked and cannot be changed from here.
+              </p>
             </CardContent>
           </Card>
 
