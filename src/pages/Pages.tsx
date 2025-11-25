@@ -803,20 +803,19 @@ export default function Pages() {
                       />
                     </TableHead>
                   )}
-                  <TableHead className="font-semibold">Path</TableHead>
+                  <TableHead className="font-semibold">Path (view)</TableHead>
                   <TableHead className="font-semibold">Domain</TableHead>
                   <TableHead className="font-semibold">Page Type</TableHead>
                   <TableHead className="font-semibold">Category</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
                   <TableHead className="font-semibold">FAQ</TableHead>
                   <TableHead className="font-semibold">Last Schema</TableHead>
-                  <TableHead className="text-right font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredPages.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 9 : 8} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={canEdit ? 8 : 7} className="text-center text-muted-foreground py-8">
                     No pages found
                   </TableCell>
                 </TableRow>
@@ -832,7 +831,10 @@ export default function Pages() {
                         </TableCell>
                       )}
                       <TableCell className="font-mono text-sm">
-                        <Link to={`/pages/${page.id}`} className="hover:text-primary transition-colors">
+                        <Link 
+                          to={`/pages/${page.id}`} 
+                          className="text-primary hover:text-primary/80 hover:underline transition-all cursor-pointer font-medium"
+                        >
                           {getPathDisplay(page.path)}
                         </Link>
                       </TableCell>
@@ -886,13 +888,6 @@ export default function Pages() {
                         {page.last_schema_generated_at
                           ? new Date(page.last_schema_generated_at).toLocaleDateString()
                           : "Never"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Link to={`/pages/${page.id}`}>
-                          <Button variant="ghost" size="sm" className="rounded-full">
-                            View
-                          </Button>
-                        </Link>
                       </TableCell>
                     </TableRow>
                   ))
