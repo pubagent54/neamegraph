@@ -240,6 +240,12 @@ export default function PageDetail() {
       return;
     }
     
+    // Corporate lane: Validate required metadata before calling edge function
+    if (page.domain === 'Corporate' && !page.page_type) {
+      toast.error("Please set the Page Type in the Corporate v2 Metadata section before generating schema.");
+      return;
+    }
+    
     // Corporate lane: Use existing v2 Corporate schema engine
     setGenerating(true);
 
