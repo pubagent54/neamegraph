@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // ========================================
@@ -814,6 +815,22 @@ export default function PageDetail() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  {/* Is Home Page Toggle */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="isHomePage">Is Home Page</Label>
+                      <Switch
+                        id="isHomePage"
+                        checked={editableIsHomePage}
+                        onCheckedChange={setEditableIsHomePage}
+                        disabled={!canEdit}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Mark this page as the site homepage
+                    </p>
                   </div>
                 </div>
 
