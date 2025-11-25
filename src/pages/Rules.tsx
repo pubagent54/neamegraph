@@ -276,7 +276,7 @@ export default function Rules() {
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold tracking-tight mb-2">AI Rules</h1>
+            <h1 className="text-4xl font-bold tracking-tight mb-2">NeameGraph Brain Rules</h1>
             <p className="text-lg text-muted-foreground">
               Manage prompts for schema generation
             </p>
@@ -294,7 +294,7 @@ export default function Rules() {
                   {editingRule ? "Edit Rule" : "Create New Rule"}
                 </DialogTitle>
                 <DialogDescription>
-                  Define the AI prompt for schema generation
+                  Define the NeameGraph Brain prompt for schema generation
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -364,7 +364,7 @@ export default function Rules() {
                     onChange={(e) =>
                       setFormData({ ...formData, body: e.target.value })
                     }
-                    placeholder="Enter the system prompt for AI schema generation..."
+                    placeholder="Enter the system prompt for NeameGraph Brain schema generation..."
                     className="min-h-[400px] font-mono text-sm rounded-xl"
                   />
                 </div>

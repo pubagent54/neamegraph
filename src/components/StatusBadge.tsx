@@ -7,7 +7,7 @@ interface StatusBadgeProps {
 
 const statusConfig = {
   not_started: { label: "Not Started", className: "bg-muted text-muted-foreground" },
-  ai_draft: { label: "AI Draft", className: "bg-status-draft/20 text-status-draft border-status-draft/30" },
+  ai_draft: { label: "Brain Draft", className: "bg-status-draft/20 text-status-draft border-status-draft/30" },
   needs_review: { label: "Needs Review", className: "bg-status-review/20 text-status-review border-status-review/30" },
   approved: { label: "Approved", className: "bg-status-approved/20 text-status-approved border-status-approved/30" },
   implemented: { label: "Implemented", className: "bg-status-implemented/20 text-status-implemented border-status-implemented/30" },

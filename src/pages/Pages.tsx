@@ -814,7 +814,7 @@ export default function Pages() {
             <SelectContent className="rounded-2xl">
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="not_started">Not Started</SelectItem>
-              <SelectItem value="ai_draft">AI Draft</SelectItem>
+              <SelectItem value="ai_draft">Brain Draft</SelectItem>
               <SelectItem value="needs_review">Needs Review</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="implemented">Implemented</SelectItem>
