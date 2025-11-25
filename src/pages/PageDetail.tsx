@@ -1188,18 +1188,33 @@ export default function PageDetail() {
                             {(!page.is_home_page || !isEditingHomepageSchema) && (
                               <div className="flex-1" />
                             )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                const textToCopy = isEditingHomepageSchema ? editedHomepageSchema : version.jsonld;
-                                navigator.clipboard.writeText(textToCopy);
-                                toast.success("Schema JSON copied");
-                              }}
-                            >
-                              <Copy className="mr-2 h-4 w-4" />
-                              Copy JSON
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const textToCopy = isEditingHomepageSchema ? editedHomepageSchema : version.jsonld;
+                                  navigator.clipboard.writeText(textToCopy);
+                                  toast.success("Raw JSON copied to clipboard");
+                                }}
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copy JSON
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const rawJson = isEditingHomepageSchema ? editedHomepageSchema : version.jsonld;
+                                  const wrappedForDrupal = `<script type="application/ld+json">\n${rawJson}\n</script>`;
+                                  navigator.clipboard.writeText(wrappedForDrupal);
+                                  toast.success("Schema copied for Drupal (with script tag wrapper)");
+                                }}
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copy for Drupal
+                              </Button>
+                            </div>
                           </div>
                           
                           {/* Read-only textarea for non-homepage or non-admin */}
