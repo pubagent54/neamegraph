@@ -324,7 +324,6 @@ export default function Rules() {
                         <SelectValue placeholder="Select page type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
                         {V2_PAGE_TYPES.map((pt) => (
                           <SelectItem key={pt} value={pt}>
                             {pt}
@@ -347,7 +346,6 @@ export default function Rules() {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
                         {formData.page_type && V2_CATEGORIES[formData.page_type]?.map((cat) => (
                           <SelectItem key={cat} value={cat}>
                             {cat}
