@@ -52,8 +52,14 @@ const V2_CATEGORIES: Record<string, string[]> = {
 
 const FAQ_MODES = ["auto", "ignore"];
 
+// Status options in fixed order: Implemented always last
 const STATUS_OPTIONS = [
-  "not_started", "ai_draft", "needs_review", "approved", "implemented", "needs_rework"
+  "not_started",    // Not Started
+  "ai_draft",       // Brain Draft
+  "needs_review",   // Needs Review
+  "needs_rework",   // Needs Rework
+  "approved",       // Approved
+  "implemented"     // Implemented (always last)
 ];
 
 const DOMAINS = ["Corporate", "Beer", "Pub"];
