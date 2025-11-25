@@ -108,16 +108,9 @@ export default function Pages() {
   const [pendingNewPaths, setPendingNewPaths] = useState<string[]>([]);
   const [newPage, setNewPage] = useState({
     path: "",
-    section: "other",
-    page_type: "other",
+    domain: "Corporate",
     has_faq: false,
-    priority: 1,
     notes: "",
-    // V2 fields
-    v2_page_type: "",
-    category: "",
-    logo_url: "",
-    hero_image_url: "",
     faq_mode: "auto",
     is_home_page: false,
   });
@@ -173,17 +166,16 @@ export default function Pages() {
 
       const { error } = await supabase.from("pages").insert({
         path: newPage.path,
-        section: newPage.section || null,
-        page_type: newPage.v2_page_type || newPage.page_type || null,
+        domain: newPage.domain || "Corporate",
+        section: null,
+        page_type: null,
+        category: null,
         has_faq: newPage.has_faq,
-        priority: newPage.priority || null,
+        priority: null,
         notes: newPage.notes || null,
         status: "not_started" as const,
         created_by_user_id: user.id,
         last_modified_by_user_id: user.id,
-        category: newPage.category || null,
-        logo_url: newPage.logo_url || null,
-        hero_image_url: newPage.hero_image_url || null,
         faq_mode: newPage.faq_mode || "auto",
         is_home_page: newPage.is_home_page,
       });
@@ -193,15 +185,9 @@ export default function Pages() {
       toast.success("Page added successfully");
       setNewPage({
         path: "",
-        section: "",
-        page_type: "",
+        domain: "Corporate",
         has_faq: false,
-        priority: 1,
         notes: "",
-        v2_page_type: "",
-        category: "",
-        logo_url: "",
-        hero_image_url: "",
         faq_mode: "auto",
         is_home_page: false,
       });
@@ -600,44 +586,37 @@ export default function Pages() {
                         className="rounded-xl"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="section">Section</Label>
-                        <Select value={newPage.section} onValueChange={(value) => setNewPage({ ...newPage, section: value })}>
-                          <SelectTrigger className="rounded-xl">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-2xl">
-                            {SECTIONS.map((section) => (
-                              <SelectItem key={section} value={section}>{section}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="page_type">Page Type</Label>
-                        <Select value={newPage.page_type} onValueChange={(value) => setNewPage({ ...newPage, page_type: value })}>
-                          <SelectTrigger className="rounded-xl">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-2xl">
-                            {PAGE_TYPES.map((type) => (
-                              <SelectItem key={type} value={type}>{type}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="domain">Domain</Label>
+                      <Select value={newPage.domain} onValueChange={(value) => setNewPage({ ...newPage, domain: value })}>
+                        <SelectTrigger className="rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl">
+                          {DOMAINS.map((domain) => (
+                            <SelectItem key={domain} value={domain}>{domain}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Defaults to Corporate. Set metadata in Page Detail after creation.
+                      </p>
                     </div>
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="priority">Priority</Label>
-                        <Input
-                          id="priority"
-                          type="number"
-                          value={newPage.priority}
-                          onChange={(e) => setNewPage({ ...newPage, priority: parseInt(e.target.value) || 1 })}
-                          className="rounded-xl"
-                        />
+                        <Label htmlFor="faq_mode">FAQ Mode</Label>
+                        <Select value={newPage.faq_mode} onValueChange={(value) => setNewPage({ ...newPage, faq_mode: value })}>
+                          <SelectTrigger className="rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-2xl">
+                            {FAQ_MODES.map((mode) => (
+                              <SelectItem key={mode} value={mode}>{mode === "auto" ? "Auto" : "Ignore"}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="flex items-center space-x-2 pt-8">
                         <input
@@ -650,6 +629,7 @@ export default function Pages() {
                         <Label htmlFor="has_faq" className="cursor-pointer">Has FAQ</Label>
                       </div>
                     </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="notes">Notes</Label>
                       <Textarea
@@ -659,98 +639,6 @@ export default function Pages() {
                         onChange={(e) => setNewPage({ ...newPage, notes: e.target.value })}
                         className="min-h-[80px] rounded-xl"
                       />
-                    </div>
-
-                    {/* V2 Corporate Fields */}
-                    <div className="border-t pt-4 space-y-4">
-                      <h4 className="font-semibold text-sm text-muted-foreground">Corporate v2 Metadata (Optional)</h4>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="v2_page_type">Page Type (v2)</Label>
-                          <Select value={newPage.v2_page_type} onValueChange={(value) => setNewPage({ ...newPage, v2_page_type: value, category: "" })}>
-                            <SelectTrigger className="rounded-xl">
-                              <SelectValue placeholder="Select type..." />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-2xl">
-                              {V2_PAGE_TYPES.map((type) => (
-                                <SelectItem key={type} value={type}>{type}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        {newPage.v2_page_type && newPage.v2_page_type !== "Site Home Page" && (
-                          <div className="space-y-2">
-                            <Label htmlFor="category">Category</Label>
-                            <Select value={newPage.category} onValueChange={(value) => setNewPage({ ...newPage, category: value })}>
-                              <SelectTrigger className="rounded-xl">
-                                <SelectValue placeholder="Select category..." />
-                              </SelectTrigger>
-                              <SelectContent className="rounded-2xl">
-                                {(V2_CATEGORIES[newPage.v2_page_type as keyof typeof V2_CATEGORIES] || []).map((cat) => (
-                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="logo_url">Logo URL</Label>
-                          <Input
-                            id="logo_url"
-                            placeholder="https://..."
-                            value={newPage.logo_url}
-                            onChange={(e) => setNewPage({ ...newPage, logo_url: e.target.value })}
-                            className="rounded-xl"
-                          />
-                          {newPage.logo_url && (
-                            <img src={newPage.logo_url} alt="Logo preview" className="w-16 h-16 object-contain border rounded-lg" />
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="hero_image_url">Hero Image URL</Label>
-                          <Input
-                            id="hero_image_url"
-                            placeholder="https://..."
-                            value={newPage.hero_image_url}
-                            onChange={(e) => setNewPage({ ...newPage, hero_image_url: e.target.value })}
-                            className="rounded-xl"
-                          />
-                          {newPage.hero_image_url && (
-                            <img src={newPage.hero_image_url} alt="Hero preview" className="w-full h-16 object-cover border rounded-lg" />
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="faq_mode">FAQ Mode</Label>
-                          <Select value={newPage.faq_mode} onValueChange={(value) => setNewPage({ ...newPage, faq_mode: value })}>
-                            <SelectTrigger className="rounded-xl">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-2xl">
-                              {FAQ_MODES.map((mode) => (
-                                <SelectItem key={mode} value={mode}>{mode === "auto" ? "Auto" : "Ignore"}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex items-center space-x-2 pt-8">
-                          <input
-                            type="checkbox"
-                            id="is_home_page"
-                            checked={newPage.is_home_page}
-                            onChange={(e) => setNewPage({ ...newPage, is_home_page: e.target.checked })}
-                            className="rounded border-input"
-                          />
-                          <Label htmlFor="is_home_page" className="cursor-pointer">Is Home Page</Label>
-                        </div>
-                      </div>
                     </div>
 
                     <Button onClick={handleAddPage} className="w-full rounded-full">Add Page</Button>
@@ -921,18 +809,17 @@ export default function Pages() {
                   <TableHead className="font-semibold">Category</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
                   <TableHead className="font-semibold">FAQ</TableHead>
-                  <TableHead className="font-semibold w-24">Priority</TableHead>
                   <TableHead className="font-semibold">Last Schema</TableHead>
                   <TableHead className="text-right font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredPages.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={canEdit ? 10 : 9} className="text-center text-muted-foreground py-8">
-                      No pages found
-                    </TableCell>
-                  </TableRow>
+                <TableRow>
+                  <TableCell colSpan={canEdit ? 9 : 8} className="text-center text-muted-foreground py-8">
+                    No pages found
+                  </TableCell>
+                </TableRow>
                 ) : (
                   filteredPages.map((page) => (
                     <TableRow key={page.id}>
@@ -944,7 +831,11 @@ export default function Pages() {
                           />
                         </TableCell>
                       )}
-                      <TableCell className="font-mono text-sm">{getPathDisplay(page.path)}</TableCell>
+                      <TableCell className="font-mono text-sm">
+                        <Link to={`/pages/${page.id}`} className="hover:text-primary transition-colors">
+                          {getPathDisplay(page.path)}
+                        </Link>
+                      </TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
                           page.domain === 'Corporate' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
@@ -989,18 +880,6 @@ export default function Pages() {
                           />
                         ) : (
                           page.has_faq ? "Yes" : "No"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {canEdit ? (
-                          <Input
-                            type="number"
-                            value={page.priority || 1}
-                            onChange={(e) => handleInlineUpdate(page.id, "priority", parseInt(e.target.value) || 1)}
-                            className="w-16 h-8 rounded-lg"
-                          />
-                        ) : (
-                          page.priority || 1
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
