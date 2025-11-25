@@ -87,6 +87,9 @@ export default function Pages() {
   const [bulkActionValue, setBulkActionValue] = useState("");
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicatePaths, setDuplicatePaths] = useState<string[]>([]);
+  const [pendingNewPaths, setPendingNewPaths] = useState<string[]>([]);
   const [newPage, setNewPage] = useState({
     path: "",
     section: "other",
@@ -263,6 +266,15 @@ export default function Pages() {
 
       const existingPaths = new Set(existingPages?.map(p => p.path) || []);
       const newPaths = paths.filter(path => !existingPaths.has(path));
+      const duplicates = paths.filter(path => existingPaths.has(path));
+
+      if (duplicates.length > 0) {
+        // Show duplicate dialog
+        setDuplicatePaths(duplicates);
+        setPendingNewPaths(newPaths);
+        setDuplicateDialogOpen(true);
+        return;
+      }
 
       if (newPaths.length === 0) {
         toast.info("All paths already exist in the database");
@@ -271,6 +283,16 @@ export default function Pages() {
         return;
       }
 
+      // No duplicates, proceed with insert
+      await insertNewPages(newPaths);
+    } catch (error: any) {
+      console.error("Error bulk adding pages:", error);
+      toast.error(error.message || "Failed to add pages");
+    }
+  };
+
+  const insertNewPages = async (pathsToInsert: string[]) => {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
@@ -278,7 +300,7 @@ export default function Pages() {
         return;
       }
 
-      const pagesToInsert = newPaths.map((path) => {
+      const pagesToInsert = pathsToInsert.map((path) => {
         return {
           path,
           section: null,
@@ -295,18 +317,59 @@ export default function Pages() {
 
       if (error) throw error;
 
-      const skippedCount = paths.length - newPaths.length;
-      if (skippedCount > 0) {
-        toast.success(`Added ${newPaths.length} new pages (${skippedCount} already existed)`);
-      } else {
-        toast.success(`Added ${newPaths.length} pages successfully`);
-      }
+      toast.success(`Added ${pathsToInsert.length} pages successfully`);
       setBulkPaths("");
       setBulkDialogOpen(false);
       fetchPages();
     } catch (error: any) {
-      console.error("Error bulk adding pages:", error);
+      console.error("Error inserting pages:", error);
       toast.error(error.message || "Failed to add pages");
+    }
+  };
+
+  const handleKeepExisting = async () => {
+    // Only add new paths, skip duplicates
+    if (pendingNewPaths.length > 0) {
+      await insertNewPages(pendingNewPaths);
+    } else {
+      toast.info("No new pages to add");
+      setBulkPaths("");
+      setBulkDialogOpen(false);
+    }
+    setDuplicateDialogOpen(false);
+    setDuplicatePaths([]);
+    setPendingNewPaths([]);
+  };
+
+  const handleReplaceExisting = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast.error("You must be logged in");
+        return;
+      }
+
+      // Delete existing pages with duplicate paths
+      const { error: deleteError } = await supabase
+        .from("pages")
+        .delete()
+        .in("path", duplicatePaths);
+
+      if (deleteError) throw deleteError;
+
+      // Insert all paths (new + replaced)
+      const allPaths = [...pendingNewPaths, ...duplicatePaths];
+      await insertNewPages(allPaths);
+
+      toast.success(`Replaced ${duplicatePaths.length} existing pages and added ${pendingNewPaths.length} new pages`);
+      
+      setDuplicateDialogOpen(false);
+      setDuplicatePaths([]);
+      setPendingNewPaths([]);
+    } catch (error: any) {
+      console.error("Error replacing pages:", error);
+      toast.error(error.message || "Failed to replace pages");
     }
   };
 
@@ -1033,6 +1096,53 @@ export default function Pages() {
                 className="rounded-full bg-destructive hover:bg-destructive/90"
               >
                 Reset All Pages
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Duplicate Pages Dialog */}
+        <AlertDialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
+          <AlertDialogContent className="rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Duplicate Pages Detected</AlertDialogTitle>
+              <AlertDialogDescription>
+                The following {duplicatePaths.length} path(s) already exist in the database:
+                <div className="mt-3 p-3 bg-muted/50 rounded-xl max-h-[200px] overflow-y-auto">
+                  <ul className="text-sm space-y-1">
+                    {duplicatePaths.map((path) => (
+                      <li key={path} className="font-mono text-foreground">{path}</li>
+                    ))}
+                  </ul>
+                </div>
+                <p className="mt-3">
+                  Would you like to <strong>replace</strong> the existing pages (deleting all their data including schema versions) or <strong>keep</strong> the existing ones and only add the {pendingNewPaths.length} new path(s)?
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel 
+                className="rounded-full" 
+                onClick={() => {
+                  setDuplicateDialogOpen(false);
+                  setDuplicatePaths([]);
+                  setPendingNewPaths([]);
+                }}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <Button
+                variant="outline"
+                onClick={handleKeepExisting}
+                className="rounded-full"
+              >
+                Keep Existing
+              </Button>
+              <AlertDialogAction
+                onClick={handleReplaceExisting}
+                className="rounded-full bg-destructive hover:bg-destructive/90"
+              >
+                Replace Existing
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
