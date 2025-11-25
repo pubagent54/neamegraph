@@ -77,7 +77,7 @@ export default function Pages() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sectionFilter, setSectionFilter] = useState<string>("all");
+  const [pageTypeFilter, setPageTypeFilter] = useState<string>("all");
   const [bulkPaths, setBulkPaths] = useState("");
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -475,8 +475,8 @@ export default function Pages() {
   const filteredPages = pages.filter((page) => {
     const matchesSearch = page.path.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || page.status === statusFilter;
-    const matchesSection = sectionFilter === "all" || page.section === sectionFilter;
-    return matchesSearch && matchesStatus && matchesSection;
+    const matchesPageType = pageTypeFilter === "all" || page.page_type === pageTypeFilter;
+    return matchesSearch && matchesStatus && matchesPageType;
   });
 
   const getPathDisplay = (path: string) => {
@@ -714,15 +714,15 @@ export default function Pages() {
               className="pl-10 rounded-full bg-muted/30 border-0 focus-visible:ring-primary/20"
             />
           </div>
-          <Select value={sectionFilter} onValueChange={setSectionFilter}>
+          <Select value={pageTypeFilter} onValueChange={setPageTypeFilter}>
             <SelectTrigger className="w-[180px] rounded-full bg-muted/30 border-0">
-              <SelectValue placeholder="Filter by section" />
+              <SelectValue placeholder="Filter by page type" />
             </SelectTrigger>
             <SelectContent className="rounded-2xl">
-              <SelectItem value="all">All Sections</SelectItem>
-              {SECTIONS.map((section) => (
-                <SelectItem key={section} value={section}>
-                  {section}
+              <SelectItem value="all">All Page Types</SelectItem>
+              {V2_PAGE_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
                 </SelectItem>
               ))}
             </SelectContent>
