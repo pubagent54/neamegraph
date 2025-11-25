@@ -26,6 +26,11 @@ export default function Dashboard() {
     implemented: 0,
     needs_rework: 0,
   });
+  const [domainStats, setDomainStats] = useState({
+    corporate: 0,
+    beer: 0,
+    pub: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [schemaEngine, setSchemaEngine] = useState<string>("v1");
   const [settingsId, setSettingsId] = useState<string>("");
@@ -39,7 +44,7 @@ export default function Dashboard() {
     try {
       const { data: pages, error } = await supabase
         .from("pages")
-        .select("status");
+        .select("status, domain");
 
       if (error) throw error;
 
@@ -50,7 +55,12 @@ export default function Dashboard() {
       const implemented = pages?.filter((p) => p.status === "implemented").length || 0;
       const needs_rework = pages?.filter((p) => p.status === "needs_rework").length || 0;
 
+      const corporate = pages?.filter((p) => (p.domain || 'Corporate') === 'Corporate').length || 0;
+      const beer = pages?.filter((p) => p.domain === 'Beer').length || 0;
+      const pub = pages?.filter((p) => p.domain === 'Pub').length || 0;
+
       setStats({ total, no_schema, draft, approved, implemented, needs_rework });
+      setDomainStats({ corporate, beer, pub });
     } catch (error) {
       console.error("Error fetching stats:", error);
     } finally {
@@ -176,6 +186,40 @@ export default function Dashboard() {
               </Card>
             );
           })}
+        </div>
+
+        {/* Domain Breakdown */}
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight mb-4">Domain Breakdown</h2>
+          <div className="grid gap-6 md:grid-cols-3">
+            <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100/30 dark:from-blue-950/30 dark:to-blue-900/10">
+              <CardHeader>
+                <CardTitle className="text-sm text-muted-foreground">Corporate Pages</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold text-blue-700 dark:text-blue-400 mb-1">{domainStats.corporate}</div>
+                <p className="text-sm text-muted-foreground">Using v2 Corporate engine</p>
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-amber-50 to-amber-100/30 dark:from-amber-950/30 dark:to-amber-900/10">
+              <CardHeader>
+                <CardTitle className="text-sm text-muted-foreground">Beer Pages</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold text-amber-700 dark:text-amber-400 mb-1">{domainStats.beer}</div>
+                <p className="text-sm text-muted-foreground">Engine coming soon</p>
+              </CardContent>
+            </Card>
+            <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-purple-50 to-purple-100/30 dark:from-purple-950/30 dark:to-purple-900/10">
+              <CardHeader>
+                <CardTitle className="text-sm text-muted-foreground">Pub Pages</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold text-purple-700 dark:text-purple-400 mb-1">{domainStats.pub}</div>
+                <p className="text-sm text-muted-foreground">Phase 2 - not implemented</p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

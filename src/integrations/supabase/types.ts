@@ -122,10 +122,15 @@ export type Database = {
       }
       pages: {
         Row: {
+          beer_abv: number | null
+          beer_launch_year: number | null
+          beer_official_url: string | null
+          beer_style: string | null
           category: string | null
           created_at: string
           created_by_user_id: string | null
           discovered_at: string | null
+          domain: string
           faq_mode: string
           has_faq: boolean
           hero_image_url: string | null
@@ -146,10 +151,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          beer_abv?: number | null
+          beer_launch_year?: number | null
+          beer_official_url?: string | null
+          beer_style?: string | null
           category?: string | null
           created_at?: string
           created_by_user_id?: string | null
           discovered_at?: string | null
+          domain?: string
           faq_mode?: string
           has_faq?: boolean
           hero_image_url?: string | null
@@ -170,10 +180,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          beer_abv?: number | null
+          beer_launch_year?: number | null
+          beer_official_url?: string | null
+          beer_style?: string | null
           category?: string | null
           created_at?: string
           created_by_user_id?: string | null
           discovered_at?: string | null
+          domain?: string
           faq_mode?: string
           has_faq?: boolean
           hero_image_url?: string | null
