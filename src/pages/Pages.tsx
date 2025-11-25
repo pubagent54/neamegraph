@@ -279,11 +279,11 @@ export default function Pages() {
       }
 
       const pagesToInsert = newPaths.map((path) => {
-        const { section, page_type } = autoDetectMetadata(path);
         return {
           path,
-          section,
-          page_type,
+          section: null,
+          page_type: null,
+          category: null,
           status: "not_started" as const,
           has_faq: false,
           created_by_user_id: user.id,
