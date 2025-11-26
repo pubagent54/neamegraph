@@ -219,59 +219,20 @@ serve(async (req) => {
         );
       }
 
-      // All page types now require a category
-      if (!page.category) {
-        return new Response(
-          JSON.stringify({ 
-            error: `Corporate v2 schema generation requires a Category for ${page.page_type}. Please set the Category before generating schema.`,
-            validation_errors: ["Missing category for v2"]
-          }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Load v2 rules from the rules table based on page metadata
-      console.log(`Loading v2 rules for pageType: ${page.page_type}, category: ${page.category}`);
+      // Load v2 rules from the rules table based on page_type ONLY
+      // Category is passed as metadata to the LLM but not used for rule selection
+      console.log(`Loading v2 rules for pageType: ${page.page_type}${page.category ? `, category (metadata): ${page.category}` : ''}`);
       
-      // First try to find exact match
+      // Match by page_type only
       let { data: matchedRule, error: matchError } = await supabase
         .from("rules")
         .select("*")
         .eq("page_type", page.page_type)
-        .eq("category", page.category || "")
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      // If no exact match and we have a category, try without category (baseline)
-      if (!matchedRule && page.category) {
-        const { data: baselineRule } = await supabase
-          .from("rules")
-          .select("*")
-          .eq("page_type", page.page_type)
-          .is("category", null)
-          .maybeSingle();
-        
-        if (baselineRule) {
-          matchedRule = baselineRule;
-          console.log(`Using baseline rule for ${page.page_type}`);
-        }
-      }
-
-      // If still no match, try to find any rule for this page type
-      if (!matchedRule) {
-        const { data: anyPageTypeRule } = await supabase
-          .from("rules")
-          .select("*")
-          .eq("page_type", page.page_type)
-          .limit(1)
-          .maybeSingle();
-        
-        if (anyPageTypeRule) {
-          matchedRule = anyPageTypeRule;
-          console.log(`Using any available rule for ${page.page_type}`);
-        }
-      }
-
-      // If still no match, fall back to active rule or any rule
+      // If no match for this page type, fall back to active rule or any rule
       if (!matchedRule) {
         const { data: fallbackRule } = await supabase
           .from("rules")
@@ -295,6 +256,8 @@ serve(async (req) => {
         if (matchedRule) {
           console.log(`Using fallback rule: ${matchedRule.name}`);
         }
+      } else {
+        console.log(`Using rule for ${page.page_type}: ${matchedRule.name}`);
       }
 
       if (!matchedRule) {
