@@ -63,10 +63,18 @@ export default function Rules() {
   const [ruleToDelete, setRuleToDelete] = useState<Rule | null>(null);
   
   const isAdmin = userRole === "admin";
+  const [pageTypeCounts, setPageTypeCounts] = useState<Record<string, number>>({});
+  const [previewPageType, setPreviewPageType] = useState<string>("");
+  const [previewRule, setPreviewRule] = useState<Rule | null>(null);
 
   useEffect(() => {
     fetchRules();
+    fetchPageTypeCounts();
   }, []);
+
+  useEffect(() => {
+    setPreviewRule(null);
+  }, [previewPageType]);
 
   const fetchRules = async () => {
     try {
@@ -89,6 +97,25 @@ export default function Rules() {
       toast.error("Failed to fetch rules");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPageTypeCounts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("pages")
+        .select("page_type");
+
+      if (error) throw error;
+
+      const counts: Record<string, number> = {};
+      (data || []).forEach((page) => {
+        const type = page.page_type || "unknown";
+        counts[type] = (counts[type] || 0) + 1;
+      });
+      setPageTypeCounts(counts);
+    } catch (error) {
+      console.error("Error fetching page type counts:", error);
     }
   };
 
@@ -255,16 +282,150 @@ export default function Rules() {
     setDeleteDialogOpen(true);
   };
 
+  const handlePreview = () => {
+    if (!previewPageType) return;
+
+    // Find specific rule for this page type
+    const specificRule = rules.find(
+      (r) => r.is_active && r.page_type === previewPageType
+    );
+
+    if (specificRule) {
+      setPreviewRule(specificRule);
+      return;
+    }
+
+    // Fallback to default rule
+    const defaultRule = rules.find((r) => r.is_active && r.page_type === null);
+    setPreviewRule(defaultRule || null);
+  };
+
+  const getRuleCoverage = () => {
+    const coverage: Record<string, { rule: Rule | null; count: number }> = {};
+    
+    // Get all unique page types
+    const allPageTypes = [...new Set(Object.keys(pageTypeCounts))];
+    
+    allPageTypes.forEach((pageType) => {
+      const specificRule = rules.find(
+        (r) => r.is_active && r.page_type === pageType
+      );
+      
+      if (specificRule) {
+        coverage[pageType] = {
+          rule: specificRule,
+          count: pageTypeCounts[pageType] || 0,
+        };
+      } else {
+        const defaultRule = rules.find((r) => r.is_active && r.page_type === null);
+        coverage[pageType] = {
+          rule: defaultRule,
+          count: pageTypeCounts[pageType] || 0,
+        };
+      }
+    });
+
+    return coverage;
+  };
+
   return (
     <Layout>
       <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight mb-2">NeameGraph Brain Rules</h1>
-            <p className="text-lg text-muted-foreground">
-              Manage prompts for schema generation
-            </p>
-          </div>
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight mb-2">NeameGraph Brain Rules</h1>
+          <p className="text-lg text-muted-foreground">
+            Manage prompts for schema generation
+          </p>
+        </div>
+
+        {/* Rules Coverage Dashboard */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg">Rule Coverage by Page Type</CardTitle>
+              <CardDescription>Which rules apply to each page type</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {Object.entries(getRuleCoverage()).map(([pageType, { rule, count }]) => (
+                  <div key={pageType} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="rounded-full">
+                        {pageType}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">{count} pages</span>
+                    </div>
+                    <div className="text-sm">
+                      {rule ? (
+                        <span className="font-medium">{rule.name}</span>
+                      ) : (
+                        <span className="text-muted-foreground italic">No rule</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg">Rule Preview</CardTitle>
+              <CardDescription>Test which rule applies to a page type</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Select Page Type</Label>
+                <Select value={previewPageType} onValueChange={setPreviewPageType}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Choose a page type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {V2_PAGE_TYPES.map((pt) => (
+                      <SelectItem key={pt} value={pt}>
+                        {pt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={handlePreview} disabled={!previewPageType} className="w-full rounded-full">
+                Preview Rule Selection
+              </Button>
+              {previewRule && (
+                <div className="mt-4 p-4 bg-muted/30 rounded-xl border border-border/50">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="font-medium">{previewRule.name}</p>
+                      {previewRule.page_type ? (
+                        <Badge variant="outline" className="rounded-full mt-1">
+                          Specific: {previewRule.page_type}
+                        </Badge>
+                      ) : (
+                        <Badge className="rounded-full mt-1 bg-primary">
+                          Default (fallback)
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 line-clamp-3">
+                    {previewRule.body.substring(0, 150)}...
+                  </p>
+                </div>
+              )}
+              {previewPageType && !previewRule && (
+                <div className="mt-4 p-4 bg-destructive/10 rounded-xl border border-destructive/20">
+                  <p className="text-sm text-destructive">
+                    No active rule found for this page type
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex items-center justify-between mt-8">
+          <h2 className="text-2xl font-bold tracking-tight">All Rules</h2>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={openNewDialog} className="rounded-full">
