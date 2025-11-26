@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, User, LayoutDashboard, FileText, Settings, GitBranch, Activity, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import neameGraphLogo from "@/assets/neamegraph-logo.png";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -70,7 +71,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 })}
               </nav>
             </div>
-            <DropdownMenu>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2 rounded-full">
                   <User className="h-4 w-4" />
@@ -91,6 +94,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
         </div>
       </header>
