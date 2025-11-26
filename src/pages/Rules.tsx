@@ -334,7 +334,7 @@ export default function Rules() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="category">Category</Label>
+                    <Label htmlFor="category">Category (Optional)</Label>
                     <Select
                       value={formData.category}
                       onValueChange={(value) => {
@@ -343,9 +343,10 @@ export default function Rules() {
                       disabled={!formData.page_type}
                     >
                       <SelectTrigger id="category" className="rounded-xl">
-                        <SelectValue placeholder="Select category" />
+                        <SelectValue placeholder="None (all categories)" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">None (all categories)</SelectItem>
                         {formData.page_type && V2_CATEGORIES[formData.page_type]?.map((cat) => (
                           <SelectItem key={cat} value={cat}>
                             {cat}
@@ -353,6 +354,9 @@ export default function Rules() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Optional. Currently not used to select rules; all matching is by Page Type. Category is still passed through as metadata to the schema engine.
+                    </p>
                   </div>
                 </div>
 
@@ -410,6 +414,7 @@ export default function Rules() {
                           <Badge variant="outline" className="rounded-full">
                             {rule.page_type}
                             {rule.category && ` · ${rule.category}`}
+                            {!rule.category && <span className="text-muted-foreground"> · All categories</span>}
                           </Badge>
                         )}
                       </div>
