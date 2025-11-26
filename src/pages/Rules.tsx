@@ -47,17 +47,6 @@ const V2_PAGE_TYPES = [
   'News',
 ];
 
-const V2_CATEGORIES: Record<string, string[]> = {
-  'Pubs & Hotels Estate': ['About', 'Collection Page'],
-  'Beers': ['Drink Brands', 'Collection Page'],
-  'Brewery': ['Brewing Process', 'Visitors Centre'],
-  'History': ['History'],
-  'Environment': ['Sustainability', 'Community'],
-  'About': ['Legal', 'Direct to Trade', 'General'],
-  'Careers': ['Working for Shepherd Neame', 'Pub Tenancies'],
-  'News': ['Pubs & Hotels', 'Community', 'Beer and Drink Brands'],
-};
-
 export default function Rules() {
   const { userRole } = useAuth();
   const [rules, setRules] = useState<Rule[]>([]);
@@ -67,8 +56,7 @@ export default function Rules() {
   const [formData, setFormData] = useState({ 
     name: "", 
     body: "", 
-    page_type: "", 
-    category: "" 
+    page_type: "" 
   });
   const [originalBodies, setOriginalBodies] = useState<Record<string, string>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -138,7 +126,6 @@ export default function Rules() {
             name: formData.name, 
             body: formData.body,
             page_type: formData.page_type || null,
-            category: formData.category || null,
             rules_backup: editingRule.body // Backup current rules before updating
           })
           .eq("id", editingRule.id);
@@ -152,7 +139,6 @@ export default function Rules() {
             name: formData.name,
             body: formData.body,
             page_type: formData.page_type || null,
-            category: formData.category || null,
             created_by_user_id: user?.id,
           });
 
@@ -162,7 +148,7 @@ export default function Rules() {
 
       setDialogOpen(false);
       setEditingRule(null);
-      setFormData({ name: "", body: "", page_type: "", category: "" });
+      setFormData({ name: "", body: "", page_type: "" });
       fetchRules();
     } catch (error) {
       console.error("Error saving rule:", error);
@@ -243,7 +229,6 @@ export default function Rules() {
       name: `${rule.name} (Copy)`,
       body: rule.body,
       page_type: rule.page_type || "",
-      category: rule.category || "",
     });
     setEditingRule(null);
     setDialogOpen(true);
@@ -254,14 +239,13 @@ export default function Rules() {
       name: rule.name,
       body: rule.body,
       page_type: rule.page_type || "",
-      category: rule.category || "",
     });
     setEditingRule(rule);
     setDialogOpen(true);
   };
 
   const openNewDialog = () => {
-    setFormData({ name: "", body: "", page_type: "", category: "" });
+    setFormData({ name: "", body: "", page_type: "" });
     setEditingRule(null);
     setDialogOpen(true);
   };
@@ -311,52 +295,41 @@ export default function Rules() {
                   />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="page_type">Page Type (Corporate v2)</Label>
-                    <Select
-                      value={formData.page_type}
-                      onValueChange={(value) => {
-                        setFormData({ ...formData, page_type: value, category: "" });
-                      }}
-                    >
-                      <SelectTrigger id="page_type" className="rounded-xl">
-                        <SelectValue placeholder="Select page type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {V2_PAGE_TYPES.map((pt) => (
-                          <SelectItem key={pt} value={pt}>
-                            {pt}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="page_type">Page Type (Optional)</Label>
+                    {formData.page_type && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setFormData({ ...formData, page_type: "" })}
+                        className="h-auto py-1 px-2 text-xs"
+                      >
+                        Clear
+                      </Button>
+                    )}
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Category (Optional)</Label>
-                    <Select
-                      value={formData.category}
-                      onValueChange={(value) => {
-                        setFormData({ ...formData, category: value });
-                      }}
-                      disabled={!formData.page_type}
-                    >
-                      <SelectTrigger id="category" className="rounded-xl">
-                        <SelectValue placeholder="None (all categories)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {formData.page_type && V2_CATEGORIES[formData.page_type]?.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {cat}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Optional. Currently not used to select rules; all matching is by Page Type. Category is still passed through as metadata to the schema engine.
-                    </p>
-                  </div>
+                  <Select
+                    value={formData.page_type}
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, page_type: value });
+                    }}
+                  >
+                    <SelectTrigger id="page_type" className="rounded-xl">
+                      <SelectValue placeholder="Default (all page types)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {V2_PAGE_TYPES.map((pt) => (
+                        <SelectItem key={pt} value={pt}>
+                          {pt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Optional. If left blank, this rule is the default for all page types that don't have a more specific rule. If set, this rule only applies to that page type.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -409,13 +382,9 @@ export default function Rules() {
                             Active
                           </Badge>
                         )}
-                        {rule.page_type && (
-                          <Badge variant="outline" className="rounded-full">
-                            {rule.page_type}
-                            {rule.category && ` · ${rule.category}`}
-                            {!rule.category && <span className="text-muted-foreground"> · All categories</span>}
-                          </Badge>
-                        )}
+                        <Badge variant="outline" className="rounded-full">
+                          {rule.page_type || "Default (all page types)"}
+                        </Badge>
                       </div>
                       <CardDescription>
                         Created {new Date(rule.created_at).toLocaleDateString()}

@@ -223,41 +223,34 @@ serve(async (req) => {
       // Category is passed as metadata to the LLM but not used for rule selection
       console.log(`Loading v2 rules for pageType: ${page.page_type}${page.category ? `, category (metadata): ${page.category}` : ''}`);
       
-      // Match by page_type only
+      // 1) Try to find a specific rule for this page type (is_active = true)
       let { data: matchedRule, error: matchError } = await supabase
         .from("rules")
         .select("*")
         .eq("page_type", page.page_type)
+        .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      // If no match for this page type, fall back to active rule or any rule
+      // 2) If no specific rule found, fall back to the default rule (page_type IS NULL)
       if (!matchedRule) {
-        const { data: fallbackRule } = await supabase
+        const { data: defaultRule } = await supabase
           .from("rules")
           .select("*")
+          .is("page_type", null)
           .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
         
-        if (!fallbackRule) {
-          // Last resort: get any rule
-          const { data: anyRule } = await supabase
-            .from("rules")
-            .select("*")
-            .limit(1)
-            .maybeSingle();
-          
-          matchedRule = anyRule;
-        } else {
-          matchedRule = fallbackRule;
-        }
+        matchedRule = defaultRule;
         
         if (matchedRule) {
-          console.log(`Using fallback rule: ${matchedRule.name}`);
+          console.log(`Using default rule (page_type=null): ${matchedRule.name}`);
         }
       } else {
-        console.log(`Using rule for ${page.page_type}: ${matchedRule.name}`);
+        console.log(`Using specific rule for ${page.page_type}: ${matchedRule.name}`);
       }
 
       if (!matchedRule) {
