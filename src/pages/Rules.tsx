@@ -346,7 +346,6 @@ export default function Rules() {
                         <SelectValue placeholder="None (all categories)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None (all categories)</SelectItem>
                         {formData.page_type && V2_CATEGORIES[formData.page_type]?.map((cat) => (
                           <SelectItem key={cat} value={cat}>
                             {cat}
