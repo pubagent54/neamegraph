@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Copy, Edit2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -66,15 +67,20 @@ export default function Rules() {
   const [pageTypeCounts, setPageTypeCounts] = useState<Record<string, number>>({});
   const [previewPageType, setPreviewPageType] = useState<string>("");
   const [previewRule, setPreviewRule] = useState<Rule | null>(null);
+  const [previewDefaultRule, setPreviewDefaultRule] = useState<Rule | null>(null);
+  const [pages, setPages] = useState<Array<{ id: string; path: string; page_type: string | null }>>([]);
+  const [previewPageId, setPreviewPageId] = useState<string>("");
 
   useEffect(() => {
     fetchRules();
     fetchPageTypeCounts();
+    fetchPages();
   }, []);
 
   useEffect(() => {
     setPreviewRule(null);
-  }, [previewPageType]);
+    setPreviewDefaultRule(null);
+  }, [previewPageType, previewPageId]);
 
   const fetchRules = async () => {
     try {
@@ -116,6 +122,20 @@ export default function Rules() {
       setPageTypeCounts(counts);
     } catch (error) {
       console.error("Error fetching page type counts:", error);
+    }
+  };
+
+  const fetchPages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("pages")
+        .select("id, path, page_type")
+        .order("path");
+
+      if (error) throw error;
+      setPages(data || []);
+    } catch (error) {
+      console.error("Error fetching pages:", error);
     }
   };
 
@@ -283,21 +303,35 @@ export default function Rules() {
   };
 
   const handlePreview = () => {
-    if (!previewPageType) return;
+    let targetPageType = previewPageType;
+    
+    // If a specific page is selected, use its page type
+    if (previewPageId) {
+      const selectedPage = pages.find(p => p.id === previewPageId);
+      if (selectedPage?.page_type) {
+        targetPageType = selectedPage.page_type;
+      }
+    }
+    
+    if (!targetPageType) return;
 
     // Find specific rule for this page type
     const specificRule = rules.find(
-      (r) => r.is_active && r.page_type === previewPageType
+      (r) => r.is_active && r.page_type === targetPageType
     );
 
+    // Always find the default rule for comparison
+    const defaultRule = rules.find((r) => r.is_active && r.page_type === null);
+    
     if (specificRule) {
       setPreviewRule(specificRule);
+      setPreviewDefaultRule(defaultRule || null);
       return;
     }
 
     // Fallback to default rule
-    const defaultRule = rules.find((r) => r.is_active && r.page_type === null);
     setPreviewRule(defaultRule || null);
+    setPreviewDefaultRule(null); // No need to show it twice
   };
 
   const getRuleCoverage = () => {
@@ -334,105 +368,26 @@ export default function Rules() {
         <div>
           <h1 className="text-4xl font-bold tracking-tight mb-2">NeameGraph Brain Rules</h1>
           <p className="text-lg text-muted-foreground">
-            Manage prompts for schema generation
+            Manage schema engine prompts for each page type. The default rule applies where no specific page-type rule exists.
           </p>
         </div>
 
-        {/* Rules Coverage Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-          <Card className="rounded-2xl border-0 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Rule Coverage by Page Type</CardTitle>
-              <CardDescription>Which rules apply to each page type</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {Object.entries(getRuleCoverage()).map(([pageType, { rule, count }]) => (
-                  <div key={pageType} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline" className="rounded-full">
-                        {pageType}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">{count} pages</span>
-                    </div>
-                    <div className="text-sm">
-                      {rule ? (
-                        <span className="font-medium">{rule.name}</span>
-                      ) : (
-                        <span className="text-muted-foreground italic">No rule</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl border-0 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Rule Preview</CardTitle>
-              <CardDescription>Test which rule applies to a page type</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Select Page Type</Label>
-                <Select value={previewPageType} onValueChange={setPreviewPageType}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Choose a page type..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {V2_PAGE_TYPES.map((pt) => (
-                      <SelectItem key={pt} value={pt}>
-                        {pt}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handlePreview} disabled={!previewPageType} className="w-full rounded-full">
-                Preview Rule Selection
-              </Button>
-              {previewRule && (
-                <div className="mt-4 p-4 bg-muted/30 rounded-xl border border-border/50">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="font-medium">{previewRule.name}</p>
-                      {previewRule.page_type ? (
-                        <Badge variant="outline" className="rounded-full mt-1">
-                          Specific: {previewRule.page_type}
-                        </Badge>
-                      ) : (
-                        <Badge className="rounded-full mt-1 bg-primary">
-                          Default (fallback)
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2 line-clamp-3">
-                    {previewRule.body.substring(0, 150)}...
-                  </p>
-                </div>
-              )}
-              {previewPageType && !previewRule && (
-                <div className="mt-4 p-4 bg-destructive/10 rounded-xl border border-destructive/20">
-                  <p className="text-sm text-destructive">
-                    No active rule found for this page type
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex items-center justify-between mt-8">
-          <h2 className="text-2xl font-bold tracking-tight">All Rules</h2>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openNewDialog} className="rounded-full">
-                <Plus className="mr-2 h-4 w-4" />
-                New Rule
-              </Button>
-            </DialogTrigger>
+        {/* 1. RULES LIST (TOP) */}
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Rules</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage schema engine prompts for each page type. The default rule applies where no specific page-type rule exists.
+              </p>
+            </div>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={openNewDialog} className="rounded-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Rule
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto rounded-2xl">
               <DialogHeader>
                 <DialogTitle>
@@ -488,9 +443,9 @@ export default function Rules() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Optional. If left blank, this rule is the default for all page types that don't have a more specific rule. If set, this rule only applies to that page type.
-                  </p>
+                   <p className="text-xs text-muted-foreground">
+                    Leave as Default to treat this as the fallback rule for all page types that don't have a specific rule. Set a Page Type (e.g. Beers) to override the default for that type only.
+                   </p>
                 </div>
 
                 <div className="space-y-2">
@@ -510,22 +465,22 @@ export default function Rules() {
                 </Button>
               </div>
             </DialogContent>
-          </Dialog>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </Dialog>
           </div>
-        ) : rules.length === 0 ? (
-          <Card className="rounded-2xl border-0 shadow-sm">
-            <CardContent className="py-12 text-center text-muted-foreground">
-              No rules created yet
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            {rules.map((rule) => (
+
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : rules.length === 0 ? (
+            <Card className="rounded-2xl border-0 shadow-sm">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                No rules created yet
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {rules.map((rule) => (
               <Card 
                 key={rule.id}
                 className={`rounded-2xl border-0 shadow-sm transition-all ${
@@ -660,9 +615,172 @@ export default function Rules() {
                   )}
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 2. RULES COVERAGE BY PAGE TYPE (MIDDLE) */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl">Rules Coverage by Page Type</CardTitle>
+            <CardDescription>Shows which rule applies to each page type and how many pages use it</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-medium text-sm">Page Type</th>
+                    <th className="text-left p-3 font-medium text-sm">Rule Used</th>
+                    <th className="text-right p-3 font-medium text-sm"># Pages</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(getRuleCoverage()).map(([pageType, { rule, count }]) => (
+                    <tr key={pageType} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="p-3">
+                        <Badge variant="outline" className="rounded-full font-normal">
+                          {pageType}
+                        </Badge>
+                      </td>
+                      <td className="p-3">
+                        {rule ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">{rule.name}</span>
+                            {!rule.page_type && (
+                              <Badge variant="secondary" className="rounded-full text-xs">
+                                default
+                              </Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground italic">No active rule</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right">
+                        <span className="text-sm font-medium">{count}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 3. RULE PREVIEW & TEST (BOTTOM) */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl">Rule Preview & Test</CardTitle>
+            <CardDescription>Preview which rule would be selected for a given page type or specific page</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Selection Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Page Type</Label>
+                <Select value={previewPageType} onValueChange={(val) => {
+                  setPreviewPageType(val);
+                  setPreviewPageId(""); // Clear page selection when page type changes
+                }}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Choose a page type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {V2_PAGE_TYPES.map((pt) => (
+                      <SelectItem key={pt} value={pt}>
+                        {pt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Specific Page (optional)</Label>
+                <Select value={previewPageId} onValueChange={setPreviewPageId}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Or choose a specific page..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pages.map((page) => (
+                      <SelectItem key={page.id} value={page.id}>
+                        {page.path} {page.page_type ? `(${page.page_type})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button 
+              onClick={handlePreview} 
+              disabled={!previewPageType && !previewPageId} 
+              className="w-full rounded-full"
+            >
+              Preview Rule Selection
+            </Button>
+
+            {/* Preview Results */}
+            {previewRule && (
+              <div className="space-y-4 p-6 bg-muted/30 rounded-xl border border-border/50">
+                {/* Summary Lines */}
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Rule that will be used:</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-lg">{previewRule.name}</p>
+                        {previewRule.page_type ? (
+                          <Badge variant="outline" className="rounded-full">
+                            {previewRule.page_type}
+                          </Badge>
+                        ) : (
+                          <Badge className="rounded-full bg-primary">
+                            Default (all types)
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {previewDefaultRule && (
+                    <div className="pt-2 border-t">
+                      <p className="text-sm text-muted-foreground">
+                        Default rule (fallback): <span className="font-medium">{previewDefaultRule.name}</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Accordion for Prompt Body */}
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="prompt" className="border-0">
+                    <AccordionTrigger className="text-sm font-medium hover:no-underline py-2">
+                      Show prompt body
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="mt-2 p-4 bg-background rounded-lg border max-h-[400px] overflow-y-auto">
+                        <pre className="font-mono text-xs whitespace-pre-wrap break-words">
+                          {previewRule.body}
+                        </pre>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+            )}
+
+            {(previewPageType || previewPageId) && !previewRule && (
+              <div className="p-4 bg-destructive/10 rounded-xl border border-destructive/20">
+                <p className="text-sm text-destructive">
+                  No active rule found for this selection
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
