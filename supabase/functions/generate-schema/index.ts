@@ -88,12 +88,11 @@ serve(async (req) => {
     // ========================================
     // DOMAIN LANE LOGIC
     // ----------------------------------------
-    // 'Corporate' - Uses existing v2 Corporate schema engine (UNCHANGED)
-    // 'Beer' - Beer brand pages (schema engine coming soon - UI blocks this)
+    // 'Corporate' & 'Beer' - Use the rules-based schema engine with page_type + category matching
     // 'Pub' - Individual pub/hotel pages (Phase 2 - UI blocks this)
     // ========================================
 
-    // Defensive check: UI should prevent these calls, but handle gracefully if reached
+    // Defensive check: UI should prevent Pub calls, but handle gracefully if reached
     const pageDomain = page.domain || 'Corporate'; // Default to Corporate for existing records
     
     if (pageDomain === 'Pub') {
@@ -104,18 +103,10 @@ serve(async (req) => {
       );
     }
 
-    if (pageDomain === 'Beer') {
-      console.log("Beer lane - should not reach edge function (UI should show stub)");
-      return new Response(
-        JSON.stringify({ error: "Beer schema engine coming soon – no schema generated yet" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // ========================================
-    // CORPORATE LANE (domain = 'Corporate')
-    // Uses the existing v2 Corporate schema engine UNCHANGED
-    // All logic below this point is the existing v2 implementation
+    // RULES-BASED SCHEMA ENGINE (Corporate & Beer)
+    // Uses page_type + category to select the correct active rule
+    // All logic below this point uses the rules system
     // ========================================
 
     // Check if HTML has been fetched
