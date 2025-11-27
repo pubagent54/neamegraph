@@ -216,20 +216,26 @@ export function SchemaSummary({ jsonld, section, createdAt, status }: SchemaSumm
                 </p>
                 {summary.images.webPageImage ? (
                   <div className="space-y-2">
-                    <div className="bg-background rounded border overflow-hidden">
+                    <div className="bg-background rounded border overflow-hidden relative">
                       <img 
                         src={summary.images.webPageImage} 
                         alt="WebPage hero"
                         className="w-full h-32 object-cover"
                         onError={(e) => {
-                          e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="128"%3E%3Crect width="200" height="128" fill="%23ddd"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-family="sans-serif" font-size="14"%3EImage failed%3C/text%3E%3C/svg%3E';
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent && !parent.querySelector('.error-overlay')) {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'error-overlay absolute inset-0 flex items-center justify-center bg-muted/50';
+                            errorDiv.innerHTML = '<span class="text-xs text-muted-foreground">Image failed to load</span>';
+                            parent.appendChild(errorDiv);
+                          }
                         }}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground break-all" title={summary.images.webPageImage}>
-                      {summary.images.webPageImage.length > 60 
-                        ? `${summary.images.webPageImage.substring(0, 60)}...` 
-                        : summary.images.webPageImage}
+                    <p className="text-xs text-muted-foreground break-all font-mono" title={summary.images.webPageImage}>
+                      {summary.images.webPageImage}
                     </p>
                   </div>
                 ) : (
@@ -246,20 +252,26 @@ export function SchemaSummary({ jsonld, section, createdAt, status }: SchemaSumm
                 </p>
                 {summary.images.brandImage ? (
                   <div className="space-y-2">
-                    <div className="bg-background rounded border overflow-hidden">
+                    <div className="bg-background rounded border overflow-hidden relative">
                       <img 
                         src={summary.images.brandImage} 
                         alt="Brand hero"
                         className="w-full h-32 object-cover"
                         onError={(e) => {
-                          e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="128"%3E%3Crect width="200" height="128" fill="%23ddd"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-family="sans-serif" font-size="14"%3EImage failed%3C/text%3E%3C/svg%3E';
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent && !parent.querySelector('.error-overlay')) {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'error-overlay absolute inset-0 flex items-center justify-center bg-muted/50';
+                            errorDiv.innerHTML = '<span class="text-xs text-muted-foreground">Image failed to load</span>';
+                            parent.appendChild(errorDiv);
+                          }
                         }}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground break-all" title={summary.images.brandImage}>
-                      {summary.images.brandImage.length > 60 
-                        ? `${summary.images.brandImage.substring(0, 60)}...` 
-                        : summary.images.brandImage}
+                    <p className="text-xs text-muted-foreground break-all font-mono" title={summary.images.brandImage}>
+                      {summary.images.brandImage}
                     </p>
                   </div>
                 ) : (
@@ -276,20 +288,26 @@ export function SchemaSummary({ jsonld, section, createdAt, status }: SchemaSumm
                 </p>
                 {summary.images.brandLogo ? (
                   <div className="space-y-2">
-                    <div className="bg-background rounded border overflow-hidden">
+                    <div className="bg-background rounded border overflow-hidden relative">
                       <img 
                         src={summary.images.brandLogo} 
                         alt="Brand logo"
                         className="w-full h-32 object-contain p-4"
                         onError={(e) => {
-                          e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="128"%3E%3Crect width="200" height="128" fill="%23ddd"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-family="sans-serif" font-size="14"%3EImage failed%3C/text%3E%3C/svg%3E';
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent && !parent.querySelector('.error-overlay')) {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'error-overlay absolute inset-0 flex items-center justify-center bg-muted/50';
+                            errorDiv.innerHTML = '<span class="text-xs text-muted-foreground">Image failed to load</span>';
+                            parent.appendChild(errorDiv);
+                          }
                         }}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground break-all" title={summary.images.brandLogo}>
-                      {summary.images.brandLogo.length > 60 
-                        ? `${summary.images.brandLogo.substring(0, 60)}...` 
-                        : summary.images.brandLogo}
+                    <p className="text-xs text-muted-foreground break-all font-mono" title={summary.images.brandLogo}>
+                      {summary.images.brandLogo}
                     </p>
                   </div>
                 ) : (
