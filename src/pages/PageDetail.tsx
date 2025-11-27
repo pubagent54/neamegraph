@@ -22,8 +22,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 // ========================================
 // DOMAIN LANE LOGIC
 // ----------------------------------------
-// 'Corporate' - Full schema generation using existing v2 Corporate engine
-// 'Beer' - Shows beer metadata panel, Generate Schema shows stub message
+// 'Corporate' - Full schema generation using rules-based engine
+// 'Beer' - Shows beer metadata panel, uses rules-based schema engine
 // 'Pub' - Shows placeholder, Generate Schema button disabled
 // ========================================
 interface Page {
@@ -247,19 +247,14 @@ export default function PageDetail() {
       return;
     }
     
-    // Beer lane: Show stub message, don't call edge function
-    if (page.domain === 'Beer') {
-      toast.info("Beer schema engine coming soon – no schema generated yet");
+    // Validate required metadata before calling edge function
+    if (!page.page_type) {
+      const domainLabel = page.domain === 'Beer' ? 'Beer Metadata' : 'Corporate v2 Metadata';
+      toast.error(`Please set the Page Type in the ${domainLabel} section before generating schema.`);
       return;
     }
     
-    // Corporate lane: Validate required metadata before calling edge function
-    if (page.domain === 'Corporate' && !page.page_type) {
-      toast.error("Please set the Page Type in the Corporate v2 Metadata section before generating schema.");
-      return;
-    }
-    
-    // Corporate lane: Use existing v2 Corporate schema engine
+    // Use the rules-based schema engine for Corporate and Beer pages
     setGenerating(true);
 
     try {
@@ -682,7 +677,6 @@ export default function PageDetail() {
                 className="rounded-full"
                 title={
                   page.domain === 'Pub' ? "Pub module is Phase 2 – not implemented yet" :
-                  page.domain === 'Beer' ? "Beer schema engine coming soon" :
                   !page.last_html_hash ? "Fetch HTML first" :
                   "Generate schema"
                 }
@@ -702,12 +696,7 @@ export default function PageDetail() {
                 Pub module is Phase 2 – not implemented yet
               </p>
             )}
-            {page.domain === 'Beer' && (
-              <p className="text-xs text-muted-foreground">
-                Beer schema engine coming soon – no schema generated yet
-              </p>
-            )}
-            {usedRule && page.domain === 'Corporate' && (
+            {usedRule && (page.domain === 'Corporate' || page.domain === 'Beer') && (
               <p className="text-xs text-muted-foreground">
                 Using rules: <span className="font-medium">{usedRule.name}</span>
                 {usedRule.page_type && (
@@ -765,8 +754,8 @@ export default function PageDetail() {
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              {editableDomain === 'Corporate' && "Uses existing v2 Corporate schema engine"}
-              {editableDomain === 'Beer' && "Beer schema engine coming soon"}
+              {editableDomain === 'Corporate' && "Uses rules-based schema engine with page type and category"}
+              {editableDomain === 'Beer' && "Uses rules-based schema engine with page type and category"}
               {editableDomain === 'Pub' && "Pub module is Phase 2 – not implemented yet"}
             </p>
           </CardContent>
