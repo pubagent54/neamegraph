@@ -199,6 +199,110 @@ export function SchemaSummary({ jsonld, section, createdAt, status }: SchemaSumm
         </div>
       )}
 
+      {/* Images this schema is using */}
+      <div>
+        <h4 className="text-sm font-semibold text-muted-foreground mb-2">Images this schema is using</h4>
+        {!summary.images.webPageImage && !summary.images.brandImage && !summary.images.brandLogo ? (
+          <div className="bg-muted/30 rounded-lg p-4">
+            <p className="text-sm text-muted-foreground">No image or logo properties found in this schema.</p>
+          </div>
+        ) : (
+          <div className="bg-muted/30 rounded-lg p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* WebPage image */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {summary.keyFacts.type === "beer" ? "Beer hero image (page)" : "WebPage image"}
+                </p>
+                {summary.images.webPageImage ? (
+                  <div className="space-y-2">
+                    <div className="bg-background rounded border overflow-hidden">
+                      <img 
+                        src={summary.images.webPageImage} 
+                        alt="WebPage hero"
+                        className="w-full h-32 object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="128"%3E%3Crect width="200" height="128" fill="%23ddd"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-family="sans-serif" font-size="14"%3EImage failed%3C/text%3E%3C/svg%3E';
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground break-all" title={summary.images.webPageImage}>
+                      {summary.images.webPageImage.length > 60 
+                        ? `${summary.images.webPageImage.substring(0, 60)}...` 
+                        : summary.images.webPageImage}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-muted rounded border p-4 h-32 flex items-center justify-center">
+                    <p className="text-xs text-muted-foreground">Not set in schema</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Brand image */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {summary.keyFacts.type === "beer" ? "Beer hero image (brand)" : "Main entity image"}
+                </p>
+                {summary.images.brandImage ? (
+                  <div className="space-y-2">
+                    <div className="bg-background rounded border overflow-hidden">
+                      <img 
+                        src={summary.images.brandImage} 
+                        alt="Brand hero"
+                        className="w-full h-32 object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="128"%3E%3Crect width="200" height="128" fill="%23ddd"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-family="sans-serif" font-size="14"%3EImage failed%3C/text%3E%3C/svg%3E';
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground break-all" title={summary.images.brandImage}>
+                      {summary.images.brandImage.length > 60 
+                        ? `${summary.images.brandImage.substring(0, 60)}...` 
+                        : summary.images.brandImage}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-muted rounded border p-4 h-32 flex items-center justify-center">
+                    <p className="text-xs text-muted-foreground">Not set in schema</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Brand logo */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {summary.keyFacts.type === "beer" ? "Beer brand logo" : "Main entity logo"}
+                </p>
+                {summary.images.brandLogo ? (
+                  <div className="space-y-2">
+                    <div className="bg-background rounded border overflow-hidden">
+                      <img 
+                        src={summary.images.brandLogo} 
+                        alt="Brand logo"
+                        className="w-full h-32 object-contain p-4"
+                        onError={(e) => {
+                          e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="128"%3E%3Crect width="200" height="128" fill="%23ddd"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-family="sans-serif" font-size="14"%3EImage failed%3C/text%3E%3C/svg%3E';
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground break-all" title={summary.images.brandLogo}>
+                      {summary.images.brandLogo.length > 60 
+                        ? `${summary.images.brandLogo.substring(0, 60)}...` 
+                        : summary.images.brandLogo}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-muted rounded border p-4 h-32 flex items-center justify-center">
+                    <p className="text-xs text-muted-foreground">Not set in schema</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Validation */}
       <div>
         <h4 className="text-sm font-semibold text-muted-foreground mb-2">Validation checks</h4>

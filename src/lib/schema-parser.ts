@@ -17,6 +17,11 @@ export interface SchemaSummary {
     noCommerceSchema: boolean;
   };
   pageType: string | null;
+  images: {
+    webPageImage?: string;
+    brandImage?: string;
+    brandLogo?: string;
+  };
 }
 
 function normaliseTypes(node: any): string[] {
@@ -191,6 +196,24 @@ export function parseSchemaForSummary(
       );
     });
 
+    // --- Extract image URLs ----------------------------------------------------
+    // Helper to normalise image field (can be string or array of strings)
+    const normaliseImageUrl = (imageField: any): string | undefined => {
+      if (!imageField) return undefined;
+      if (typeof imageField === 'string') return imageField;
+      if (Array.isArray(imageField) && imageField.length > 0) {
+        // Return first string in the array
+        return typeof imageField[0] === 'string' ? imageField[0] : undefined;
+      }
+      return undefined;
+    };
+
+    const images = {
+      webPageImage: normaliseImageUrl(webPageNode?.image),
+      brandImage: normaliseImageUrl(mainEntity?.image),
+      brandLogo: normaliseImageUrl(mainEntity?.logo),
+    };
+
     return {
       mainEntity: mainEntityInfo,
       connections: {
@@ -204,6 +227,7 @@ export function parseSchemaForSummary(
         noCommerceSchema: !hasCommerceSchema,
       },
       pageType: mainEntityInfo?.type || null,
+      images,
     };
   } catch (error) {
     console.error("Error parsing schema for summary:", error);
@@ -220,6 +244,11 @@ export function parseSchemaForSummary(
         noCommerceSchema: true,
       },
       pageType: null,
+      images: {
+        webPageImage: undefined,
+        brandImage: undefined,
+        brandLogo: undefined,
+      },
     };
   }
 }
