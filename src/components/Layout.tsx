@@ -1,3 +1,11 @@
+/**
+ * App Shell Layout Component
+ * 
+ * Provides consistent header, navigation, and user controls across all pages.
+ * Navigation items filtered by user role (admin sees Rules and Settings).
+ * Features: prominent NeameGraph logo, role badge, dark mode toggle, sign out dropdown.
+ */
+
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";

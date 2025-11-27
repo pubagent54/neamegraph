@@ -1,3 +1,13 @@
+/**
+ * Page Detail Screen
+ * 
+ * Single page view for managing metadata and generating JSON-LD schema.
+ * Displays domain-specific metadata panels (Corporate v2, Beer, Pub placeholder).
+ * Schema generation workflow: Fetch HTML → Generate Schema (using matched rule) → Review → Approve.
+ * Homepage receives special treatment: manual schema editing only, AI generation blocked.
+ * Schema versions tracked with approval workflow and copy-to-Drupal functionality.
+ */
+
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
@@ -772,6 +782,9 @@ export default function PageDetail() {
         </Card>
 
         {/* Corporate v2 Metadata Section - only show for Corporate domain */}
+        {/* TODO: Consider extracting metadata panels into reusable <MetadataPanel /> component
+            once the pattern stabilizes across Corporate/Beer/Pub domains. Current implementation
+            has domain-specific fields and handlers that make extraction non-trivial. */}
         {page.domain === 'Corporate' && (
           <Collapsible
             open={isV2MetadataOpen}
