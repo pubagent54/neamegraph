@@ -197,21 +197,44 @@ export function parseSchemaForSummary(
     });
 
     // --- Extract image URLs ----------------------------------------------------
-    // Helper to normalise image field (can be string or array of strings)
-    const normaliseImageUrl = (imageField: any): string | undefined => {
+    // Helper to extract and normalise image URLs from schema fields
+    // Handles both string and array formats, and ensures absolute URLs are preserved unchanged
+    const extractImageUrl = (imageField: any): string | undefined => {
       if (!imageField) return undefined;
-      if (typeof imageField === 'string') return imageField;
-      if (Array.isArray(imageField) && imageField.length > 0) {
-        // Return first string in the array
-        return typeof imageField[0] === 'string' ? imageField[0] : undefined;
+      
+      let rawUrl: string | undefined;
+      if (typeof imageField === 'string') {
+        rawUrl = imageField;
+      } else if (Array.isArray(imageField) && imageField.length > 0) {
+        rawUrl = typeof imageField[0] === 'string' ? imageField[0] : undefined;
       }
-      return undefined;
+      
+      if (!rawUrl) return undefined;
+      
+      // If already absolute (http/https), return as-is WITHOUT any encoding
+      // This prevents double-encoding of URLs like ?url=%2F becoming ?url%3D%252F
+      if (/^https?:\/\//i.test(rawUrl)) {
+        return rawUrl;
+      }
+      
+      // Protocol-relative URLs (starts with //)
+      if (/^\/\//.test(rawUrl)) {
+        return `https:${rawUrl}`;
+      }
+      
+      // Relative path - resolve against base URL
+      try {
+        const baseUrl = "https://www.shepherdneame.co.uk";
+        return new URL(rawUrl, baseUrl).toString();
+      } catch {
+        return rawUrl;
+      }
     };
 
     const images = {
-      webPageImage: normaliseImageUrl(webPageNode?.image),
-      brandImage: normaliseImageUrl(mainEntity?.image),
-      brandLogo: normaliseImageUrl(mainEntity?.logo),
+      webPageImage: extractImageUrl(webPageNode?.image),
+      brandImage: extractImageUrl(mainEntity?.image),
+      brandLogo: extractImageUrl(mainEntity?.logo),
     };
 
     return {
