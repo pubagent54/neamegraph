@@ -6,7 +6,7 @@
 // Categories for each page type
 export const V2_CATEGORIES: Record<string, string[]> = {
   'Pubs & Hotels Estate': ['Estate Overview', 'Pub Finder', 'Individual Pubs'],
-  'Beers': ['Beer Brands', 'Beer Collections', 'Brewing Process'],
+  'Beers': ['Drink Brands', 'Collection Page'],
   'Brewery': ['Brewery History', 'Brewing Process', 'Facilities'],
   'History': ['Company History', 'Heritage', 'Timeline'],
   'Environment': ['Sustainability', 'Community', 'Initiatives'],
