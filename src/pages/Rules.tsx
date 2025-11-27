@@ -48,6 +48,17 @@ const V2_PAGE_TYPES = [
   'News',
 ];
 
+const V2_CATEGORIES: Record<string, string[]> = {
+  'Pubs & Hotels Estate': ['Estate Overview', 'Pub Finder', 'Individual Pubs'],
+  'Beers': ['Beer Brands', 'Beer Collections', 'Brewing Process'],
+  'Brewery': ['Brewery History', 'Brewing Process', 'Facilities'],
+  'History': ['Company History', 'Heritage', 'Timeline'],
+  'Environment': ['Sustainability', 'Community', 'Initiatives'],
+  'About': ['General', 'Company Info', 'Leadership'],
+  'Careers': ['Jobs', 'Culture', 'Benefits'],
+  'News': ['Press Releases', 'Blog Posts', 'Updates'],
+};
+
 export default function Rules() {
   const { userRole } = useAuth();
   const [rules, setRules] = useState<Rule[]>([]);
@@ -57,7 +68,8 @@ export default function Rules() {
   const [formData, setFormData] = useState({ 
     name: "", 
     body: "", 
-    page_type: "" 
+    page_type: "",
+    category: ""
   });
   const [originalBodies, setOriginalBodies] = useState<Record<string, string>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -70,17 +82,26 @@ export default function Rules() {
   const [previewDefaultRule, setPreviewDefaultRule] = useState<Rule | null>(null);
   const [pages, setPages] = useState<Array<{ id: string; path: string; page_type: string | null }>>([]);
   const [previewPageId, setPreviewPageId] = useState<string>("");
+  const [ruleCoverage, setRuleCoverage] = useState<Record<string, { rule: Rule | null; count: number }>>({});
 
   useEffect(() => {
     fetchRules();
     fetchPageTypeCounts();
     fetchPages();
+    fetchRuleCoverage();
   }, []);
 
   useEffect(() => {
     setPreviewRule(null);
     setPreviewDefaultRule(null);
   }, [previewPageType, previewPageId]);
+
+  useEffect(() => {
+    // Refetch coverage when rules change
+    if (rules.length > 0) {
+      fetchRuleCoverage();
+    }
+  }, [rules]);
 
   const fetchRules = async () => {
     try {
@@ -173,6 +194,7 @@ export default function Rules() {
             name: formData.name, 
             body: formData.body,
             page_type: formData.page_type || null,
+            category: formData.category || null,
             rules_backup: editingRule.body // Backup current rules before updating
           })
           .eq("id", editingRule.id);
@@ -186,6 +208,7 @@ export default function Rules() {
             name: formData.name,
             body: formData.body,
             page_type: formData.page_type || null,
+            category: formData.category || null,
             created_by_user_id: user?.id,
           });
 
@@ -195,7 +218,7 @@ export default function Rules() {
 
       setDialogOpen(false);
       setEditingRule(null);
-      setFormData({ name: "", body: "", page_type: "" });
+      setFormData({ name: "", body: "", page_type: "", category: "" });
       fetchRules();
     } catch (error) {
       console.error("Error saving rule:", error);
@@ -252,8 +275,18 @@ export default function Rules() {
 
   const handleSetActive = async (id: string) => {
     try {
-      // Deactivate all rules
-      await supabase.from("rules").update({ is_active: false }).neq("id", "");
+      const ruleToActivate = rules.find(r => r.id === id);
+      if (!ruleToActivate) return;
+
+      // Deactivate any other rule with the same page_type + category combination
+      const { error: deactivateError } = await supabase
+        .from("rules")
+        .update({ is_active: false })
+        .eq("page_type", ruleToActivate.page_type)
+        .eq("category", ruleToActivate.category)
+        .neq("id", id);
+
+      if (deactivateError) throw deactivateError;
 
       // Activate selected rule
       const { error } = await supabase
@@ -276,6 +309,7 @@ export default function Rules() {
       name: `${rule.name} (Copy)`,
       body: rule.body,
       page_type: rule.page_type || "",
+      category: rule.category || "",
     });
     setEditingRule(null);
     setDialogOpen(true);
@@ -286,13 +320,14 @@ export default function Rules() {
       name: rule.name,
       body: rule.body,
       page_type: rule.page_type || "",
+      category: rule.category || "",
     });
     setEditingRule(rule);
     setDialogOpen(true);
   };
 
   const openNewDialog = () => {
-    setFormData({ name: "", body: "", page_type: "" });
+    setFormData({ name: "", body: "", page_type: "", category: "" });
     setEditingRule(null);
     setDialogOpen(true);
   };
@@ -302,26 +337,37 @@ export default function Rules() {
     setDeleteDialogOpen(true);
   };
 
-  const handlePreview = () => {
+  const handlePreview = async () => {
     let targetPageType = previewPageType;
+    let targetCategory: string | null = null;
     
-    // If a specific page is selected, use its page type
+    // If a specific page is selected, use its page type and category
     if (previewPageId) {
-      const selectedPage = pages.find(p => p.id === previewPageId);
+      const { data: selectedPage } = await supabase
+        .from("pages")
+        .select("page_type, category")
+        .eq("id", previewPageId)
+        .single();
+        
       if (selectedPage?.page_type) {
         targetPageType = selectedPage.page_type;
+        targetCategory = selectedPage.category;
       }
     }
     
     if (!targetPageType) return;
 
-    // Find specific rule for this page type
+    // Find specific rule for this page type + category combination
     const specificRule = rules.find(
-      (r) => r.is_active && r.page_type === targetPageType
+      (r) => r.is_active && 
+             r.page_type === targetPageType && 
+             r.category === targetCategory
     );
 
-    // Always find the default rule for comparison
-    const defaultRule = rules.find((r) => r.is_active && r.page_type === null);
+    // Find the default rule for comparison (page_type and category both null)
+    const defaultRule = rules.find(
+      (r) => r.is_active && r.page_type === null && r.category === null
+    );
     
     if (specificRule) {
       setPreviewRule(specificRule);
@@ -334,32 +380,43 @@ export default function Rules() {
     setPreviewDefaultRule(null); // No need to show it twice
   };
 
-  const getRuleCoverage = () => {
+  const getRuleCoverage = async () => {
+    // Fetch pages with their page_type and category
+    const { data: pagesData } = await supabase
+      .from("pages")
+      .select("page_type, category");
+    
     const coverage: Record<string, { rule: Rule | null; count: number }> = {};
     
-    // Get all unique page types
-    const allPageTypes = [...new Set(Object.keys(pageTypeCounts))];
-    
-    allPageTypes.forEach((pageType) => {
-      const specificRule = rules.find(
-        (r) => r.is_active && r.page_type === pageType
+    (pagesData || []).forEach((page) => {
+      const key = `${page.page_type || 'unknown'}::${page.category || 'none'}`;
+      
+      // Find matching rule for this page_type + category
+      const matchedRule = rules.find(
+        (r) => r.is_active && 
+               r.page_type === page.page_type && 
+               r.category === page.category
       );
       
-      if (specificRule) {
-        coverage[pageType] = {
-          rule: specificRule,
-          count: pageTypeCounts[pageType] || 0,
-        };
-      } else {
-        const defaultRule = rules.find((r) => r.is_active && r.page_type === null);
-        coverage[pageType] = {
-          rule: defaultRule,
-          count: pageTypeCounts[pageType] || 0,
-        };
+      // Fall back to default rule if no specific match
+      const defaultRule = rules.find(
+        (r) => r.is_active && r.page_type === null && r.category === null
+      );
+      
+      const ruleToUse = matchedRule || defaultRule;
+      
+      if (!coverage[key]) {
+        coverage[key] = { rule: ruleToUse, count: 0 };
       }
+      coverage[key].count++;
     });
 
     return coverage;
+  };
+
+  const fetchRuleCoverage = async () => {
+    const coverage = await getRuleCoverage();
+    setRuleCoverage(coverage);
   };
 
   return (
@@ -368,7 +425,7 @@ export default function Rules() {
         <div>
           <h1 className="text-4xl font-bold tracking-tight mb-2">NeameGraph Brain Rules</h1>
           <p className="text-lg text-muted-foreground">
-            Manage schema engine prompts for each page type. The default rule applies where no specific page-type rule exists.
+            Manage schema engine prompts for each page type and category combination. Set a default rule (no page type or category) to handle pages without specific rules.
           </p>
         </div>
 
@@ -378,7 +435,7 @@ export default function Rules() {
             <div>
               <h2 className="text-2xl font-bold tracking-tight">Rules</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Manage schema engine prompts for each page type. The default rule applies where no specific page-type rule exists.
+                Create rules for specific page type and category combinations. The default rule (no page type/category set) applies to pages without a matching specific rule.
               </p>
             </div>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -444,8 +501,46 @@ export default function Rules() {
                     </SelectContent>
                   </Select>
                    <p className="text-xs text-muted-foreground">
-                    Leave as Default to treat this as the fallback rule for all page types that don't have a specific rule. Set a Page Type (e.g. Beers) to override the default for that type only.
+                    Leave blank for a default rule that applies to all page types. Set to create a specific rule for that page type.
                    </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="category">Category (Optional)</Label>
+                    {formData.category && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setFormData({ ...formData, category: "" })}
+                        className="h-auto py-1 px-2 text-xs"
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, category: value });
+                    }}
+                    disabled={!formData.page_type}
+                  >
+                    <SelectTrigger id="category" className="rounded-xl">
+                      <SelectValue placeholder={formData.page_type ? "Select category" : "Select page type first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {formData.page_type && V2_CATEGORIES[formData.page_type]?.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Optional category for this rule. Combine with Page Type for fine-grained rule matching.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -501,6 +596,11 @@ export default function Rules() {
                         <Badge variant="outline" className="rounded-full">
                           {rule.page_type || "Default (all page types)"}
                         </Badge>
+                        {rule.category && (
+                          <Badge variant="outline" className="rounded-full bg-muted">
+                            {rule.category}
+                          </Badge>
+                        )}
                       </div>
                       <CardDescription>
                         Created {new Date(rule.created_at).toLocaleDateString()}
@@ -623,8 +723,8 @@ export default function Rules() {
         {/* 2. RULES COVERAGE BY PAGE TYPE (MIDDLE) */}
         <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-xl">Rules Coverage by Page Type</CardTitle>
-            <CardDescription>Shows which rule applies to each page type and how many pages use it</CardDescription>
+            <CardTitle className="text-xl">Rules Coverage by Page Type & Category</CardTitle>
+            <CardDescription>Shows which rule applies to each page type and category combination</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-lg border">
@@ -632,37 +732,46 @@ export default function Rules() {
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 font-medium text-sm">Page Type</th>
+                    <th className="text-left p-3 font-medium text-sm">Category</th>
                     <th className="text-left p-3 font-medium text-sm">Rule Used</th>
                     <th className="text-right p-3 font-medium text-sm"># Pages</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(getRuleCoverage()).map(([pageType, { rule, count }]) => (
-                    <tr key={pageType} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="p-3">
-                        <Badge variant="outline" className="rounded-full font-normal">
-                          {pageType}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        {rule ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">{rule.name}</span>
-                            {!rule.page_type && (
-                              <Badge variant="secondary" className="rounded-full text-xs">
-                                default
-                              </Badge>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground italic">No active rule</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right">
-                        <span className="text-sm font-medium">{count}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {Object.entries(ruleCoverage).map(([key, { rule, count }]) => {
+                    const [pageType, category] = key.split('::');
+                    return (
+                      <tr key={key} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="p-3">
+                          <Badge variant="outline" className="rounded-full font-normal">
+                            {pageType === 'unknown' ? 'Not Set' : pageType}
+                          </Badge>
+                        </td>
+                        <td className="p-3">
+                          <Badge variant="outline" className="rounded-full font-normal bg-muted">
+                            {category === 'none' ? 'Not Set' : category}
+                          </Badge>
+                        </td>
+                        <td className="p-3">
+                          {rule ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">{rule.name}</span>
+                              {!rule.page_type && !rule.category && (
+                                <Badge variant="secondary" className="rounded-full text-xs">
+                                  default
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground italic">No active rule</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className="text-sm font-medium">{count}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

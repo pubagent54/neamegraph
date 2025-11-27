@@ -219,26 +219,27 @@ serve(async (req) => {
         );
       }
 
-      // Load v2 rules from the rules table based on page_type ONLY
-      // Category is passed as metadata to the LLM but not used for rule selection
-      console.log(`Loading v2 rules for pageType: ${page.page_type}${page.category ? `, category (metadata): ${page.category}` : ''}`);
+      // Load v2 rules from the rules table based on page_type AND category
+      console.log(`Loading v2 rules for pageType: ${page.page_type}, category: ${page.category || 'none'}`);
       
-      // 1) Try to find a specific rule for this page type (is_active = true)
+      // 1) Try to find a specific rule for this page type + category (is_active = true)
       let { data: matchedRule, error: matchError } = await supabase
         .from("rules")
         .select("*")
         .eq("page_type", page.page_type)
+        .eq("category", page.category)
         .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      // 2) If no specific rule found, fall back to the default rule (page_type IS NULL)
+      // 2) If no specific rule found, fall back to the default rule (page_type AND category both NULL)
       if (!matchedRule) {
         const { data: defaultRule } = await supabase
           .from("rules")
           .select("*")
           .is("page_type", null)
+          .is("category", null)
           .eq("is_active", true)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -247,16 +248,16 @@ serve(async (req) => {
         matchedRule = defaultRule;
         
         if (matchedRule) {
-          console.log(`Using default rule (page_type=null): ${matchedRule.name}`);
+          console.log(`Using default rule (page_type=null, category=null): ${matchedRule.name}`);
         }
       } else {
-        console.log(`Using specific rule for ${page.page_type}: ${matchedRule.name}`);
+        console.log(`Using specific rule for ${page.page_type} · ${page.category}: ${matchedRule.name}`);
       }
 
       if (!matchedRule) {
         return new Response(
           JSON.stringify({ 
-            error: "No rules found. Please create at least one rule set."
+            error: `No active rule found for page type "${page.page_type}" and category "${page.category || 'none'}". Please create a rule for this combination or set a default rule.`
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
