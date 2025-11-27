@@ -1,3 +1,12 @@
+/**
+ * Pages List Screen
+ * 
+ * Main pages management view displaying all corporate pages with filtering, search, and bulk actions.
+ * Handles all three domain lanes (Corporate, Beer, Pub) with inline editing for page metadata.
+ * Status workflow: not_started → ai_draft → needs_review → approved → implemented.
+ * Clicking a path navigates to PageDetail for schema generation and version management.
+ */
+
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";

@@ -1,3 +1,11 @@
+/**
+ * Domain Badge Component
+ * 
+ * Reusable badge for displaying page domain (Corporate, Beer, Pub) with semantic color coding.
+ * Used in Pages list and other views to quickly identify which domain lane a page belongs to.
+ * Corporate: blue theme, Beer: amber theme, Pub: purple theme (all with dark mode support).
+ */
+
 import { Badge } from "@/components/ui/badge";
 
 interface DomainBadgeProps {

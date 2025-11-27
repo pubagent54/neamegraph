@@ -1,3 +1,12 @@
+/**
+ * Rules Management Screen (Admin Only)
+ * 
+ * Manages schema generation prompts matched by (page_type, category) pairs.
+ * Rules are sent as system prompts to NeameGraph Brain (LLM) when generating JSON-LD.
+ * Features: inline editing, backup/restore, coverage dashboard, and preview/test tool.
+ * Default rule (both page_type and category NULL) serves as fallback for unmatched pages.
+ */
+
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
