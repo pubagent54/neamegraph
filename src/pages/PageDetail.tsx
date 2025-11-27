@@ -226,6 +226,16 @@ export default function PageDetail() {
     }
   };
 
+  // ========================================
+  // SCHEMA GENERATION LOGIC
+  // ----------------------------------------
+  // 1. Homepage: Manually managed, AI generation blocked (frontend + backend)
+  // 2. Pub domain: Phase 2 stub, generation disabled with UI message
+  // 3. Corporate/Beer domains: Rules-based engine
+  //    - Requires page_type to be set
+  //    - Edge function selects active rule by (page_type, category) match
+  //    - Falls back to default rule (both NULL) if no specific match
+  // ----------------------------------------
   const handleGenerateSchema = async () => {
     if (!page) return;
     

@@ -327,6 +327,14 @@ export default function Rules() {
     setDeleteDialogOpen(true);
   };
 
+  // ========================================
+  // RULES MATCHING ALGORITHM
+  // ----------------------------------------
+  // Rules are matched by (page_type, category) pair
+  // 1. Try exact match: rules.page_type = page.page_type AND rules.category = page.category
+  // 2. Fallback: active default rule where both page_type and category are NULL
+  // 3. Database enforces unique constraint on active rules per (page_type, category)
+  // ----------------------------------------
   const handlePreview = async () => {
     let targetPageType = previewPageType;
     let targetCategory: string | null = null;
@@ -534,7 +542,13 @@ export default function Rules() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="body">Prompt Body</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="body">Prompt Body</Label>
+                    <span className="text-xs text-muted-foreground">
+                      {formData.body.length} characters
+                      {formData.body.length > 0 && ` • ${formData.body.split('\n').length} lines`}
+                    </span>
+                  </div>
                   <Textarea
                     id="body"
                     value={formData.body}
@@ -542,8 +556,11 @@ export default function Rules() {
                       setFormData({ ...formData, body: e.target.value })
                     }
                     placeholder="Enter the system prompt for NeameGraph Brain schema generation..."
-                    className="min-h-[400px] font-mono text-sm rounded-xl"
+                    className="min-h-[400px] font-mono text-sm rounded-xl leading-relaxed"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    This prompt will be used by NeameGraph Brain to generate JSON-LD schema for matching pages.
+                  </p>
                 </div>
                 <Button onClick={handleSave} className="w-full rounded-full">
                   Save Rule
@@ -639,11 +656,16 @@ export default function Rules() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium">Schema Rules (prompt)</h3>
-                      {rule.created_at && (
+                      <div className="flex items-center gap-3">
                         <span className="text-xs text-muted-foreground">
-                          Last updated {new Date(rule.created_at).toLocaleDateString()}
+                          {rule.body.length} chars • {rule.body.split('\n').length} lines
                         </span>
-                      )}
+                        {rule.created_at && (
+                          <span className="text-xs text-muted-foreground">
+                            Last updated {new Date(rule.created_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="bg-muted/30 p-4 rounded-xl border border-border/50">
                       <Textarea
@@ -662,7 +684,7 @@ export default function Rules() {
                             handleInlineUpdate(rule.id, rule.body);
                           }
                         }}
-                        className={`font-mono text-sm min-h-[180px] bg-background/50 border-0 resize-none ${
+                        className={`font-mono text-sm min-h-[180px] leading-relaxed bg-background/50 border-0 resize-none ${
                           isAdmin ? "focus-visible:ring-1 focus-visible:ring-primary" : "focus-visible:ring-0"
                         }`}
                       />

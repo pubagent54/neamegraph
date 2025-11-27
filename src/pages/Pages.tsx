@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DomainBadge } from "@/components/DomainBadge";
 import { Link, useSearchParams } from "react-router-dom";
 import { Plus, Search, Upload, Trash2, Edit, CheckCircle2, Circle } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -91,7 +92,22 @@ const STATUS_CONFIG = {
   },
 } as const;
 
+// ========================================
+// DOMAIN LANE LOGIC - Corporate, Beer, Pub
+// ----------------------------------------
+// Corporate: Full rules-based schema engine with page_type/category matching
+// Beer: Uses same rules engine as Corporate, with beer-specific metadata fields
+// Pub: Phase 2 placeholder - schema generation disabled
+// ========================================
 const DOMAINS = ["Corporate", "Beer", "Pub"];
+
+// ========================================
+// PAGE STATUS WORKFLOW
+// ----------------------------------------
+// not_started → ai_draft (Brain generates) → needs_review 
+// → approved (admin only) → implemented (admin only)
+// Can branch to needs_rework from needs_review
+// ========================================
 
 // ========================================
 // Domain field: Corporate, Beer, or Pub
@@ -874,13 +890,7 @@ export default function Pages() {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
-                          page.domain === 'Corporate' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
-                          page.domain === 'Beer' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                          'bg-purple-50 text-purple-700 border-purple-200'
-                        }`}>
-                          {page.domain || 'Corporate'}
-                        </span>
+                        <DomainBadge domain={page.domain || 'Corporate'} />
                       </TableCell>
                       <TableCell>
                         {canEdit ? (
