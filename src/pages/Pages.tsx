@@ -311,10 +311,10 @@ export default function Pages() {
       });
 
       if (error) {
-        // Handle unique constraint violation
-        if (error.code === "23505" && error.message.includes("pages_path_unique")) {
+        // Handle unique constraint violation (any duplicate path error)
+        if (error.code === "23505") {
           setPathError("This page already exists in the database. Open the existing page instead of creating a duplicate.");
-          return;
+          return; // Don't throw, don't toast - just show inline error
         }
         throw error;
       }
@@ -335,7 +335,7 @@ export default function Pages() {
       fetchPages();
     } catch (error: any) {
       console.error("Error adding page:", error);
-      toast.error(error.message || "Failed to add page");
+      toast.error("Failed to add page. Please try again.");
     }
   };
 
