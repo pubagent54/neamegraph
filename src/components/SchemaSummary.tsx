@@ -11,6 +11,15 @@ interface SchemaSummaryProps {
 export function SchemaSummary({ jsonld, section, createdAt, status }: SchemaSummaryProps) {
   const summary = parseSchemaForSummary(jsonld, section);
 
+  // Defensive check for invalid props
+  if (!jsonld || !createdAt || !status) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <p>Missing required data to display schema summary.</p>
+      </div>
+    );
+  }
+
   if (!summary.mainEntity && !summary.validation.hasOrganization) {
     return (
       <div className="text-center py-8 text-muted-foreground">
