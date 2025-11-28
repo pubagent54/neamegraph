@@ -482,6 +482,10 @@ export type Database = {
           row_number: number
           run_id: string
           schema_status: string
+          validation_error_count: number | null
+          validation_issues: Json | null
+          validation_status: string | null
+          validation_warning_count: number | null
         }
         Insert: {
           category?: string | null
@@ -497,6 +501,10 @@ export type Database = {
           row_number: number
           run_id: string
           schema_status?: string
+          validation_error_count?: number | null
+          validation_issues?: Json | null
+          validation_status?: string | null
+          validation_warning_count?: number | null
         }
         Update: {
           category?: string | null
@@ -512,6 +520,10 @@ export type Database = {
           row_number?: number
           run_id?: string
           schema_status?: string
+          validation_error_count?: number | null
+          validation_issues?: Json | null
+          validation_status?: string | null
+          validation_warning_count?: number | null
         }
         Relationships: [
           {
