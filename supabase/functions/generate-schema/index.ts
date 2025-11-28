@@ -520,6 +520,9 @@ CRITICAL REQUIREMENTS - Your response MUST include:
    - "name": "Shepherd Neame Limited"
    - "url": "https://www.shepherdneame.co.uk"
 
+   NOTE: In future versions, the Organization node should be sourced from settings.organization_schema_json 
+   instead of being generated inline by the AI. This will ensure a single master Organization node across all pages.
+
 Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just the raw JSON starting with { and ending with }.
 `;
 
@@ -613,6 +616,8 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
     }
 
     // Check for Organization node
+    // TODO: In future, replace this validation with a check that the Organization node
+    // matches the master Organization schema from settings.organization_schema_json
     const orgNode = jsonld["@graph"]?.find((node: any) =>
       node["@id"] === "https://www.shepherdneame.co.uk/#organization" &&
       node.name === "Shepherd Neame Limited"

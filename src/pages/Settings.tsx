@@ -5,9 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Save, RefreshCw } from "lucide-react";
+import { Save, RefreshCw, Copy, RotateCcw } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Settings {
   id: string;
@@ -17,13 +28,19 @@ interface Settings {
   preview_auth_user: string | null;
   preview_auth_password: string | null;
   schema_engine_version: string;
+  organization_schema_json: string | null;
+  organization_schema_backup_json: string | null;
 }
 
 export default function Settings() {
+  const { userRole } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  
+  const isAdmin = userRole === 'admin';
 
   useEffect(() => {
     fetchSettings();
@@ -89,6 +106,79 @@ export default function Settings() {
     } finally {
       setSyncing(false);
     }
+  };
+
+  const handleCopyOrgSchema = async () => {
+    if (!settings?.organization_schema_json) {
+      toast.error("No organization schema to copy");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(settings.organization_schema_json);
+      toast.success("Organization schema copied to clipboard");
+    } catch (error) {
+      console.error("Error copying to clipboard:", error);
+      toast.error("Failed to copy to clipboard");
+    }
+  };
+
+  const handleSaveOrgSchema = async () => {
+    if (!settings || !isAdmin) return;
+    setSaving(true);
+
+    try {
+      // Move current to backup, save new current
+      const { error } = await supabase
+        .from("settings")
+        .update({
+          organization_schema_backup_json: settings.organization_schema_json,
+          organization_schema_json: settings.organization_schema_json,
+        })
+        .eq("id", settings.id);
+
+      if (error) throw error;
+
+      toast.success("Master Organization schema saved & backed up");
+      await fetchSettings(); // Refresh to get updated backup
+    } catch (error) {
+      console.error("Error saving organization schema:", error);
+      toast.error("Failed to save organization schema");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRestoreOrgSchema = async () => {
+    if (!settings?.organization_schema_backup_json || !isAdmin) return;
+    setSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from("settings")
+        .update({
+          organization_schema_json: settings.organization_schema_backup_json,
+        })
+        .eq("id", settings.id);
+
+      if (error) throw error;
+
+      toast.success("Organization schema restored from backup");
+      await fetchSettings(); // Refresh
+      setShowRestoreDialog(false);
+    } catch (error) {
+      console.error("Error restoring organization schema:", error);
+      toast.error("Failed to restore organization schema");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getCharacterCount = (text: string | null) => {
+    return text?.length || 0;
+  };
+
+  const getLineCount = (text: string | null) => {
+    return text ? text.split('\n').length : 0;
   };
 
   if (loading) {
@@ -232,6 +322,78 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        {isAdmin && (
+          <Card className="rounded-2xl border-0 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-xl">Master Organisation Schema</CardTitle>
+              <CardDescription>
+                Single source of truth for the Organization node at https://www.shepherdneame.co.uk/#organization
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="org-schema">Organization JSON-LD</Label>
+                  <span className="text-xs text-muted-foreground">
+                    {getCharacterCount(settings.organization_schema_json)} characters · {getLineCount(settings.organization_schema_json)} lines
+                  </span>
+                </div>
+                <Textarea
+                  id="org-schema"
+                  value={settings.organization_schema_json || ""}
+                  onChange={(e) =>
+                    setSettings({ ...settings, organization_schema_json: e.target.value })
+                  }
+                  placeholder='{"@type": ["Organization", "Corporation"], "@id": "https://www.shepherdneame.co.uk/#organization", ...}'
+                  className="font-mono text-sm min-h-[300px] leading-relaxed"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This is the <strong>master Organization node</strong> that represents Shepherd Neame Limited. 
+                  In future versions, page-level schema generators will read from this source instead of generating it inline.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCopyOrgSchema}
+                  disabled={!settings.organization_schema_json}
+                  className="rounded-full"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy JSON
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveOrgSchema}
+                  disabled={saving || !settings.organization_schema_json}
+                  className="rounded-full"
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  {saving ? "Saving..." : "Save & Backup"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowRestoreDialog(true)}
+                  disabled={!settings.organization_schema_backup_json}
+                  className="rounded-full"
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Restore Last Backup
+                </Button>
+              </div>
+
+              {settings.organization_schema_backup_json && (
+                <div className="p-3 bg-muted/30 rounded-xl border text-xs text-muted-foreground">
+                  <strong className="text-foreground">Backup available:</strong> {getCharacterCount(settings.organization_schema_backup_json)} characters · {getLineCount(settings.organization_schema_backup_json)} lines
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <div className="flex gap-3">
           <Button onClick={handleSave} disabled={saving} className="rounded-full">
             <Save className="mr-2 h-4 w-4" />
@@ -248,6 +410,24 @@ export default function Settings() {
           </Button>
         </div>
       </div>
+
+      <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore Organization Schema Backup?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will replace the current Organization schema with the last backup version. 
+              The current version will not be lost—it remains in the database history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRestoreOrgSchema}>
+              Restore Backup
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }
