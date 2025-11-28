@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Maximize2 } from "lucide-react";
 import ForceGraph2D from "react-force-graph-2d";
 import { useNavigate } from "react-router-dom";
+import shepsLogo from "@/assets/neamegraph-logo.png";
 
 type GraphNodeType = 'organization' | 'beer' | 'wikidata';
 
@@ -56,6 +57,16 @@ export default function Graph() {
   const [schemaFilter, setSchemaFilter] = useState<'all' | 'no_schema' | 'has_schema'>('all');
   const [wikidataFilter, setWikidataFilter] = useState<'all' | 'with' | 'without'>('all');
   const fgRef = useRef<any>();
+  const logoImageRef = useRef<HTMLImageElement | null>(null);
+
+  // Load logo image for org node rendering
+  useEffect(() => {
+    const img = new Image();
+    img.src = shepsLogo;
+    img.onload = () => {
+      logoImageRef.current = img;
+    };
+  }, []);
 
   const fetchGraphData = useCallback(async () => {
     setLoading(true);
@@ -80,6 +91,11 @@ export default function Graph() {
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     setSelectedNode(node);
+
+    // If organization node, open homepage in new tab
+    if (node.type === 'organization') {
+      window.open('https://www.shepherdneame.co.uk/', '_blank', 'noopener,noreferrer');
+    }
 
     // Find connected nodes
     const connectedNodes = new Set<string>([node.id]);
@@ -160,27 +176,75 @@ export default function Graph() {
     const nodeSize = getNodeSize(node);
     const nodeColor = getNodeColor(node);
 
-    // Draw node circle
-    ctx.beginPath();
-    ctx.arc(node.x!, node.y!, nodeSize, 0, 2 * Math.PI, false);
-    ctx.fillStyle = nodeColor;
-    ctx.fill();
+    // Special rendering for organization node with logo
+    if (node.type === 'organization' && logoImageRef.current) {
+      const logoSize = nodeSize * 2.5;
+      const isDimmed = highlightNodes.size > 0 && !highlightNodes.has(node.id);
+      
+      // Draw circle background
+      ctx.beginPath();
+      ctx.arc(node.x!, node.y!, logoSize, 0, 2 * Math.PI, false);
+      ctx.fillStyle = isDimmed ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.95)';
+      ctx.fill();
+      ctx.strokeStyle = isDimmed ? 'rgba(128, 128, 128, 0.3)' : nodeColor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
-    // Draw label background (only if zoomed in enough)
-    if (globalScale > 1.5) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-      ctx.fillRect(
-        node.x! - bckgDimensions[0] / 2,
-        node.y! + nodeSize + 2,
-        bckgDimensions[0],
-        bckgDimensions[1]
+      // Draw logo inside circle
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(node.x!, node.y!, logoSize - 4, 0, 2 * Math.PI, false);
+      ctx.clip();
+      ctx.globalAlpha = isDimmed ? 0.3 : 1;
+      
+      const imgSize = (logoSize - 4) * 1.6;
+      ctx.drawImage(
+        logoImageRef.current,
+        node.x! - imgSize / 2,
+        node.y! - imgSize / 2,
+        imgSize,
+        imgSize
       );
+      ctx.restore();
 
-      // Draw label text
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'white';
-      ctx.fillText(label, node.x!, node.y! + nodeSize + 2 + bckgDimensions[1] / 2);
+      // Draw label below (only if zoomed in enough)
+      if (globalScale > 1.5) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(
+          node.x! - bckgDimensions[0] / 2,
+          node.y! + logoSize + 2,
+          bckgDimensions[0],
+          bckgDimensions[1]
+        );
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'white';
+        ctx.fillText(label, node.x!, node.y! + logoSize + 2 + bckgDimensions[1] / 2);
+      }
+    } else {
+      // Standard rendering for beer/wikidata nodes
+      ctx.beginPath();
+      ctx.arc(node.x!, node.y!, nodeSize, 0, 2 * Math.PI, false);
+      ctx.fillStyle = nodeColor;
+      ctx.fill();
+
+      // Draw label background (only if zoomed in enough)
+      if (globalScale > 1.5) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(
+          node.x! - bckgDimensions[0] / 2,
+          node.y! + nodeSize + 2,
+          bckgDimensions[0],
+          bckgDimensions[1]
+        );
+
+        // Draw label text
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'white';
+        ctx.fillText(label, node.x!, node.y! + nodeSize + 2 + bckgDimensions[1] / 2);
+      }
     }
   }, [highlightNodes]);
 
