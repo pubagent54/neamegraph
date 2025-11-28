@@ -169,6 +169,8 @@ export default function Pages() {
   const [newPage, setNewPage] = useState({
     path: "",
     domain: "Corporate",
+    page_type: "",
+    category: "",
     has_faq: false,
     notes: "",
     faq_mode: "auto",
@@ -217,6 +219,18 @@ export default function Pages() {
         return;
       }
 
+      // Validate Page Type and Category for Corporate and Beer domains
+      if (newPage.domain === "Corporate" || newPage.domain === "Beer") {
+        if (!newPage.page_type) {
+          toast.error("Page Type is required for Corporate and Beer domains");
+          return;
+        }
+        if (!newPage.category) {
+          toast.error("Category is required for Corporate and Beer domains");
+          return;
+        }
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
@@ -228,8 +242,8 @@ export default function Pages() {
         path: newPage.path,
         domain: newPage.domain || "Corporate",
         section: null,
-        page_type: null,
-        category: null,
+        page_type: newPage.page_type || null,
+        category: newPage.category || null,
         has_faq: newPage.has_faq,
         priority: null,
         notes: newPage.notes || null,
@@ -246,6 +260,8 @@ export default function Pages() {
       setNewPage({
         path: "",
         domain: "Corporate",
+        page_type: "",
+        category: "",
         has_faq: false,
         notes: "",
         faq_mode: "auto",
@@ -649,7 +665,10 @@ export default function Pages() {
                     
                     <div className="space-y-2">
                       <Label htmlFor="domain">Domain</Label>
-                      <Select value={newPage.domain} onValueChange={(value) => setNewPage({ ...newPage, domain: value })}>
+                      <Select 
+                        value={newPage.domain} 
+                        onValueChange={(value) => setNewPage({ ...newPage, domain: value, page_type: "", category: "" })}
+                      >
                         <SelectTrigger className="rounded-xl">
                           <SelectValue />
                         </SelectTrigger>
@@ -659,9 +678,51 @@ export default function Pages() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Defaults to Corporate. Set metadata in Page Detail after creation.
-                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="page_type">
+                        Page Type {(newPage.domain === "Corporate" || newPage.domain === "Beer") && <span className="text-destructive">*</span>}
+                      </Label>
+                      <Select 
+                        value={newPage.page_type} 
+                        onValueChange={(value) => setNewPage({ ...newPage, page_type: value, category: "" })}
+                      >
+                        <SelectTrigger className="rounded-xl">
+                          <SelectValue placeholder="Select a page type" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl max-h-[300px]">
+                          {V2_PAGE_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(newPage.domain === "Corporate" || newPage.domain === "Beer") && (
+                        <p className="text-xs text-muted-foreground">Required for {newPage.domain} pages</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category">
+                        Category {(newPage.domain === "Corporate" || newPage.domain === "Beer") && <span className="text-destructive">*</span>}
+                      </Label>
+                      <Select 
+                        value={newPage.category} 
+                        onValueChange={(value) => setNewPage({ ...newPage, category: value })}
+                        disabled={!newPage.page_type}
+                      >
+                        <SelectTrigger className="rounded-xl">
+                          <SelectValue placeholder="Select a category" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl max-h-[300px]">
+                          {newPage.page_type && V2_CATEGORIES[newPage.page_type]?.map((cat) => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(newPage.domain === "Corporate" || newPage.domain === "Beer") && (
+                        <p className="text-xs text-muted-foreground">Required for {newPage.domain} pages</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
