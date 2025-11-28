@@ -24,24 +24,33 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get the authenticated user
+    // Check if this is a service role call (internal/automated)
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const isServiceRoleCall = authHeader?.includes(supabaseServiceKey);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
+    let userId: string | null = null;
 
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    if (!isServiceRoleCall) {
+      // Regular user call - require authentication
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const { data: { user }, error: authError } = await supabase.auth.getUser(
+        authHeader.replace("Bearer ", "")
       );
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      userId = user.id;
+    } else {
+      console.log("Service role call detected - proceeding without user auth");
+      // userId remains null for automated calls
     }
 
     // Parse request body
@@ -464,7 +473,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           version_number: nextVersionNumber,
           jsonld: v2JsonldString,
           status: "draft",
-          created_by_user_id: user.id,
+          created_by_user_id: userId,
           rules_id: usedRuleId,
           google_rr_passed: false,
         })
@@ -485,12 +494,12 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           last_schema_generated_at: new Date().toISOString(),
           last_schema_hash: v2SchemaHash,
           status: "ai_draft",
-          last_modified_by_user_id: user.id,
+          last_modified_by_user_id: userId,
         })
         .eq("id", page_id);
 
       await supabase.from("audit_log").insert({
-        user_id: user.id,
+        user_id: userId || "system",
         entity_type: "schema_version",
         entity_id: v2SchemaVersion.id,
         action: "generate_schema",
@@ -717,7 +726,7 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
         version_number: nextVersionNumber,
         jsonld: jsonldString,
         status: "draft",
-        created_by_user_id: user.id,
+        created_by_user_id: userId,
         rules_id: activeRule.id,
         google_rr_passed: false,
       })
@@ -739,7 +748,7 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
         last_schema_generated_at: new Date().toISOString(),
         last_schema_hash: schemaHash,
         status: "ai_draft",
-        last_modified_by_user_id: user.id,
+        last_modified_by_user_id: userId,
       })
       .eq("id", page_id);
 
@@ -749,7 +758,7 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
 
     // 6. Audit log
     await supabase.from("audit_log").insert({
-      user_id: user.id,
+      user_id: userId || "system",
       entity_type: "schema_version",
       entity_id: schemaVersion.id,
       action: "generate_schema",

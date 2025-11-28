@@ -394,13 +394,14 @@ export default function WIZmode() {
     if (!runItems.length) return null;
 
     const created = runItems.filter((i) => i.result === "created").length;
+    const updated = runItems.filter((i) => i.result === "updated").length;
     const skipped = runItems.filter((i) => i.result === "skipped_duplicate").length;
     const errors = runItems.filter((i) => i.result === "error").length;
     const htmlSuccess = runItems.filter((i) => i.html_status === "success").length;
     const schemaSuccess = runItems.filter((i) => i.schema_status === "success").length;
     const completed = runItems.filter((i) => i.result !== "pending").length;
 
-    return { created, skipped, errors, htmlSuccess, schemaSuccess, completed };
+    return { created, updated, skipped, errors, htmlSuccess, schemaSuccess, completed };
   };
 
   const getEstimatedTimeRemaining = () => {
@@ -539,11 +540,17 @@ export default function WIZmode() {
               })()}
 
               {summary && (
-                <div className="grid gap-4 md:grid-cols-5">
+                <div className="grid gap-4 md:grid-cols-6">
                   <Card className="rounded-xl">
                     <CardContent className="pt-6">
                       <div className="text-2xl font-bold">{summary.created}</div>
                       <p className="text-xs text-muted-foreground">Pages Created</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-xl">
+                    <CardContent className="pt-6">
+                      <div className="text-2xl font-bold">{summary.updated}</div>
+                      <p className="text-xs text-muted-foreground">Pages Updated</p>
                     </CardContent>
                   </Card>
                   <Card className="rounded-xl">
@@ -596,6 +603,9 @@ export default function WIZmode() {
                         <TableCell>
                           {item.result === "created" && (
                             <Badge className="rounded-full bg-green-500">Created</Badge>
+                          )}
+                          {item.result === "updated" && (
+                            <Badge className="rounded-full bg-blue-500">Updated</Badge>
                           )}
                           {item.result === "skipped_duplicate" && (
                             <Badge className="rounded-full bg-yellow-500">Skipped</Badge>
