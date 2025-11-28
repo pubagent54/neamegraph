@@ -176,6 +176,7 @@ export default function Pages() {
     faq_mode: "auto",
     is_home_page: false,
   });
+  const [pathError, setPathError] = useState("");
   const [searchParams] = useSearchParams();
   const { userRole } = useAuth();
 
@@ -189,6 +190,23 @@ export default function Pages() {
       setStatusFilter(statusParam);
     }
   }, [searchParams]);
+
+  // Normalize path: trim, ensure leading /, strip trailing / (except root)
+  const normalizePath = (path: string): string => {
+    let normalized = path.trim();
+    
+    // Ensure leading /
+    if (!normalized.startsWith("/")) {
+      normalized = "/" + normalized;
+    }
+    
+    // Strip trailing / except for root
+    if (normalized !== "/" && normalized.endsWith("/")) {
+      normalized = normalized.slice(0, -1);
+    }
+    
+    return normalized;
+  };
 
   const fetchPages = async () => {
     try {
@@ -209,15 +227,15 @@ export default function Pages() {
 
   const handleAddPage = async () => {
     try {
+      setPathError(""); // Clear any previous errors
+
       if (!newPage.path) {
-        toast.error("Path is required");
+        setPathError("Path is required");
         return;
       }
 
-      if (!newPage.path.startsWith("/")) {
-        toast.error("Path must start with /");
-        return;
-      }
+      // Normalize the path
+      const normalizedPath = normalizePath(newPage.path);
 
       // Validate Page Type and Category for Corporate and Beer domains
       if (newPage.domain === "Corporate" || newPage.domain === "Beer") {
@@ -239,7 +257,7 @@ export default function Pages() {
       }
 
       const { error } = await supabase.from("pages").insert({
-        path: newPage.path,
+        path: normalizedPath,
         domain: newPage.domain || "Corporate",
         section: null,
         page_type: newPage.page_type || null,
@@ -254,7 +272,14 @@ export default function Pages() {
         is_home_page: newPage.is_home_page,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle unique constraint violation
+        if (error.code === "23505" && error.message.includes("pages_path_unique")) {
+          setPathError("A page with this path already exists. Edit the existing page instead of creating a new one.");
+          return;
+        }
+        throw error;
+      }
 
       toast.success("Page added successfully");
       setNewPage({
@@ -267,6 +292,7 @@ export default function Pages() {
         faq_mode: "auto",
         is_home_page: false,
       });
+      setPathError("");
       setAddDialogOpen(false);
       fetchPages();
     } catch (error: any) {
@@ -327,7 +353,7 @@ export default function Pages() {
     try {
       const paths = bulkPaths
         .split("\n")
-        .map((p) => p.trim())
+        .map((p) => normalizePath(p))
         .filter((p) => p.length > 0);
 
       if (paths.length === 0) {
@@ -658,9 +684,15 @@ export default function Pages() {
                         id="path"
                         placeholder="/beers/spitfire"
                         value={newPage.path}
-                        onChange={(e) => setNewPage({ ...newPage, path: e.target.value })}
-                        className="rounded-xl"
+                        onChange={(e) => {
+                          setNewPage({ ...newPage, path: e.target.value });
+                          setPathError(""); // Clear error on input change
+                        }}
+                        className={`rounded-xl ${pathError ? "border-destructive" : ""}`}
                       />
+                      {pathError && (
+                        <p className="text-sm text-destructive">{pathError}</p>
+                      )}
                     </div>
                     
                     <div className="space-y-2">
