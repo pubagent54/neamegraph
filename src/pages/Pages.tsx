@@ -215,6 +215,8 @@ export default function Pages() {
     is_home_page: false,
   });
   const [pathError, setPathError] = useState("");
+  const [duplicatePage, setDuplicatePage] = useState<any>(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [searchParams] = useSearchParams();
   const { userRole } = useAuth();
 
@@ -229,7 +231,7 @@ export default function Pages() {
     }
   }, [searchParams]);
 
-  // Normalize path: trim, ensure leading /, strip trailing / (except root)
+  // Normalize path: trim, ensure leading /, strip trailing / (except root), lowercase
   const normalizePath = (path: string): string => {
     let normalized = path.trim();
     
@@ -242,6 +244,9 @@ export default function Pages() {
     if (normalized !== "/" && normalized.endsWith("/")) {
       normalized = normalized.slice(0, -1);
     }
+    
+    // Make case-insensitive by lowercasing
+    normalized = normalized.toLowerCase();
     
     return normalized;
   };
@@ -262,6 +267,51 @@ export default function Pages() {
       setLoading(false);
     }
   };
+
+  // Debounced duplicate check
+  const checkDuplicatePath = async (rawPath: string) => {
+    if (!rawPath.trim()) {
+      setDuplicatePage(null);
+      setPathError("");
+      return;
+    }
+
+    const normalizedPath = normalizePath(rawPath);
+    setCheckingDuplicate(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("pages")
+        .select("id, domain, page_type, path")
+        .eq("path", normalizedPath)
+        .limit(1);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setDuplicatePage(data[0]);
+        setPathError("This page already exists in the database. Open the existing page instead of creating a duplicate.");
+      } else {
+        setDuplicatePage(null);
+        setPathError("");
+      }
+    } catch (error) {
+      console.error("Error checking duplicate:", error);
+    } finally {
+      setCheckingDuplicate(false);
+    }
+  };
+
+  // Debounce timer
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (newPage.path) {
+        checkDuplicatePath(newPage.path);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [newPage.path]);
 
   const handleAddPage = async () => {
     try {
@@ -292,6 +342,23 @@ export default function Pages() {
       if (!user) {
         toast.error("You must be logged in to add pages");
         return;
+      }
+
+      // Pre-flight duplicate check
+      const { data: existingPage, error: checkError } = await supabase
+        .from("pages")
+        .select("id, domain, page_type, path")
+        .eq("path", normalizedPath)
+        .limit(1);
+
+      if (checkError) {
+        console.error("Error checking for duplicate:", checkError);
+      }
+
+      if (existingPage && existingPage.length > 0) {
+        setDuplicatePage(existingPage[0]);
+        setPathError("This page already exists in the database. Open the existing page instead of creating a duplicate.");
+        return; // Don't proceed with insert
       }
 
       const { error } = await supabase.from("pages").insert({
@@ -331,6 +398,7 @@ export default function Pages() {
         is_home_page: false,
       });
       setPathError("");
+      setDuplicatePage(null);
       setAddDialogOpen(false);
       fetchPages();
     } catch (error: any) {
@@ -725,11 +793,29 @@ export default function Pages() {
                         onChange={(e) => {
                           setNewPage({ ...newPage, path: e.target.value });
                           setPathError(""); // Clear error on input change
+                          setDuplicatePage(null); // Clear duplicate state
                         }}
                         className={`rounded-xl ${pathError ? "border-destructive" : ""}`}
                       />
                       {pathError && (
-                        <p className="text-sm text-destructive">{pathError}</p>
+                        <p className="text-sm text-destructive mt-1">
+                          {pathError}
+                          {duplicatePage && (
+                            <>
+                              {" "}
+                              <button
+                                type="button"
+                                className="underline font-medium hover:text-destructive/80"
+                                onClick={() => window.open(`/pages/${duplicatePage.id}`, "_blank")}
+                              >
+                                View existing page
+                              </button>
+                            </>
+                          )}
+                        </p>
+                      )}
+                      {checkingDuplicate && (
+                        <p className="text-xs text-muted-foreground">Checking for duplicates...</p>
                       )}
                     </div>
                     
@@ -875,7 +961,13 @@ export default function Pages() {
                       />
                     </div>
 
-                    <Button onClick={handleAddPage} className="w-full rounded-full">Add Page</Button>
+                    <Button 
+                      onClick={handleAddPage} 
+                      className="w-full rounded-full"
+                      disabled={!!duplicatePage || checkingDuplicate}
+                    >
+                      Add Page
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>
