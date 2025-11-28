@@ -98,7 +98,9 @@ export default function Settings() {
     setSyncing(true);
     try {
       // In a real implementation, this would call an edge function
-      toast.info("Sitemap sync would be implemented via edge function");
+      // NOTE: Edge function should use INSERT ... ON CONFLICT (path) DO UPDATE
+      // or DO NOTHING to handle the unique constraint on pages.path
+      toast.info("Sitemap sync would be implemented via edge function with upsert logic");
       
       await new Promise(resolve => setTimeout(resolve, 2000));
       
