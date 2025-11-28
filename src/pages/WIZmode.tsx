@@ -168,12 +168,72 @@ export default function WIZmode() {
           dataStartIndex = 0;
         }
 
+        // Category normalization map
+        const categoryMap: Record<string, string> = {
+          "pubs & hotels": "Pubs & Hotels",
+          "beer & drinks brands": "Beer and Drink Brands",
+          "beer and drink brands": "Beer and Drink Brands",
+          "drink brands": "Drink Brands",
+          "community": "Community",
+          "collection page": "Collection Page",
+          "working for shepherd neame": "Working for Shepherd Neame",
+          "pub tenancies": "Pub Tenancies",
+          "legal": "Legal",
+          "direct to trade": "Direct to Trade",
+          "general": "General",
+          "history": "History",
+          "environment": "Environment",
+          "about": "About",
+          "brewery history": "Brewery History",
+          "brewing process": "Brewing Process",
+          "facilities": "Facilities",
+        };
+
+        // Page type normalization map
+        const pageTypeMap: Record<string, string> = {
+          "about": "About",
+          "history": "History",
+          "environment": "Environment",
+          "careers": "Careers",
+          "news": "News",
+          "beers": "Beers",
+          "brewery": "Brewery",
+          "pubs & hotels estate": "Pubs & Hotels Estate",
+        };
+
+        // Domain normalization map
+        const domainMap: Record<string, string> = {
+          "corporate": "Corporate",
+          "beer": "Beer",
+          "pub": "Pub",
+        };
+
         const rows = lines.slice(dataStartIndex).map((line, index) => {
           const values = line.split(",").map((v) => v.trim());
           const row: any = { row_number: index + 1 };
           
           headers.forEach((header, i) => {
-            row[header] = values[i] || "";
+            let value = values[i] || "";
+            
+            // Normalize domain values
+            if (header === "domain" && value) {
+              const normalizedKey = value.toLowerCase();
+              value = domainMap[normalizedKey] || value;
+            }
+            
+            // Normalize page_type values
+            if (header === "page_type" && value) {
+              const normalizedKey = value.toLowerCase();
+              value = pageTypeMap[normalizedKey] || value;
+            }
+            
+            // Normalize category values
+            if (header === "category" && value) {
+              const normalizedKey = value.toLowerCase();
+              value = categoryMap[normalizedKey] || value;
+            }
+            
+            row[header] = value;
           });
           
           return row;
