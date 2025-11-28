@@ -14,11 +14,12 @@ import { useNavigate } from "react-router-dom";
 import shepsLogo from "@/assets/neamegraph-logo.png";
 import { useToast } from "@/hooks/use-toast";
 
-type GraphNodeType = 'organization' | 'beer' | 'wikidata';
+type GraphNodeType = 'organization' | 'beer_page' | 'corporate_page' | 'pub_page' | 'wikidata';
 
 interface GraphNode {
   id: string;
   type: GraphNodeType;
+  domain?: string | null;
   label: string;
   subtitle?: string;
   pageId?: string | null;
@@ -32,6 +33,8 @@ interface GraphNode {
     style?: string | null;
     launchYear?: number | null;
     officialUrl?: string | null;
+    pageType?: string | null;
+    category?: string | null;
   };
   x?: number;
   y?: number;
@@ -45,7 +48,7 @@ interface GraphLink {
   id: string;
   source: string;
   target: string;
-  relation: 'produces' | 'sameAs';
+  relation: 'produces' | 'sameAs' | 'describes';
 }
 
 interface GraphSnapshot {
@@ -61,6 +64,7 @@ export default function Graph() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [highlightNodes, setHighlightNodes] = useState<Set<string>>(new Set());
   const [highlightLinks, setHighlightLinks] = useState<Set<string>>(new Set());
+  const [scope, setScope] = useState<'All' | 'Corporate' | 'Beers' | 'Pubs'>('Beers');
   const [schemaFilter, setSchemaFilter] = useState<'all' | 'no_schema' | 'has_schema'>('all');
   const [wikidataFilter, setWikidataFilter] = useState<'all' | 'with' | 'without'>('all');
   const [isAnimating, setIsAnimating] = useState(true);
@@ -82,8 +86,8 @@ export default function Graph() {
   const fetchGraphData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('graph-beers', {
-        body: { schemaFilter, wikidataFilter },
+      const { data, error } = await supabase.functions.invoke('graph-pages', {
+        body: { scope, schemaFilter, wikidataFilter },
       });
 
       if (error) throw error;
@@ -94,10 +98,15 @@ export default function Graph() {
       loadSavedLayout(data.nodes);
     } catch (error) {
       console.error("Error fetching graph data:", error);
+      toast({
+        title: "Error loading graph",
+        description: "Failed to fetch graph data. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
-  }, [schemaFilter, wikidataFilter]);
+  }, [scope, schemaFilter, wikidataFilter, toast]);
 
   useEffect(() => {
     fetchGraphData();
@@ -108,7 +117,7 @@ export default function Graph() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const filterKey = `${schemaFilter}-${wikidataFilter}`;
+      const filterKey = `${scope}-${schemaFilter}-${wikidataFilter}`;
       const { data, error } = await supabase
         .from('graph_layouts')
         .select('layout_data')
@@ -166,7 +175,7 @@ export default function Graph() {
         };
       });
 
-      const filterKey = `${schemaFilter}-${wikidataFilter}`;
+      const filterKey = `${scope}-${schemaFilter}-${wikidataFilter}`;
       
       const { error } = await supabase
         .from('graph_layouts')
@@ -277,7 +286,7 @@ export default function Graph() {
     if (!searchQuery.trim()) {
       toast({
         title: "Enter a search term",
-        description: "Type a beer name to search",
+        description: "Type a page name to search",
         variant: "destructive",
       });
       return;
@@ -291,7 +300,7 @@ export default function Graph() {
     if (matchingNodes.length === 0) {
       toast({
         title: "No matches found",
-        description: `No beers found matching "${searchQuery}"`,
+        description: `No pages found matching "${searchQuery}"`,
         variant: "destructive",
       });
       return;
@@ -336,6 +345,7 @@ export default function Graph() {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     const snapshot = {
       generatedAt: new Date().toISOString(),
+      scope,
       filters: {
         schema: schemaFilter,
         wikidata: wikidataFilter,
@@ -348,7 +358,7 @@ export default function Graph() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `neamegraph-knowledge-graph-v1-${timestamp}.json`;
+    a.download = `neamegraph-knowledge-graph-v2-${timestamp}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -358,7 +368,7 @@ export default function Graph() {
       title: "Graph JSON exported",
       description: "Download started",
     });
-  }, [graphData, schemaFilter, wikidataFilter, toast]);
+  }, [graphData, scope, schemaFilter, wikidataFilter, toast]);
 
   const handleExportPNG = useCallback(() => {
     if (graphData.nodes.length === 0) {
@@ -386,7 +396,7 @@ export default function Graph() {
       
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = `neamegraph-knowledge-graph-v1-${timestamp}.png`;
+      a.download = `neamegraph-knowledge-graph-v2-${timestamp}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -415,13 +425,25 @@ export default function Graph() {
         return 'hsl(var(--primary))';
       case 'wikidata':
         return 'hsl(var(--accent))';
-      case 'beer':
+      case 'beer_page':
         if (node.metrics?.hasSchema && node.metrics?.hasWikidata) {
           return 'hsl(142, 71%, 45%)'; // green
         } else if (node.metrics?.hasSchema) {
           return 'hsl(45, 93%, 47%)'; // amber
         } else {
           return 'hsl(0, 72%, 51%)'; // red
+        }
+      case 'corporate_page':
+        if (node.metrics?.hasSchema) {
+          return 'hsl(200, 70%, 50%)'; // blue
+        } else {
+          return 'hsl(200, 40%, 60%)'; // light blue
+        }
+      case 'pub_page':
+        if (node.metrics?.hasSchema) {
+          return 'hsl(280, 60%, 50%)'; // purple
+        } else {
+          return 'hsl(280, 40%, 60%)'; // light purple
         }
       default:
         return 'hsl(var(--muted))';
@@ -434,7 +456,9 @@ export default function Graph() {
         return 12;
       case 'wikidata':
         return 5;
-      case 'beer':
+      case 'beer_page':
+      case 'corporate_page':
+      case 'pub_page':
         return 8;
       default:
         return 6;
@@ -540,9 +564,9 @@ export default function Graph() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-4xl font-bold tracking-tight mb-2">Knowledge Graph v1</h1>
+          <h1 className="text-4xl font-bold tracking-tight mb-2">Knowledge Graph v2</h1>
           <p className="text-lg text-muted-foreground">
-            Interactive visualization of Shepherd Neame's beer universe
+            Interactive visualization of Shepherd Neame's corporate, beer, and pub universes
           </p>
         </div>
 
@@ -555,7 +579,7 @@ export default function Graph() {
                 <div className="relative flex items-center">
                   <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search beers..."
+                    placeholder="Search pages..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyPress={handleSearchKeyPress}
@@ -565,6 +589,24 @@ export default function Graph() {
                 <Button onClick={handleSearch} variant="outline" size="sm">
                   Find
                 </Button>
+              </div>
+
+              <div className="h-6 w-px bg-border" />
+
+              {/* Scope Selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Scope:</span>
+                <Select value={scope} onValueChange={(v: any) => setScope(v)}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All</SelectItem>
+                    <SelectItem value="Corporate">Corporate</SelectItem>
+                    <SelectItem value="Beers">Beers</SelectItem>
+                    <SelectItem value="Pubs">Pubs</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="h-6 w-px bg-border" />
@@ -751,16 +793,16 @@ export default function Graph() {
                           Central node representing Shepherd Neame brewery
                         </p>
                         <div className="p-3 bg-muted rounded-lg">
-                          <p className="text-sm font-medium">Connected Beers</p>
+                          <p className="text-sm font-medium">Connected Pages</p>
                           <p className="text-2xl font-bold mt-1">
-                            {graphData.nodes.filter(n => n.type === 'beer').length}
+                            {graphData.nodes.filter(n => n.type !== 'organization' && n.type !== 'wikidata').length}
                           </p>
                         </div>
                       </div>
                     )}
 
                     {/* Beer Details */}
-                    {selectedNode.type === 'beer' && selectedNode.metrics && (
+                    {selectedNode.type === 'beer_page' && selectedNode.metrics && (
                       <div className="space-y-3">
                         {/* Schema Status */}
                         <div className="p-3 bg-muted rounded-lg space-y-1.5">
@@ -847,6 +889,108 @@ export default function Graph() {
                       </div>
                     )}
 
+                    {/* Corporate Page Details */}
+                    {selectedNode.type === 'corporate_page' && selectedNode.metrics && (
+                      <div className="space-y-3">
+                        {/* Schema Status */}
+                        <div className="p-3 bg-muted rounded-lg space-y-1.5">
+                          <p className="text-xs font-medium text-muted-foreground">Schema Status</p>
+                          {selectedNode.metrics.hasSchema ? (
+                            <>
+                              <Badge variant="outline" className="capitalize">
+                                {selectedNode.metrics.schemaStatus}
+                              </Badge>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Page status: {selectedNode.metrics.pageStatus}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-destructive">No schema generated</p>
+                          )}
+                        </div>
+
+                        {/* Page Properties */}
+                        {(selectedNode.metrics.pageType || selectedNode.metrics.category) && (
+                          <div className="p-3 bg-muted rounded-lg space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">Page Properties</p>
+                            {selectedNode.metrics.pageType && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Page Type:</span>
+                                <span className="font-medium">{selectedNode.metrics.pageType}</span>
+                              </div>
+                            )}
+                            {selectedNode.metrics.category && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Category:</span>
+                                <span className="font-medium">{selectedNode.metrics.category}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="pt-2">
+                          {selectedNode.pageId && (
+                            <Button
+                              onClick={() => navigate(`/pages/${selectedNode.pageId}`)}
+                              variant="outline"
+                              className="w-full"
+                              size="sm"
+                            >
+                              View Page
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pub Page Details */}
+                    {selectedNode.type === 'pub_page' && selectedNode.metrics && (
+                      <div className="space-y-3">
+                        {/* Schema Status */}
+                        <div className="p-3 bg-muted rounded-lg space-y-1.5">
+                          <p className="text-xs font-medium text-muted-foreground">Schema Status</p>
+                          {selectedNode.metrics.hasSchema ? (
+                            <>
+                              <Badge variant="outline" className="capitalize">
+                                {selectedNode.metrics.schemaStatus}
+                              </Badge>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Page status: {selectedNode.metrics.pageStatus}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-destructive">No schema generated</p>
+                          )}
+                        </div>
+
+                        {/* Pub Properties */}
+                        {selectedNode.metrics.category && (
+                          <div className="p-3 bg-muted rounded-lg space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">Pub Properties</p>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Category:</span>
+                              <span className="font-medium">{selectedNode.metrics.category}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="pt-2">
+                          {selectedNode.pageId && (
+                            <Button
+                              onClick={() => navigate(`/pages/${selectedNode.pageId}`)}
+                              variant="outline"
+                              className="w-full"
+                              size="sm"
+                            >
+                              View Page
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Wikidata Details */}
                     {selectedNode.type === 'wikidata' && (
                       <div className="space-y-3">
@@ -884,22 +1028,22 @@ export default function Graph() {
 
           <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-muted-foreground">Beer Entities</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">Page Entities</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold">
-                {graphData.nodes.filter(n => n.type === 'beer').length}
+                {graphData.nodes.filter(n => n.type !== 'organization' && n.type !== 'wikidata').length}
               </p>
             </CardContent>
           </Card>
 
           <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-muted-foreground">With Wikidata</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">Beers with Wikidata</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold">
-                {graphData.nodes.filter(n => n.type === 'beer' && n.metrics?.hasWikidata).length}
+                {graphData.nodes.filter(n => n.type === 'beer_page' && n.metrics?.hasWikidata).length}
               </p>
             </CardContent>
           </Card>
