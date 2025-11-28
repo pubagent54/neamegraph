@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { SchemaSummary } from "@/components/SchemaSummary";
 import { SchemaStory } from "@/components/SchemaStory";
+import { WikidataPanel } from "@/components/WikidataPanel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,6 +58,20 @@ interface Page {
   beer_style: string | null;
   beer_launch_year: number | null;
   beer_official_url: string | null;
+  wikidata_candidate: boolean;
+  wikidata_status: string;
+  wikidata_qid: string | null;
+  wikidata_label: string | null;
+  wikidata_description: string | null;
+  wikidata_language: string | null;
+  wikidata_intro_year: number | null;
+  wikidata_abv: number | null;
+  wikidata_style: string | null;
+  wikidata_official_website: string | null;
+  wikidata_image_url: string | null;
+  wikidata_notes: string | null;
+  wikidata_verified_at: string | null;
+  wikidata_last_exported_at: string | null;
 }
 
 interface SchemaVersion {
@@ -515,6 +530,44 @@ export default function PageDetail() {
       toast.error('Failed to save beer metadata');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveWikidata = async (wikidataData: any) => {
+    if (!page || !canEdit) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from('pages')
+        .update({
+          wikidata_candidate: wikidataData.wikidata_candidate,
+          wikidata_status: wikidataData.wikidata_status,
+          wikidata_qid: wikidataData.wikidata_qid || null,
+          wikidata_label: wikidataData.wikidata_label,
+          wikidata_description: wikidataData.wikidata_description,
+          wikidata_language: wikidataData.wikidata_language,
+          wikidata_intro_year: wikidataData.wikidata_intro_year,
+          wikidata_abv: wikidataData.wikidata_abv,
+          wikidata_style: wikidataData.wikidata_style || null,
+          wikidata_official_website: wikidataData.wikidata_official_website || null,
+          wikidata_image_url: wikidataData.wikidata_image_url || null,
+          wikidata_notes: wikidataData.wikidata_notes || null,
+          wikidata_verified_at: wikidataData.wikidata_status === 'checked' || wikidataData.wikidata_status === 'ready_for_wikidata' 
+            ? new Date().toISOString() 
+            : page.wikidata_verified_at,
+          last_modified_by_user_id: user?.id,
+        })
+        .eq('id', page.id);
+
+      if (error) throw error;
+
+      toast.success('Wikidata fields saved successfully');
+      await fetchPageData();
+    } catch (error) {
+      console.error('Error saving wikidata fields:', error);
+      toast.error('Failed to save wikidata fields');
     }
   };
 
@@ -1068,6 +1121,35 @@ export default function PageDetail() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Wikidata Panel - only show for Beer domain */}
+        {page.domain === 'Beer' && page && (
+          <WikidataPanel
+            wikidataData={{
+              wikidata_candidate: page.wikidata_candidate || false,
+              wikidata_status: page.wikidata_status || 'none',
+              wikidata_qid: page.wikidata_qid,
+              wikidata_label: page.wikidata_label || '',
+              wikidata_description: page.wikidata_description || '',
+              wikidata_language: page.wikidata_language || 'en',
+              wikidata_intro_year: page.wikidata_intro_year,
+              wikidata_abv: page.wikidata_abv,
+              wikidata_style: page.wikidata_style,
+              wikidata_official_website: page.wikidata_official_website,
+              wikidata_image_url: page.wikidata_image_url,
+              wikidata_notes: page.wikidata_notes,
+              wikidata_verified_at: page.wikidata_verified_at,
+              wikidata_last_exported_at: page.wikidata_last_exported_at,
+            }}
+            beerName={page.path.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || ''}
+            beerAbv={page.beer_abv}
+            beerStyle={page.beer_style}
+            beerLaunchYear={page.beer_launch_year}
+            beerOfficialUrl={page.beer_official_url}
+            canEdit={canEdit}
+            onSave={handleSaveWikidata}
+          />
         )}
 
         {/* Pub Placeholder - only show for Pub domain */}

@@ -769,6 +769,66 @@ export default function Pages() {
           </div>
           {canEdit && (
             <div className="flex gap-2">
+              {isAdmin && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={async () => {
+                          try {
+                            // Check if there are any beers ready for export
+                            const { data: readyBeers, error } = await supabase
+                              .from('pages')
+                              .select('id')
+                              .eq('domain', 'Beer')
+                              .eq('wikidata_candidate', true)
+                              .eq('wikidata_status', 'ready_for_wikidata')
+                              .is('wikidata_qid', null);
+
+                            if (error) throw error;
+
+                            if (!readyBeers || readyBeers.length === 0) {
+                              toast.info('No beers marked Ready for Wikidata');
+                              return;
+                            }
+
+                            toast.info(`Exporting ${readyBeers.length} beers to Wikidata...`);
+
+                            const { data, error: exportError } = await supabase.functions.invoke('export-wikidata-beers');
+
+                            if (exportError) throw exportError;
+
+                            // Trigger download
+                            const blob = new Blob([data], { type: 'text/plain' });
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-');
+                            a.download = `sheps-beers-wikidata-${timestamp}.txt`;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+
+                            toast.success(`Exported ${readyBeers.length} beers to Wikidata TSV`);
+                            await fetchPages(); // Refresh to show updated status
+                          } catch (error: any) {
+                            console.error('Export error:', error);
+                            toast.error(error.message || 'Failed to export beers');
+                          }
+                        }}
+                      >
+                        Export Wikidata (Beers)
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Export beers ready for Wikidata as QuickStatements format
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="rounded-full">
