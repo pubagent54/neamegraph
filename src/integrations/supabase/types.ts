@@ -76,6 +76,33 @@ export type Database = {
         }
         Relationships: []
       }
+      graph_layouts: {
+        Row: {
+          created_at: string
+          filter_key: string
+          id: string
+          layout_data: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          filter_key?: string
+          id?: string
+          layout_data?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          filter_key?: string
+          id?: string
+          layout_data?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       graph_nodes: {
         Row: {
           created_at: string

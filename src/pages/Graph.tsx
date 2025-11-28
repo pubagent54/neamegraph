@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Maximize2, Download } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { ExternalLink, Maximize2, Download, Save, Play, Pause } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ForceGraph2D from "react-force-graph-2d";
 import { useNavigate } from "react-router-dom";
@@ -35,6 +36,8 @@ interface GraphNode {
   y?: number;
   vx?: number;
   vy?: number;
+  fx?: number;
+  fy?: number;
 }
 
 interface GraphLink {
@@ -59,6 +62,9 @@ export default function Graph() {
   const [highlightLinks, setHighlightLinks] = useState<Set<string>>(new Set());
   const [schemaFilter, setSchemaFilter] = useState<'all' | 'no_schema' | 'has_schema'>('all');
   const [wikidataFilter, setWikidataFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [isAnimating, setIsAnimating] = useState(true);
+  const [animationSpeed, setAnimationSpeed] = useState([1]);
+  const [isSavingLayout, setIsSavingLayout] = useState(false);
   const fgRef = useRef<any>();
   const logoImageRef = useRef<HTMLImageElement | null>(null);
 
@@ -81,6 +87,9 @@ export default function Graph() {
       if (error) throw error;
 
       setGraphData(data);
+      
+      // Load saved layout after data is fetched
+      loadSavedLayout(data.nodes);
     } catch (error) {
       console.error("Error fetching graph data:", error);
     } finally {
@@ -91,6 +100,100 @@ export default function Graph() {
   useEffect(() => {
     fetchGraphData();
   }, [fetchGraphData]);
+
+  const loadSavedLayout = async (nodes: GraphNode[]) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const filterKey = `${schemaFilter}-${wikidataFilter}`;
+      const { data, error } = await supabase
+        .from('graph_layouts')
+        .select('layout_data')
+        .eq('user_id', user.id)
+        .eq('filter_key', filterKey)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error loading layout:', error);
+        return;
+      }
+
+      if (data?.layout_data) {
+        const layoutData = data.layout_data as Record<string, { x: number; y: number; fx: number; fy: number }>;
+        
+        // Apply saved positions to nodes
+        nodes.forEach(node => {
+          const savedPos = layoutData[node.id];
+          if (savedPos) {
+            node.x = savedPos.x;
+            node.y = savedPos.y;
+            node.fx = savedPos.fx;
+            node.fy = savedPos.fy;
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error loading layout:', error);
+    }
+  };
+
+  const handleSaveLayout = async () => {
+    if (!fgRef.current || graphData.nodes.length === 0) {
+      toast({
+        title: "Nothing to save",
+        description: "No graph layout to save",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSavingLayout(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Capture current node positions
+      const layoutData: Record<string, { x: number; y: number; fx: number | undefined; fy: number | undefined }> = {};
+      graphData.nodes.forEach(node => {
+        layoutData[node.id] = {
+          x: node.x || 0,
+          y: node.y || 0,
+          fx: node.fx,
+          fy: node.fy,
+        };
+      });
+
+      const filterKey = `${schemaFilter}-${wikidataFilter}`;
+      
+      const { error } = await supabase
+        .from('graph_layouts')
+        .upsert({
+          user_id: user.id,
+          filter_key: filterKey,
+          layout_data: layoutData,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id,filter_key'
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Layout saved",
+        description: "Graph layout has been saved successfully",
+      });
+    } catch (error) {
+      console.error('Error saving layout:', error);
+      toast({
+        title: "Save failed",
+        description: "Could not save graph layout",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingLayout(false);
+    }
+  };
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     setSelectedNode(node);
@@ -130,6 +233,41 @@ export default function Graph() {
   const handleResetView = useCallback(() => {
     if (fgRef.current) {
       fgRef.current.zoomToFit(400);
+    }
+  }, []);
+
+  const toggleAnimation = useCallback(() => {
+    if (!fgRef.current) return;
+    
+    if (isAnimating) {
+      // Pause: fix all nodes in place
+      graphData.nodes.forEach(node => {
+        if (node.x !== undefined && node.y !== undefined) {
+          node.fx = node.x;
+          node.fy = node.y;
+        }
+      });
+      fgRef.current.d3ReheatSimulation();
+    } else {
+      // Resume: unfix all nodes
+      graphData.nodes.forEach(node => {
+        node.fx = undefined;
+        node.fy = undefined;
+      });
+      fgRef.current.d3ReheatSimulation();
+    }
+    
+    setIsAnimating(!isAnimating);
+  }, [isAnimating, graphData.nodes]);
+
+  const handleSpeedChange = useCallback((value: number[]) => {
+    setAnimationSpeed(value);
+    if (fgRef.current) {
+      // Adjust simulation velocityDecay based on speed
+      // Higher speed = less decay = faster movement
+      const decay = 1 - (value[0] * 0.3); // 0.7 to 0.1 range
+      fgRef.current.d3Force('charge').velocityDecay?.(decay);
+      fgRef.current.d3ReheatSimulation();
     }
   }, []);
 
@@ -393,6 +531,16 @@ export default function Graph() {
                 Reset View
               </Button>
 
+              <Button 
+                onClick={handleSaveLayout} 
+                variant="outline" 
+                size="sm"
+                disabled={isSavingLayout || graphData.nodes.length === 0}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Save Layout
+              </Button>
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -409,6 +557,31 @@ export default function Graph() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              <div className="flex items-center gap-2 border-l pl-4">
+                <Button
+                  onClick={toggleAnimation}
+                  variant="outline"
+                  size="sm"
+                >
+                  {isAnimating ? (
+                    <Pause className="h-4 w-4" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </Button>
+                <div className="flex items-center gap-2 min-w-[120px]">
+                  <span className="text-xs text-muted-foreground">Speed:</span>
+                  <Slider
+                    value={animationSpeed}
+                    onValueChange={handleSpeedChange}
+                    min={0.5}
+                    max={3}
+                    step={0.5}
+                    className="w-20"
+                  />
+                </div>
+              </div>
 
               <div className="ml-auto flex items-center gap-3 text-xs">
                 <div className="flex items-center gap-1.5">
