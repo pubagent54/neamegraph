@@ -55,6 +55,8 @@ export default function WIZmode() {
   const [runItems, setRunItems] = useState<WizmodeRunItem[]>([]);
   const [pastRuns, setPastRuns] = useState<WizmodeRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [estimatedRowCount, setEstimatedRowCount] = useState<number | null>(null);
 
   // Admin-only check
   if (userRole !== "admin") {
@@ -179,6 +181,19 @@ export default function WIZmode() {
         return;
       }
       setCsvFile(file);
+      
+      // Read file to count rows for initial estimate
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        const lines = text.split("\n").filter((line) => line.trim());
+        const firstRow = lines[0]?.split(",").map((h) => h.trim().toLowerCase());
+        const requiredColumns = ["domain", "path", "page_type", "category"];
+        const hasHeader = requiredColumns.every((col) => firstRow.includes(col));
+        const dataLines = hasHeader ? lines.length - 1 : lines.length;
+        setEstimatedRowCount(dataLines);
+      };
+      reader.readAsText(file);
     }
   };
 
@@ -297,6 +312,7 @@ export default function WIZmode() {
     }
 
     setUploading(true);
+    setStartTime(Date.now());
 
     try {
       // Parse CSV
@@ -382,8 +398,44 @@ export default function WIZmode() {
     const errors = runItems.filter((i) => i.result === "error").length;
     const htmlSuccess = runItems.filter((i) => i.html_status === "success").length;
     const schemaSuccess = runItems.filter((i) => i.schema_status === "success").length;
+    const completed = runItems.filter((i) => i.result !== "pending").length;
 
-    return { created, skipped, errors, htmlSuccess, schemaSuccess };
+    return { created, skipped, errors, htmlSuccess, schemaSuccess, completed };
+  };
+
+  const getEstimatedTimeRemaining = () => {
+    if (!currentRun || !startTime || !runItems.length) return null;
+
+    const completed = runItems.filter((i) => i.result !== "pending").length;
+    if (completed === 0) return null;
+
+    const elapsed = Date.now() - startTime;
+    const avgTimePerRow = elapsed / completed;
+    const remaining = currentRun.total_rows - completed;
+    const estimatedMs = remaining * avgTimePerRow;
+
+    return {
+      completed,
+      total: currentRun.total_rows,
+      estimatedMs,
+      avgTimePerRow
+    };
+  };
+
+  const formatTime = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+  };
+
+  const getInitialEstimate = () => {
+    if (!estimatedRowCount) return null;
+    // Rough estimate: ~10-15 seconds per row (fetch HTML + generate schema)
+    const avgTimePerRow = 12000; // 12 seconds average
+    const totalMs = estimatedRowCount * avgTimePerRow;
+    return formatTime(totalMs);
   };
 
   const summary = getSummary();
@@ -427,6 +479,11 @@ export default function WIZmode() {
                 onChange={handleFileChange}
                 className="rounded-full"
               />
+              {estimatedRowCount && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  {estimatedRowCount} rows detected • Estimated time: ~{getInitialEstimate()}
+                </p>
+              )}
             </div>
             <Button
               onClick={handleStartRun}
@@ -453,11 +510,33 @@ export default function WIZmode() {
             <CardHeader>
               <CardTitle>Current Run: {currentRun.label}</CardTitle>
               <CardDescription>
-                Status: {currentRun.status} • {runItems.filter((i) => i.result !== "pending").length} of {currentRun.total_rows} rows processed
+                Status: {currentRun.status}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <Progress value={progress} className="h-2" />
+              {(() => {
+                const timeEstimate = getEstimatedTimeRemaining();
+                return (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">
+                        Processing row {timeEstimate?.completed || 0} of {currentRun.total_rows}
+                      </span>
+                      {timeEstimate && timeEstimate.completed > 0 && (
+                        <span className="text-sm text-muted-foreground">
+                          ~{formatTime(timeEstimate.estimatedMs)} remaining
+                        </span>
+                      )}
+                    </div>
+                    <Progress value={progress} className="h-2" />
+                    {timeEstimate && timeEstimate.completed > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Average: {formatTime(timeEstimate.avgTimePerRow)} per row
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               {summary && (
                 <div className="grid gap-4 md:grid-cols-5">
