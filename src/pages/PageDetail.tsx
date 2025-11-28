@@ -17,8 +17,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatusBadge } from "@/components/StatusBadge";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle, Save, ChevronDown, Copy } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle, Save, ChevronDown, Copy, ShieldCheck } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { validateJsonLdSchema, formatValidationIssue } from "@/lib/schema-validator";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { SchemaSummary } from "@/components/SchemaSummary";
 import { SchemaStory } from "@/components/SchemaStory";
@@ -143,6 +145,11 @@ export default function PageDetail() {
   // Homepage manual schema editing
   const [isEditingHomepageSchema, setIsEditingHomepageSchema] = useState(false);
   const [editedHomepageSchema, setEditedHomepageSchema] = useState<string>('');
+  
+  // Validation dialog state
+  const [validationDialogOpen, setValidationDialogOpen] = useState(false);
+  const [validationResult, setValidationResult] = useState<any>(null);
+  const [validatingVersionId, setValidatingVersionId] = useState<string | null>(null);
 
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
@@ -366,6 +373,55 @@ export default function PageDetail() {
       console.error("Error rejecting schema:", error);
       toast.error("Failed to reject schema");
     }
+  };
+
+  const handleValidateSchema = (versionId: string, jsonld: string) => {
+    const version = versions.find(v => v.id === versionId);
+    if (!version) return;
+
+    // Get canonical URL from settings
+    const canonicalUrl = page ? `https://www.shepherdneame.co.uk${page.path}` : undefined;
+    
+    const result = validateJsonLdSchema(jsonld, canonicalUrl);
+    setValidationResult(result);
+    setValidatingVersionId(versionId);
+    setValidationDialogOpen(true);
+
+    // Show toast summary
+    const errorCount = result.issues.filter(i => i.severity === 'error').length;
+    const warningCount = result.issues.filter(i => i.severity === 'warning').length;
+    
+    if (errorCount > 0) {
+      toast.error(`Validation failed: ${errorCount} error${errorCount > 1 ? 's' : ''} found`);
+    } else if (warningCount > 0) {
+      toast.warning(`Validation passed with ${warningCount} warning${warningCount > 1 ? 's' : ''}`);
+    } else {
+      toast.success('Schema validation passed ✓');
+    }
+  };
+
+  const handleApproveWithValidation = async (versionId: string) => {
+    if (!isAdmin) return;
+
+    const version = versions.find(v => v.id === versionId);
+    if (!version) return;
+
+    // Run validation first
+    const canonicalUrl = page ? `https://www.shepherdneame.co.uk${page.path}` : undefined;
+    const result = validateJsonLdSchema(version.jsonld, canonicalUrl);
+    
+    const errorCount = result.issues.filter(i => i.severity === 'error').length;
+    
+    if (errorCount > 0) {
+      setValidationResult(result);
+      setValidatingVersionId(versionId);
+      setValidationDialogOpen(true);
+      toast.error('Schema has validation errors. Review issues before approving.');
+      return;
+    }
+
+    // Proceed with approval if no errors
+    await handleApprove(versionId);
   };
 
   const handleApprove = async (versionId: string) => {
@@ -1197,11 +1253,20 @@ export default function PageDetail() {
                       </div>
                        <div className="flex items-center gap-2">
                         <StatusBadge status={version.status} />
+                        {/* Validate button for all users */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleValidateSchema(version.id, version.jsonld)}
+                        >
+                          <ShieldCheck className="mr-2 h-4 w-4" />
+                          Validate
+                        </Button>
                         {canEdit && version.status === "draft" && (
                           <>
                             <Button
                               size="sm"
-                              onClick={() => handleApprove(version.id)}
+                              onClick={() => handleApproveWithValidation(version.id)}
                             >
                               <CheckCircle className="mr-2 h-4 w-4" />
                               Approve
@@ -1392,6 +1457,119 @@ export default function PageDetail() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Validation Dialog */}
+      <AlertDialog open={validationDialogOpen} onOpenChange={setValidationDialogOpen}>
+        <AlertDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" />
+              Schema Validation Results
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Review schema validation issues before approving
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {validationResult && (
+            <div className="space-y-4">
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <div className="text-sm font-medium">Total Nodes</div>
+                  <div className="text-2xl font-bold">{validationResult.stats.totalNodes}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium">References</div>
+                  <div className="text-2xl font-bold">{validationResult.stats.references}</div>
+                </div>
+                <div>
+                  <div className="text-sm font-medium">Status</div>
+                  <div className={`text-2xl font-bold ${validationResult.valid ? 'text-green-600' : 'text-red-600'}`}>
+                    {validationResult.valid ? '✓ Valid' : '✗ Invalid'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Node Types */}
+              {Object.keys(validationResult.stats.nodeTypes).length > 0 && (
+                <div>
+                  <div className="text-sm font-medium mb-2">Node Types Found:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(validationResult.stats.nodeTypes as Record<string, number>).map(([type, count]) => (
+                      <div key={type} className="px-3 py-1 bg-primary/10 rounded-full text-xs font-medium">
+                        {type} ({count as number})
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Issues */}
+              {validationResult.issues.length > 0 ? (
+                <div>
+                  <div className="text-sm font-medium mb-2">
+                    Issues Found: {validationResult.issues.length}
+                  </div>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {validationResult.issues.map((issue: any, index: number) => (
+                      <div
+                        key={index}
+                        className={`p-3 rounded-lg border ${
+                          issue.severity === 'error'
+                            ? 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-900'
+                            : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-900'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="text-lg">
+                            {issue.severity === 'error' ? '❌' : '⚠️'}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold mb-1 text-foreground">
+                              [{issue.category}]
+                            </div>
+                            <div className="text-sm text-foreground">
+                              {issue.message}
+                            </div>
+                            {issue.path && (
+                              <div className="text-xs text-muted-foreground mt-1 font-mono">
+                                {issue.path}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg dark:bg-green-950/20 dark:border-green-900">
+                  <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                    <CheckCircle className="h-5 w-5" />
+                    <span className="font-medium">All validation checks passed!</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
+            {isAdmin && validatingVersionId && validationResult && !validationResult.valid && (
+              <AlertDialogAction
+                onClick={() => {
+                  setValidationDialogOpen(false);
+                  handleApprove(validatingVersionId);
+                }}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                Approve Anyway (Override)
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }
