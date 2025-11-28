@@ -177,7 +177,7 @@ export default function Settings() {
   };
 
   const handleUnlockChest = () => {
-    if (unlockCode === "010925") {
+    if (unlockCode === "011225") {
       setIsUnlocked(true);
       setUnlockError("");
       toast.success("Chest unlocked – editing enabled.");
