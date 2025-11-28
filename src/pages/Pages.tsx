@@ -39,6 +39,44 @@ const PAGE_TYPES = [
   "faq_page", "collection", "other"
 ];
 
+// ========================================
+// DOMAIN CONFIG - Single source of truth for Domain → Page Type → Category hierarchy
+// ----------------------------------------
+// Defines which Page Types and Categories are valid for each Domain lane
+// Used by Add New Page modal and inline editing to enforce clean relationships
+// ========================================
+const DOMAIN_CONFIG: Record<string, {
+  pageTypes: string[];
+  categoriesByPageType: Record<string, string[]>;
+}> = {
+  Corporate: {
+    pageTypes: ['About', 'History', 'Environment', 'Careers', 'News', 'Beers', 'Pubs & Hotels Estate'],
+    categoriesByPageType: {
+      'About': ['Legal', 'Direct to Trade', 'General'],
+      'History': ['History'],
+      'Environment': ['Sustainability', 'Community'],
+      'Careers': ['Working for Shepherd Neame', 'Pub Tenancies'],
+      'News': ['Pubs & Hotels', 'Community', 'Beer and Drink Brands'],
+      'Beers': ['Drink Brands', 'Collection Page'],
+      'Pubs & Hotels Estate': ['About', 'Collection Page'],
+    },
+  },
+  Beer: {
+    pageTypes: ['Beers', 'Brewery'],
+    categoriesByPageType: {
+      'Beers': ['Drink Brands', 'Collection Page'],
+      'Brewery': ['Brewing Process', 'Visitors Centre'],
+    },
+  },
+  Pub: {
+    pageTypes: ['Pubs & Hotels Estate'],
+    categoriesByPageType: {
+      'Pubs & Hotels Estate': ['Managed', 'Tenanted', 'Freehouses'],
+    },
+  },
+};
+
+// Legacy V2 constants for backwards compatibility (if needed elsewhere)
 const V2_PAGE_TYPES = [
   'Pubs & Hotels Estate',
   'Beers',
@@ -275,7 +313,7 @@ export default function Pages() {
       if (error) {
         // Handle unique constraint violation
         if (error.code === "23505" && error.message.includes("pages_path_unique")) {
-          setPathError("A page with this path already exists. Edit the existing page instead of creating a new one.");
+          setPathError("This page already exists in the database. Open the existing page instead of creating a duplicate.");
           return;
         }
         throw error;
@@ -699,7 +737,28 @@ export default function Pages() {
                       <Label htmlFor="domain">Domain</Label>
                       <Select 
                         value={newPage.domain} 
-                        onValueChange={(value) => setNewPage({ ...newPage, domain: value, page_type: "", category: "" })}
+                        onValueChange={(value) => {
+                          const domain = value as keyof typeof DOMAIN_CONFIG;
+                          // When domain changes, reset page_type and category
+                          const newState = { 
+                            ...newPage, 
+                            domain: value, 
+                            page_type: "", 
+                            category: "" 
+                          };
+                          
+                          // Auto-select "Beers" for Beer domain
+                          if (domain === "Beer") {
+                            newState.page_type = "Beers";
+                            // Auto-select category if only one option
+                            const categories = DOMAIN_CONFIG.Beer.categoriesByPageType["Beers"];
+                            if (categories && categories.length === 1) {
+                              newState.category = categories[0];
+                            }
+                          }
+                          
+                          setNewPage(newState);
+                        }}
                       >
                         <SelectTrigger className="rounded-xl">
                           <SelectValue />
@@ -718,15 +777,31 @@ export default function Pages() {
                       </Label>
                       <Select 
                         value={newPage.page_type} 
-                        onValueChange={(value) => setNewPage({ ...newPage, page_type: value, category: "" })}
+                        onValueChange={(value) => {
+                          const newState = { ...newPage, page_type: value, category: "" };
+                          
+                          // Auto-select category if only one option for this page type
+                          const domain = newPage.domain as keyof typeof DOMAIN_CONFIG;
+                          const domainConfig = DOMAIN_CONFIG[domain];
+                          const categories = domainConfig?.categoriesByPageType[value];
+                          if (categories && categories.length === 1) {
+                            newState.category = categories[0];
+                          }
+                          
+                          setNewPage(newState);
+                        }}
                       >
                         <SelectTrigger className="rounded-xl">
                           <SelectValue placeholder="Select a page type" />
                         </SelectTrigger>
                         <SelectContent className="rounded-2xl max-h-[300px]">
-                          {V2_PAGE_TYPES.map((type) => (
-                            <SelectItem key={type} value={type}>{type}</SelectItem>
-                          ))}
+                          {(() => {
+                            const domain = newPage.domain as keyof typeof DOMAIN_CONFIG;
+                            const allowedTypes = DOMAIN_CONFIG[domain]?.pageTypes || [];
+                            return allowedTypes.map((type) => (
+                              <SelectItem key={type} value={type}>{type}</SelectItem>
+                            ));
+                          })()}
                         </SelectContent>
                       </Select>
                       {(newPage.domain === "Corporate" || newPage.domain === "Beer") && (
@@ -747,9 +822,15 @@ export default function Pages() {
                           <SelectValue placeholder="Select a category" />
                         </SelectTrigger>
                         <SelectContent className="rounded-2xl max-h-[300px]">
-                          {newPage.page_type && V2_CATEGORIES[newPage.page_type]?.map((cat) => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                          ))}
+                          {(() => {
+                            if (!newPage.page_type) return null;
+                            const domain = newPage.domain as keyof typeof DOMAIN_CONFIG;
+                            const domainConfig = DOMAIN_CONFIG[domain];
+                            const categories = domainConfig?.categoriesByPageType[newPage.page_type] || [];
+                            return categories.map((cat) => (
+                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                            ));
+                          })()}
                         </SelectContent>
                       </Select>
                       {(newPage.domain === "Corporate" || newPage.domain === "Beer") && (
@@ -998,18 +1079,38 @@ export default function Pages() {
                         {canEdit ? (
                           <Select
                             value={page.page_type || "none"}
-                            onValueChange={(value) => handleInlineUpdate(page.id, "page_type", value === "none" ? null : value)}
+                            onValueChange={(value) => {
+                              const newType = value === "none" ? null : value;
+                              handleInlineUpdate(page.id, "page_type", newType);
+                              // Clear category if it's not valid for the new page type
+                              if (newType && page.category) {
+                                const domain = page.domain as keyof typeof DOMAIN_CONFIG;
+                                const domainConfig = DOMAIN_CONFIG[domain];
+                                const validCategories = domainConfig?.categoriesByPageType[newType] || [];
+                                if (!validCategories.includes(page.category)) {
+                                  handleInlineUpdate(page.id, "category", null);
+                                }
+                              }
+                            }}
                           >
                             <SelectTrigger className="w-[180px] h-8 rounded-lg">
                               <SelectValue placeholder="—" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl max-h-[300px]">
                               <SelectItem value="none">—</SelectItem>
-                              {V2_PAGE_TYPES.map((type) => (
-                                <SelectItem key={type} value={type}>
-                                  {type}
-                                </SelectItem>
-                              ))}
+                              {(() => {
+                                const domain = page.domain as keyof typeof DOMAIN_CONFIG;
+                                const allowedTypes = DOMAIN_CONFIG[domain]?.pageTypes || V2_PAGE_TYPES;
+                                // Show current value even if not in allowed list (legacy data)
+                                const typesToShow = page.page_type && !allowedTypes.includes(page.page_type)
+                                  ? [page.page_type, ...allowedTypes]
+                                  : allowedTypes;
+                                return typesToShow.map((type) => (
+                                  <SelectItem key={type} value={type}>
+                                    {type}
+                                  </SelectItem>
+                                ));
+                              })()}
                             </SelectContent>
                           </Select>
                         ) : (
@@ -1028,11 +1129,21 @@ export default function Pages() {
                             </SelectTrigger>
                             <SelectContent className="rounded-xl max-h-[300px]">
                               <SelectItem value="none">—</SelectItem>
-                              {page.page_type && V2_CATEGORIES[page.page_type]?.map((cat) => (
-                                <SelectItem key={cat} value={cat}>
-                                  {cat}
-                                </SelectItem>
-                              ))}
+                              {(() => {
+                                if (!page.page_type) return null;
+                                const domain = page.domain as keyof typeof DOMAIN_CONFIG;
+                                const domainConfig = DOMAIN_CONFIG[domain];
+                                const allowedCategories = domainConfig?.categoriesByPageType[page.page_type] || V2_CATEGORIES[page.page_type] || [];
+                                // Show current value even if not in allowed list (legacy data)
+                                const categoriesToShow = page.category && !allowedCategories.includes(page.category)
+                                  ? [page.category, ...allowedCategories]
+                                  : allowedCategories;
+                                return categoriesToShow.map((cat) => (
+                                  <SelectItem key={cat} value={cat}>
+                                    {cat}
+                                  </SelectItem>
+                                ));
+                              })()}
                             </SelectContent>
                           </Select>
                         ) : (
