@@ -56,10 +56,10 @@ serve(async (req) => {
 
     console.log("Generating schema for page:", page_id);
 
-    // 1. Load page context
+    // 1. Load page context (including wikidata_qid for sameAs injection)
     const { data: page, error: pageError } = await supabase
       .from("pages")
-      .select("id, path, section, page_type, category, faq_mode, logo_url, hero_image_url, is_home_page, domain, beer_abv, beer_style, beer_launch_year, beer_official_url, last_html_hash, has_faq, notes")
+      .select("id, path, section, page_type, category, faq_mode, logo_url, hero_image_url, is_home_page, domain, beer_abv, beer_style, beer_launch_year, beer_official_url, last_html_hash, has_faq, notes, wikidata_qid")
       .eq("id", page_id)
       .single();
 
@@ -400,6 +400,41 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      // ========================================
+      // WIKIDATA SAMEAS INJECTION
+      // ----------------------------------------
+      // If this is a Beer page with a wikidata_qid, inject the sameAs URL
+      // into the main Beer entity (typically a Brand node)
+      // ========================================
+      if (pageDomain === 'Beer' && page.wikidata_qid && v2Jsonld["@graph"]) {
+        const wikidataUrl = `https://www.wikidata.org/wiki/${page.wikidata_qid}`;
+        console.log(`Injecting Wikidata sameAs: ${wikidataUrl}`);
+        
+        // Find the main beer entity in the graph (typically has @type containing "Brand")
+        // and inject/append sameAs
+        const graph = v2Jsonld["@graph"];
+        for (let i = 0; i < graph.length; i++) {
+          const node = graph[i];
+          const nodeTypes = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+          
+          // Look for Brand nodes (main beer entity)
+          if (nodeTypes.includes("Brand")) {
+            if (!node.sameAs) {
+              node.sameAs = [wikidataUrl];
+            } else if (Array.isArray(node.sameAs)) {
+              if (!node.sameAs.includes(wikidataUrl)) {
+                node.sameAs.push(wikidataUrl);
+              }
+            } else {
+              // sameAs is a single string, convert to array
+              node.sameAs = [node.sameAs, wikidataUrl];
+            }
+            console.log(`Added Wikidata sameAs to Brand node: ${node["@id"]}`);
+            break; // Only inject once
+          }
+        }
       }
 
       // Save v2 schema version

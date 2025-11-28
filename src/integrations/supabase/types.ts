@@ -149,6 +149,21 @@ export type Database = {
           section: string | null
           status: Database["public"]["Enums"]["page_status"]
           updated_at: string
+          wikidata_abv: number | null
+          wikidata_candidate: boolean
+          wikidata_description: string | null
+          wikidata_image_url: string | null
+          wikidata_intro_year: number | null
+          wikidata_label: string | null
+          wikidata_language: string | null
+          wikidata_last_exported_at: string | null
+          wikidata_notes: string | null
+          wikidata_official_website: string | null
+          wikidata_qid: string | null
+          wikidata_status: string
+          wikidata_style: string | null
+          wikidata_verified_at: string | null
+          wikidata_verified_by: string | null
         }
         Insert: {
           beer_abv?: number | null
@@ -178,6 +193,21 @@ export type Database = {
           section?: string | null
           status?: Database["public"]["Enums"]["page_status"]
           updated_at?: string
+          wikidata_abv?: number | null
+          wikidata_candidate?: boolean
+          wikidata_description?: string | null
+          wikidata_image_url?: string | null
+          wikidata_intro_year?: number | null
+          wikidata_label?: string | null
+          wikidata_language?: string | null
+          wikidata_last_exported_at?: string | null
+          wikidata_notes?: string | null
+          wikidata_official_website?: string | null
+          wikidata_qid?: string | null
+          wikidata_status?: string
+          wikidata_style?: string | null
+          wikidata_verified_at?: string | null
+          wikidata_verified_by?: string | null
         }
         Update: {
           beer_abv?: number | null
@@ -207,6 +237,21 @@ export type Database = {
           section?: string | null
           status?: Database["public"]["Enums"]["page_status"]
           updated_at?: string
+          wikidata_abv?: number | null
+          wikidata_candidate?: boolean
+          wikidata_description?: string | null
+          wikidata_image_url?: string | null
+          wikidata_intro_year?: number | null
+          wikidata_label?: string | null
+          wikidata_language?: string | null
+          wikidata_last_exported_at?: string | null
+          wikidata_notes?: string | null
+          wikidata_official_website?: string | null
+          wikidata_qid?: string | null
+          wikidata_status?: string
+          wikidata_style?: string | null
+          wikidata_verified_at?: string | null
+          wikidata_verified_by?: string | null
         }
         Relationships: [
           {
@@ -219,6 +264,13 @@ export type Database = {
           {
             foreignKeyName: "pages_last_modified_by_user_id_fkey"
             columns: ["last_modified_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pages_wikidata_verified_by_fkey"
+            columns: ["wikidata_verified_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
