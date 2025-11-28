@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Maximize2 } from "lucide-react";
+import { ExternalLink, Maximize2, Download } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ForceGraph2D from "react-force-graph-2d";
 import { useNavigate } from "react-router-dom";
 import shepsLogo from "@/assets/neamegraph-logo.png";
+import { useToast } from "@/hooks/use-toast";
 
 type GraphNodeType = 'organization' | 'beer' | 'wikidata';
 
@@ -49,6 +51,7 @@ interface GraphSnapshot {
 
 export default function Graph() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [graphData, setGraphData] = useState<GraphSnapshot>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -129,6 +132,88 @@ export default function Graph() {
       fgRef.current.zoomToFit(400);
     }
   }, []);
+
+  const handleExportJSON = useCallback(() => {
+    if (graphData.nodes.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "Adjust filters to show at least one node",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const snapshot = {
+      generatedAt: new Date().toISOString(),
+      filters: {
+        schema: schemaFilter,
+        wikidata: wikidataFilter,
+      },
+      nodes: graphData.nodes,
+      links: graphData.links,
+    };
+
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `neamegraph-knowledge-graph-v1-${timestamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Graph JSON exported",
+      description: "Download started",
+    });
+  }, [graphData, schemaFilter, wikidataFilter, toast]);
+
+  const handleExportPNG = useCallback(() => {
+    if (graphData.nodes.length === 0) {
+      toast({
+        title: "Nothing to export",
+        description: "Adjust filters to show at least one node",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!fgRef.current) {
+      toast({
+        title: "Export failed",
+        description: "Graph not ready",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const canvas = fgRef.current.renderer().domElement;
+      const dataUrl = canvas.toDataURL('image/png');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `neamegraph-knowledge-graph-v1-${timestamp}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      toast({
+        title: "Graph PNG exported",
+        description: "Download started",
+      });
+    } catch (error) {
+      console.error('Export PNG error:', error);
+      toast({
+        title: "Export failed",
+        description: "Could not capture graph image",
+        variant: "destructive",
+      });
+    }
+  }, [graphData.nodes.length, toast]);
 
   const getNodeColor = (node: GraphNode): string => {
     if (highlightNodes.size > 0 && !highlightNodes.has(node.id)) {
@@ -308,6 +393,23 @@ export default function Graph() {
                 Reset View
               </Button>
 
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportJSON}>
+                    Export JSON
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportPNG}>
+                    Export PNG
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <div className="ml-auto flex items-center gap-3 text-xs">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-full" style={{ background: 'hsl(142, 71%, 45%)' }} />
@@ -349,6 +451,10 @@ export default function Graph() {
                     linkCanvasObject={paintLink}
                     onNodeClick={handleNodeClick}
                     onBackgroundClick={handleBackgroundClick}
+                    onNodeDragEnd={(node: any) => {
+                      node.fx = node.x;
+                      node.fy = node.y;
+                    }}
                     width={800}
                     height={600}
                     backgroundColor="transparent"
