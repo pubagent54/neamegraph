@@ -3,10 +3,11 @@ import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
-import { ExternalLink, Maximize2, Download, Save, Play, Pause } from "lucide-react";
+import { ExternalLink, Maximize2, Download, Save, Play, Pause, Search } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ForceGraph2D from "react-force-graph-2d";
 import { useNavigate } from "react-router-dom";
@@ -65,6 +66,7 @@ export default function Graph() {
   const [isAnimating, setIsAnimating] = useState(true);
   const [animationSpeed, setAnimationSpeed] = useState([1]);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const fgRef = useRef<any>();
   const logoImageRef = useRef<HTMLImageElement | null>(null);
 
@@ -270,6 +272,56 @@ export default function Graph() {
       fgRef.current.d3ReheatSimulation();
     }
   }, []);
+
+  const handleSearch = useCallback(() => {
+    if (!searchQuery.trim()) {
+      toast({
+        title: "Enter a search term",
+        description: "Type a beer name to search",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    const matchingNodes = graphData.nodes.filter(node => 
+      node.label.toLowerCase().includes(query)
+    );
+
+    if (matchingNodes.length === 0) {
+      toast({
+        title: "No matches found",
+        description: `No beers found matching "${searchQuery}"`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // If multiple matches, use the first one
+    const targetNode = matchingNodes[0];
+    
+    // Select and highlight the node
+    handleNodeClick(targetNode);
+
+    // Zoom to the node
+    if (fgRef.current && targetNode.x !== undefined && targetNode.y !== undefined) {
+      fgRef.current.centerAt(targetNode.x, targetNode.y, 1000);
+      fgRef.current.zoom(3, 1000);
+    }
+
+    toast({
+      title: "Found",
+      description: matchingNodes.length > 1 
+        ? `Found ${matchingNodes.length} matches, showing "${targetNode.label}"`
+        : `Showing "${targetNode.label}"`,
+    });
+  }, [searchQuery, graphData.nodes, handleNodeClick, toast]);
+
+  const handleSearchKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  }, [handleSearch]);
 
   const handleExportJSON = useCallback(() => {
     if (graphData.nodes.length === 0) {
@@ -498,6 +550,25 @@ export default function Graph() {
         <Card className="rounded-2xl border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center gap-4 flex-wrap">
+              {/* Search */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex items-center">
+                  <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search beers..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={handleSearchKeyPress}
+                    className="pl-9 w-[200px]"
+                  />
+                </div>
+                <Button onClick={handleSearch} variant="outline" size="sm">
+                  Find
+                </Button>
+              </div>
+
+              <div className="h-6 w-px bg-border" />
+
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Schema:</span>
                 <Select value={schemaFilter} onValueChange={(v: any) => setSchemaFilter(v)}>
