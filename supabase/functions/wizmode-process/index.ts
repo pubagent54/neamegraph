@@ -88,50 +88,49 @@ serve(async (req) => {
           .eq("path", normalizedPath)
           .single();
 
+        let pageId: string;
+        let result: string;
+
         if (existingPage) {
-          // Page already exists, skip
-          await supabase
-            .from("wizmode_run_items")
-            .update({
-              result: "skipped_duplicate",
-              page_id: existingPage.id,
+          // Page exists - update it (fetch fresh HTML + generate new schema)
+          pageId = existingPage.id;
+          result = "updated";
+          console.log(`Found existing page: ${normalizedPath} (ID: ${existingPage.id}) - will update`);
+        } else {
+          // Create new page
+          const { data: newPage, error: createError } = await supabase
+            .from("pages")
+            .insert({
+              domain: item.domain,
+              path: normalizedPath,
+              page_type: item.page_type,
+              category: item.category,
+              status: "not_started",
             })
-            .eq("id", item.id);
-          console.log(`Skipped duplicate: ${normalizedPath}`);
-          continue;
+            .select()
+            .single();
+
+          if (createError) throw createError;
+
+          pageId = newPage.id;
+          result = "created";
+          console.log(`Created page: ${normalizedPath} (ID: ${newPage.id})`);
         }
-
-        // Create new page
-        const { data: newPage, error: createError } = await supabase
-          .from("pages")
-          .insert({
-            domain: item.domain,
-            path: normalizedPath,
-            page_type: item.page_type,
-            category: item.category,
-            status: "not_started",
-          })
-          .select()
-          .single();
-
-        if (createError) throw createError;
-
-        console.log(`Created page: ${normalizedPath} (ID: ${newPage.id})`);
 
         // Update item with page_id and result
         await supabase
           .from("wizmode_run_items")
           .update({
-            result: "created",
-            page_id: newPage.id,
+            result: result,
+            page_id: pageId,
           })
           .eq("id", item.id);
 
-        // Run Fetch HTML
+        // Run Fetch HTML (for both new and existing pages)
         try {
           console.log(`Fetching HTML for ${normalizedPath}...`);
           const { error: htmlError } = await supabase.functions.invoke("fetch-html", {
-            body: { page_id: newPage.id },
+            body: { page_id: pageId },
           });
 
           if (htmlError) throw htmlError;
@@ -150,11 +149,11 @@ serve(async (req) => {
             .eq("id", item.id);
         }
 
-        // Run Generate Schema
+        // Run Generate Schema (for both new and existing pages)
         try {
           console.log(`Generating schema for ${normalizedPath}...`);
           const { error: schemaError } = await supabase.functions.invoke("generate-schema", {
-            body: { page_id: newPage.id },
+            body: { page_id: pageId },
           });
 
           if (schemaError) throw schemaError;
