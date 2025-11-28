@@ -15,3 +15,6 @@ static_files = [
 
 [functions.generate-schema-story]
 verify_jwt = false
+
+[functions.graph-pages]
+verify_jwt = true
