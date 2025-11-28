@@ -50,7 +50,7 @@ const DOMAIN_CONFIG: Record<string, {
   categoriesByPageType: Record<string, string[]>;
 }> = {
   Corporate: {
-    pageTypes: ['About', 'History', 'Environment', 'Careers', 'News', 'Beers', 'Pubs & Hotels Estate'],
+    pageTypes: ['About', 'History', 'Environment', 'Careers', 'News', 'Beers', 'Brewery', 'Pubs & Hotels Estate'],
     categoriesByPageType: {
       'About': ['Legal', 'Direct to Trade', 'General'],
       'History': ['History'],
@@ -58,6 +58,7 @@ const DOMAIN_CONFIG: Record<string, {
       'Careers': ['Working for Shepherd Neame', 'Pub Tenancies'],
       'News': ['Pubs & Hotels', 'Community', 'Beer and Drink Brands'],
       'Beers': ['Drink Brands', 'Collection Page'],
+      'Brewery': ['Brewery History', 'Brewing Process', 'Facilities'],
       'Pubs & Hotels Estate': ['About', 'Collection Page'],
     },
   },
