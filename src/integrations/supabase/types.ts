@@ -467,6 +467,104 @@ export type Database = {
         }
         Relationships: []
       }
+      wizmode_run_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          domain: string
+          error_message: string | null
+          html_status: string
+          id: string
+          page_id: string | null
+          page_type: string | null
+          path: string
+          result: string
+          row_number: number
+          run_id: string
+          schema_status: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          domain: string
+          error_message?: string | null
+          html_status?: string
+          id?: string
+          page_id?: string | null
+          page_type?: string | null
+          path: string
+          result?: string
+          row_number: number
+          run_id: string
+          schema_status?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          domain?: string
+          error_message?: string | null
+          html_status?: string
+          id?: string
+          page_id?: string | null
+          page_type?: string | null
+          path?: string
+          result?: string
+          row_number?: number
+          run_id?: string
+          schema_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wizmode_run_items_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wizmode_run_items_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "wizmode_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wizmode_runs: {
+        Row: {
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          label: string | null
+          status: string
+          total_rows: number
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          label?: string | null
+          status?: string
+          total_rows?: number
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          label?: string | null
+          status?: string
+          total_rows?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wizmode_runs_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, LayoutDashboard, FileText, Settings, GitBranch, Activity, Shield } from "lucide-react";
+import { LogOut, User, LayoutDashboard, FileText, Settings, GitBranch, Activity, Shield, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import neameGraphLogo from "@/assets/neamegraph-logo.png";
@@ -39,6 +39,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { path: "/audit", label: "Audit Log", icon: Activity, color: "text-orange-500" },
     ...(userRole === "admin"
       ? [
+          { path: "/wizmode", label: "WIZmode", icon: Zap, color: "text-yellow-500" },
           { path: "/rules", label: "Rules", icon: Shield, color: "text-red-500" },
           { path: "/settings", label: "Settings", icon: Settings, color: "text-gray-500" },
         ]
