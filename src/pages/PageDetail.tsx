@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SchemaSummary } from "@/components/SchemaSummary";
 import { SchemaStory } from "@/components/SchemaStory";
 import { WikidataPanel } from "@/components/WikidataPanel";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1226,19 +1227,23 @@ export default function PageDetail() {
                         <TabsTrigger value="json">JSON</TabsTrigger>
                       </TabsList>
                       <TabsContent value="summary" className="mt-4">
-                        <SchemaSummary 
-                          jsonld={version.jsonld}
-                          section={page.section}
-                          createdAt={version.created_at}
-                          status={version.status}
-                        />
+                        <ErrorBoundary>
+                          <SchemaSummary 
+                            jsonld={version.jsonld}
+                            section={page.section}
+                            createdAt={version.created_at}
+                            status={version.status}
+                          />
+                        </ErrorBoundary>
                       </TabsContent>
                       <TabsContent value="story" className="mt-4">
-                        <SchemaStory 
-                          jsonld={version.jsonld}
-                          pageType={page.page_type}
-                          category={page.category}
-                        />
+                        <ErrorBoundary>
+                          <SchemaStory 
+                            jsonld={version.jsonld}
+                            pageType={page.page_type}
+                            category={page.category}
+                          />
+                        </ErrorBoundary>
                       </TabsContent>
                       <TabsContent value="json" className="mt-4">
                         <div className="space-y-2">
