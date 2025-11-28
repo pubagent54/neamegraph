@@ -75,13 +75,57 @@ export default function WIZmode() {
   }, []);
 
   useEffect(() => {
-    if (currentRun && currentRun.status === "running") {
-      const interval = setInterval(() => {
-        fetchRunProgress(currentRun.id);
-      }, 2000);
-      return () => clearInterval(interval);
-    }
-  }, [currentRun]);
+    if (!currentRun) return;
+
+    // Initial fetch
+    fetchRunProgress(currentRun.id);
+
+    // Set up real-time subscriptions for live updates
+    const itemsChannel = supabase
+      .channel(`wizmode_items_${currentRun.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'wizmode_run_items',
+          filter: `run_id=eq.${currentRun.id}`
+        },
+        () => {
+          // Refetch items when any change occurs
+          fetchRunProgress(currentRun.id);
+        }
+      )
+      .subscribe();
+
+    const runsChannel = supabase
+      .channel(`wizmode_run_${currentRun.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'wizmode_runs',
+          filter: `id=eq.${currentRun.id}`
+        },
+        (payload) => {
+          const updatedRun = payload.new as WizmodeRun;
+          setCurrentRun(updatedRun);
+          
+          if (updatedRun.status === "completed" || updatedRun.status === "failed") {
+            toast.success(`Run ${updatedRun.status}`);
+            fetchPastRuns();
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscriptions
+    return () => {
+      supabase.removeChannel(itemsChannel);
+      supabase.removeChannel(runsChannel);
+    };
+  }, [currentRun?.id]);
 
   const fetchPastRuns = async () => {
     try {
