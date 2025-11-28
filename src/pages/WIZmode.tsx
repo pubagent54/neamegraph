@@ -16,12 +16,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { Upload, PlayCircle, Loader2, CheckCircle2, XCircle, AlertCircle, Download } from "lucide-react";
+import { Upload, PlayCircle, Loader2, CheckCircle2, XCircle, AlertCircle, Download, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface WizmodeRun {
   id: string;
@@ -48,6 +49,7 @@ interface WizmodeRunItem {
 export default function WIZmode() {
   const { userRole } = useAuth();
   const navigate = useNavigate();
+  const isAdmin = userRole === "admin";
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [batchLabel, setBatchLabel] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -57,6 +59,9 @@ export default function WIZmode() {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [estimatedRowCount, setEstimatedRowCount] = useState<number | null>(null);
+  const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
+  const [oldRunsCount, setOldRunsCount] = useState<number>(0);
+  const [cleaningUp, setCleaningUp] = useState(false);
 
   // Admin-only check
   if (userRole !== "admin") {
@@ -431,6 +436,79 @@ export default function WIZmode() {
     return `${minutes}m ${remainingSeconds}s`;
   };
 
+  const checkOldRuns = async () => {
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { count, error } = await supabase
+        .from("wizmode_runs")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "completed")
+        .lt("created_at", thirtyDaysAgo.toISOString());
+
+      if (error) throw error;
+      setOldRunsCount(count || 0);
+      setCleanupDialogOpen(true);
+    } catch (error) {
+      console.error("Error checking old runs:", error);
+      toast.error("Failed to check old runs");
+    }
+  };
+
+  const handleCleanup = async () => {
+    setCleaningUp(true);
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("You must be logged in");
+        return;
+      }
+
+      // Get the runs to be deleted for audit log
+      const { data: runsToDelete, error: fetchError } = await supabase
+        .from("wizmode_runs")
+        .select("id, label, total_rows")
+        .eq("status", "completed")
+        .lt("created_at", thirtyDaysAgo.toISOString());
+
+      if (fetchError) throw fetchError;
+
+      // Delete old completed runs (items will cascade delete automatically)
+      const { error: deleteError } = await supabase
+        .from("wizmode_runs")
+        .delete()
+        .eq("status", "completed")
+        .lt("created_at", thirtyDaysAgo.toISOString());
+
+      if (deleteError) throw deleteError;
+
+      // Log the cleanup
+      await supabase.from("audit_log").insert({
+        user_id: user.id,
+        entity_type: "wizmode_runs",
+        action: "cleanup_old_runs",
+        details: {
+          runs_deleted: runsToDelete?.length || 0,
+          cutoff_date: thirtyDaysAgo.toISOString(),
+          deleted_runs: runsToDelete?.map(r => ({ id: r.id, label: r.label, total_rows: r.total_rows })),
+        },
+      });
+
+      toast.success(`Cleaned up ${runsToDelete?.length || 0} old completed runs`);
+      setCleanupDialogOpen(false);
+      fetchPastRuns();
+    } catch (error: any) {
+      console.error("Error cleaning up old runs:", error);
+      toast.error(error.message || "Failed to clean up old runs");
+    } finally {
+      setCleaningUp(false);
+    }
+  };
+
   const getInitialEstimate = () => {
     if (!estimatedRowCount) return null;
     // Rough estimate: ~10-15 seconds per row (fetch HTML + generate schema)
@@ -650,8 +728,23 @@ export default function WIZmode() {
 
         <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader>
-            <CardTitle>Past Runs</CardTitle>
-            <CardDescription>Recent WIZmode batch processing runs</CardDescription>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Past Runs</CardTitle>
+                <CardDescription>Recent WIZmode batch processing runs</CardDescription>
+              </div>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={checkOldRuns}
+                  className="rounded-full"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Clean Up Old Runs
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <Table>
@@ -699,6 +792,48 @@ export default function WIZmode() {
             </Table>
           </CardContent>
         </Card>
+
+        {/* Cleanup Dialog */}
+        <AlertDialog open={cleanupDialogOpen} onOpenChange={setCleanupDialogOpen}>
+          <AlertDialogContent className="rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clean Up Old WIZmode Runs</AlertDialogTitle>
+              <AlertDialogDescription>
+                {oldRunsCount === 0 ? (
+                  <p>No old completed runs found (older than 30 days).</p>
+                ) : (
+                  <div className="space-y-2">
+                    <p>
+                      This will permanently delete <strong>{oldRunsCount}</strong> completed run{oldRunsCount !== 1 ? 's' : ''} older than 30 days and all their associated items.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      This action cannot be undone. Pages created by these runs will NOT be deleted.
+                    </p>
+                  </div>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={cleaningUp}>Cancel</AlertDialogCancel>
+              {oldRunsCount > 0 && (
+                <AlertDialogAction
+                  onClick={handleCleanup}
+                  disabled={cleaningUp}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {cleaningUp ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Cleaning up...
+                    </>
+                  ) : (
+                    `Delete ${oldRunsCount} Run${oldRunsCount !== 1 ? 's' : ''}`
+                  )}
+                </AlertDialogAction>
+              )}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );
