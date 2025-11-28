@@ -14,6 +14,7 @@ import Rules from "./pages/Rules";
 import Settings from "./pages/Settings";
 import Graph from "./pages/Graph";
 import AuditLog from "./pages/AuditLog";
+import WIZmode from "./pages/WIZmode";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -89,6 +90,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="admin">
                   <Settings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/wizmode"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <WIZmode />
                 </ProtectedRoute>
               }
             />
