@@ -1,4 +1,4 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
       const pathParts = beer.path.split('/').filter(Boolean);
       const beerName = pathParts[pathParts.length - 1]
         ?.split('-')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ') || 'Unknown Beer';
 
       // Build subtitle with ABV and style
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in graph-beers function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
