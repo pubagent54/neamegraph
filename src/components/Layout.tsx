@@ -17,15 +17,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, LayoutDashboard, FileText, Settings, GitBranch, Activity, Shield, Zap } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { LogOut, User, LayoutDashboard, FileText, Settings, GitBranch, Activity, Shield, Zap, Menu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import neameGraphLogo from "@/assets/neamegraph-logo.png";
+import { useState } from "react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, userRole, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -81,6 +90,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </nav>
             </div>
             <div className="flex items-center gap-2">
+              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="md:hidden">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-64">
+                  <SheetHeader>
+                    <SheetTitle>Menu</SheetTitle>
+                  </SheetHeader>
+                  <nav className="flex flex-col gap-2 mt-6">
+                    {navItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location.pathname === item.path;
+                      return (
+                        <Link key={item.path} to={item.path} onClick={() => setMobileMenuOpen(false)}>
+                          <Button
+                            variant={isActive ? "secondary" : "ghost"}
+                            className={`w-full justify-start gap-2 ${isActive ? 'shadow-sm' : ''}`}
+                          >
+                            <Icon className={`h-4 w-4 ${item.color}`} />
+                            {item.label}
+                          </Button>
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                </SheetContent>
+              </Sheet>
               <ThemeToggle />
               <DropdownMenu>
               <DropdownMenuTrigger asChild>
