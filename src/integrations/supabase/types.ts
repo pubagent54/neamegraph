@@ -349,6 +349,8 @@ export type Database = {
           created_at: string
           fetch_base_url: string
           id: string
+          organization_schema_backup_json: string | null
+          organization_schema_json: string | null
           preview_auth_password: string | null
           preview_auth_user: string | null
           schema_engine_version: string
@@ -360,6 +362,8 @@ export type Database = {
           created_at?: string
           fetch_base_url?: string
           id?: string
+          organization_schema_backup_json?: string | null
+          organization_schema_json?: string | null
           preview_auth_password?: string | null
           preview_auth_user?: string | null
           schema_engine_version?: string
@@ -371,6 +375,8 @@ export type Database = {
           created_at?: string
           fetch_base_url?: string
           id?: string
+          organization_schema_backup_json?: string | null
+          organization_schema_json?: string | null
           preview_auth_password?: string | null
           preview_auth_user?: string | null
           schema_engine_version?: string
