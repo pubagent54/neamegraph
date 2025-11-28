@@ -39,6 +39,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [unlockCode, setUnlockCode] = useState("");
+  const [unlockError, setUnlockError] = useState("");
   
   const isAdmin = userRole === 'admin';
 
@@ -170,6 +173,16 @@ export default function Settings() {
       toast.error("Failed to restore organization schema");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUnlockChest = () => {
+    if (unlockCode === "010925") {
+      setIsUnlocked(true);
+      setUnlockError("");
+      toast.success("Chest unlocked – editing enabled.");
+    } else {
+      setUnlockError("Incorrect code. Try again.");
     }
   };
 
@@ -331,6 +344,41 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {!isUnlocked && (
+                <div className="p-4 bg-muted/30 rounded-xl border space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="unlock-code">Unlock code</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="unlock-code"
+                        type="password"
+                        value={unlockCode}
+                        onChange={(e) => {
+                          setUnlockCode(e.target.value);
+                          setUnlockError("");
+                        }}
+                        placeholder="Enter 6-digit code"
+                        maxLength={6}
+                        className="rounded-xl max-w-[200px]"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleUnlockChest}
+                        className="rounded-full"
+                      >
+                        Unlock chest
+                      </Button>
+                    </div>
+                    {unlockError && (
+                      <p className="text-xs text-destructive">{unlockError}</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Enter the unlock code to edit the master schema.
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="org-schema">Organization JSON-LD</Label>
@@ -346,6 +394,7 @@ export default function Settings() {
                   }
                   placeholder='{"@type": ["Organization", "Corporation"], "@id": "https://www.shepherdneame.co.uk/#organization", ...}'
                   className="font-mono text-sm min-h-[300px] leading-relaxed"
+                  disabled={!isUnlocked}
                 />
                 <p className="text-xs text-muted-foreground">
                   This is the <strong>master Organization node</strong> that represents Shepherd Neame Limited. 
@@ -358,7 +407,7 @@ export default function Settings() {
                   size="sm"
                   variant="outline"
                   onClick={handleCopyOrgSchema}
-                  disabled={!settings.organization_schema_json}
+                  disabled={!isUnlocked || !settings.organization_schema_json}
                   className="rounded-full"
                 >
                   <Copy className="mr-2 h-4 w-4" />
@@ -367,7 +416,7 @@ export default function Settings() {
                 <Button
                   size="sm"
                   onClick={handleSaveOrgSchema}
-                  disabled={saving || !settings.organization_schema_json}
+                  disabled={!isUnlocked || saving || !settings.organization_schema_json}
                   className="rounded-full"
                 >
                   <Save className="mr-2 h-4 w-4" />
@@ -377,7 +426,7 @@ export default function Settings() {
                   size="sm"
                   variant="outline"
                   onClick={() => setShowRestoreDialog(true)}
-                  disabled={!settings.organization_schema_backup_json}
+                  disabled={!isUnlocked || !settings.organization_schema_backup_json}
                   className="rounded-full"
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
