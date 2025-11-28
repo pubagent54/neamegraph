@@ -145,23 +145,30 @@ export default function WIZmode() {
         const text = e.target?.result as string;
         const lines = text.split("\n").filter((line) => line.trim());
         
-        if (lines.length < 2) {
-          reject(new Error("CSV must have at least a header row and one data row"));
+        if (lines.length < 1) {
+          reject(new Error("CSV file is empty"));
           return;
         }
 
-        const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-        
-        // Validate required columns
+        // Check if first row is a header or data
+        const firstRow = lines[0].split(",").map((h) => h.trim().toLowerCase());
         const requiredColumns = ["domain", "path", "page_type", "category"];
-        const missingColumns = requiredColumns.filter((col) => !headers.includes(col));
-        
-        if (missingColumns.length > 0) {
-          reject(new Error(`Missing required columns: ${missingColumns.join(", ")}`));
-          return;
+        const hasHeader = requiredColumns.every((col) => firstRow.includes(col));
+
+        let headers: string[];
+        let dataStartIndex: number;
+
+        if (hasHeader) {
+          // First row is header
+          headers = firstRow;
+          dataStartIndex = 1;
+        } else {
+          // No header, assume column order: domain, path, page_type, category
+          headers = requiredColumns;
+          dataStartIndex = 0;
         }
 
-        const rows = lines.slice(1).map((line, index) => {
+        const rows = lines.slice(dataStartIndex).map((line, index) => {
           const values = line.split(",").map((v) => v.trim());
           const row: any = { row_number: index + 1 };
           
