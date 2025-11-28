@@ -117,6 +117,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       );
                     })}
                   </nav>
+                  <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-card">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm truncate">{user?.email}</span>
+                      </div>
+                      {userRole && (
+                        <Badge className={`${roleColors[userRole as keyof typeof roleColors]} w-fit rounded-full`}>
+                          {userRole}
+                        </Badge>
+                      )}
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start gap-2"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          handleSignOut();
+                        }}
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Sign Out
+                      </Button>
+                    </div>
+                  </div>
                 </SheetContent>
               </Sheet>
               <ThemeToggle />
