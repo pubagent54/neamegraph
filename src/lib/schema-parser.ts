@@ -162,10 +162,30 @@ export function parseSchemaForSummary(
         keyFacts.type = "article";
         keyFacts.headline = mainEntity.headline;
         keyFacts.datePublished = mainEntity.datePublished;
-        keyFacts.author =
-          mainEntity.author?.name || mainEntity.author || undefined;
-        keyFacts.publisher =
-          mainEntity.publisher?.name || mainEntity.publisher || undefined;
+        
+        // Extract author - handle both string and object formats
+        if (mainEntity.author) {
+          if (typeof mainEntity.author === 'string') {
+            keyFacts.author = mainEntity.author;
+          } else if (mainEntity.author.name) {
+            keyFacts.author = mainEntity.author.name;
+          }
+        }
+        
+        // Extract publisher - handle both string, object with name, and @id reference
+        if (mainEntity.publisher) {
+          if (typeof mainEntity.publisher === 'string') {
+            keyFacts.publisher = mainEntity.publisher;
+          } else if (mainEntity.publisher.name) {
+            keyFacts.publisher = mainEntity.publisher.name;
+          } else if (mainEntity.publisher["@id"]) {
+            // Publisher is a reference - try to resolve from graph
+            const publisherNode = graph.find(n => n["@id"] === mainEntity.publisher["@id"]);
+            if (publisherNode?.name) {
+              keyFacts.publisher = publisherNode.name;
+            }
+          }
+        }
       }
 
       // ---- Generic corporate pages -------------------------------------------
