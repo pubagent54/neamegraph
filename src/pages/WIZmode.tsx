@@ -431,6 +431,88 @@ export default function WIZmode() {
     setValidationErrors(new Set([...validationErrors].filter(err => !err.startsWith(`${id}-${field}`))));
   };
 
+  const matchValueCaseInsensitive = (value: string, options: string[]): string | null => {
+    if (!value) return null;
+    const normalized = value.trim().toLowerCase();
+    const matched = options.find(opt => opt.toLowerCase() === normalized);
+    return matched || null;
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    
+    const clipboardText = e.clipboardData.getData('text/plain');
+    if (!clipboardText.trim()) return;
+
+    // Parse clipboard data into rows and cells
+    const pastedRows = clipboardText
+      .replace(/\r/g, "")
+      .split("\n")
+      .filter(line => line.trim().length > 0)
+      .map(line => line.split("\t"));
+
+    if (pastedRows.length === 0) return;
+
+    // Find starting row index (default to 0 if no focus)
+    const startIndex = 0;
+
+    // Ensure we have enough rows in the table
+    const updatedRows = [...tableRows];
+    while (updatedRows.length < startIndex + pastedRows.length) {
+      updatedRows.push({
+        id: crypto.randomUUID(),
+        urlOrPath: '',
+        domain: null,
+        page_type: null,
+        category: null,
+      });
+    }
+
+    // Apply pasted data to rows
+    pastedRows.forEach((cells, i) => {
+      const rowIndex = startIndex + i;
+      const row = updatedRows[rowIndex];
+
+      // Column 1: URL/Path
+      if (cells[0]) {
+        row.urlOrPath = cells[0].trim();
+      }
+
+      // Column 2: Domain
+      if (cells[1]) {
+        const matchedDomain = matchValueCaseInsensitive(cells[1], DOMAIN_CONFIG.domains);
+        row.domain = matchedDomain;
+        // Reset dependent fields if domain changes
+        if (!matchedDomain) {
+          row.page_type = null;
+          row.category = null;
+        }
+      }
+
+      // Column 3: Page Type
+      if (cells[2] && row.domain) {
+        const pageTypes = getPageTypesForDomain(row.domain);
+        const matchedPageType = matchValueCaseInsensitive(cells[2], pageTypes);
+        row.page_type = matchedPageType;
+        // Reset category if page type changes
+        if (!matchedPageType) {
+          row.category = null;
+        }
+      }
+
+      // Column 4: Category
+      if (cells[3] && row.page_type) {
+        const categories = getCategoriesForPageType(row.page_type);
+        const matchedCategory = matchValueCaseInsensitive(cells[3], categories);
+        row.category = matchedCategory;
+      }
+    });
+
+    setTableRows(updatedRows);
+    setValidationErrors(new Set()); // Clear validation errors after paste
+    toast.success(`Pasted ${pastedRows.length} row${pastedRows.length === 1 ? '' : 's'} into Table Entry`);
+  };
+
   const validateTableRows = (): { valid: boolean; validRows: any[]; errors: string[] } => {
     const errors: string[] = [];
     const validRows: any[] = [];
@@ -771,7 +853,9 @@ export default function WIZmode() {
               <CardHeader>
                 <CardTitle>Add by Table</CardTitle>
                 <CardDescription>
-                  Paste or type rows and run WIZmode without preparing a CSV file.
+                  Type rows directly or paste from Google Sheets / Excel (Ctrl/Cmd+V).
+                  <br />
+                  Paste 1-4 columns: URL/Path | Domain | Page Type | Category
                   <br />
                   Example: <code className="bg-muted px-2 py-1 rounded text-xs">/beers/orchard-view | Beer | Beers | Drink Brands</code>
                 </CardDescription>
@@ -790,7 +874,10 @@ export default function WIZmode() {
                 </div>
 
                 {/* Table */}
-                <div className="border rounded-xl overflow-hidden">
+                <div 
+                  className="border rounded-xl overflow-hidden"
+                  onPaste={handlePaste}
+                >
                   <Table>
                     <TableHeader>
                       <TableRow>
