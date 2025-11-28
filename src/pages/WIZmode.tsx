@@ -1,10 +1,11 @@
 /**
- * WIZmode v1 - Batch Page Creation & Schema Generation
+ * WIZmode v3.1 - Batch Page Creation & Schema Generation
  * 
- * Admin-only screen for uploading CSV batches to create pages and automatically
- * run Fetch HTML and Generate Schema workflows.
- * CSV format: domain, path, page_type, category (all required)
- * Reuses existing path normalization, duplicate detection, and edge functions.
+ * Admin-only screen with two modes:
+ * 1. Upload CSV - batch import from CSV file
+ * 2. Table Entry - manual entry/paste of rows
+ * 
+ * Both modes feed into the same backend engine (wizmode-process)
  */
 
 import { useState, useEffect } from "react";
@@ -14,15 +15,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { Upload, PlayCircle, Loader2, CheckCircle2, XCircle, AlertCircle, Download, Trash2 } from "lucide-react";
+import { Upload, PlayCircle, Loader2, CheckCircle2, XCircle, AlertCircle, Trash2, Plus, Eye, X } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { 
+  DOMAIN_CONFIG, 
+  getPageTypesForDomain, 
+  getCategoriesForPageType, 
+  normalizePath,
+  DOMAIN_NORMALIZATION_MAP,
+  PAGE_TYPE_NORMALIZATION_MAP,
+  CATEGORY_NORMALIZATION_MAP
+} from "@/lib/domain-config";
 
 interface WizmodeRun {
   id: string;
@@ -50,11 +61,20 @@ interface WizmodeRunItem {
   validation_issues: any;
 }
 
+interface TableRow {
+  id: string;
+  urlOrPath: string;
+  domain: string | null;
+  page_type: string | null;
+  category: string | null;
+}
+
 export default function WIZmode() {
   const { userRole } = useAuth();
   const navigate = useNavigate();
   const isAdmin = userRole === "admin";
-  const [csvFile, setCsvFile] = useState<File | null>(null);
+
+  // Shared state
   const [batchLabel, setBatchLabel] = useState("");
   const [uploading, setUploading] = useState(false);
   const [currentRun, setCurrentRun] = useState<WizmodeRun | null>(null);
@@ -62,7 +82,18 @@ export default function WIZmode() {
   const [pastRuns, setPastRuns] = useState<WizmodeRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
+  
+  // CSV mode state
+  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [estimatedRowCount, setEstimatedRowCount] = useState<number | null>(null);
+
+  // Table mode state
+  const [tableRows, setTableRows] = useState<TableRow[]>([
+    { id: crypto.randomUUID(), urlOrPath: '', domain: null, page_type: null, category: null }
+  ]);
+  const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
+
+  // Cleanup dialog
   const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
   const [oldRunsCount, setOldRunsCount] = useState<number>(0);
   const [cleaningUp, setCleaningUp] = useState(false);
@@ -88,50 +119,38 @@ export default function WIZmode() {
   useEffect(() => {
     if (!currentRun) return;
 
-    // Initial fetch
     fetchRunProgress(currentRun.id);
 
-    // Set up real-time subscriptions for live updates
     const itemsChannel = supabase
       .channel(`wizmode_items_${currentRun.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'wizmode_run_items',
-          filter: `run_id=eq.${currentRun.id}`
-        },
-        () => {
-          // Refetch items when any change occurs
-          fetchRunProgress(currentRun.id);
-        }
-      )
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'wizmode_run_items',
+        filter: `run_id=eq.${currentRun.id}`
+      }, () => {
+        fetchRunProgress(currentRun.id);
+      })
       .subscribe();
 
     const runsChannel = supabase
       .channel(`wizmode_run_${currentRun.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'wizmode_runs',
-          filter: `id=eq.${currentRun.id}`
-        },
-        (payload) => {
-          const updatedRun = payload.new as WizmodeRun;
-          setCurrentRun(updatedRun);
-          
-          if (updatedRun.status === "completed" || updatedRun.status === "failed") {
-            toast.success(`Run ${updatedRun.status}`);
-            fetchPastRuns();
-          }
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'wizmode_runs',
+        filter: `id=eq.${currentRun.id}`
+      }, (payload) => {
+        const updatedRun = payload.new as WizmodeRun;
+        setCurrentRun(updatedRun);
+        
+        if (updatedRun.status === "completed" || updatedRun.status === "failed") {
+          toast.success(`Run ${updatedRun.status}`);
+          fetchPastRuns();
         }
-      )
+      })
       .subscribe();
 
-    // Cleanup subscriptions
     return () => {
       supabase.removeChannel(itemsChannel);
       supabase.removeChannel(runsChannel);
@@ -173,7 +192,6 @@ export default function WIZmode() {
       if (itemsError) throw itemsError;
       setRunItems(itemsData || []);
 
-      // If completed, update past runs list
       if (runData.status === "completed" || runData.status === "failed") {
         fetchPastRuns();
       }
@@ -181,6 +199,10 @@ export default function WIZmode() {
       console.error("Error fetching run progress:", error);
     }
   };
+
+  // ============================================
+  // CSV MODE FUNCTIONS
+  // ============================================
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -191,7 +213,6 @@ export default function WIZmode() {
       }
       setCsvFile(file);
       
-      // Read file to count rows for initial estimate
       const reader = new FileReader();
       reader.onload = (event) => {
         const text = event.target?.result as string;
@@ -218,7 +239,6 @@ export default function WIZmode() {
           return;
         }
 
-        // Check if first row is a header or data
         const firstRow = lines[0].split(",").map((h) => h.trim().toLowerCase());
         const requiredColumns = ["domain", "path", "page_type", "category"];
         const hasHeader = requiredColumns.every((col) => firstRow.includes(col));
@@ -227,54 +247,12 @@ export default function WIZmode() {
         let dataStartIndex: number;
 
         if (hasHeader) {
-          // First row is header
           headers = firstRow;
           dataStartIndex = 1;
         } else {
-          // No header, assume column order: domain, path, page_type, category
           headers = requiredColumns;
           dataStartIndex = 0;
         }
-
-        // Category normalization map
-        const categoryMap: Record<string, string> = {
-          "pubs & hotels": "Pubs & Hotels",
-          "beer & drinks brands": "Beer and Drink Brands",
-          "beer and drink brands": "Beer and Drink Brands",
-          "drink brands": "Drink Brands",
-          "community": "Community",
-          "collection page": "Collection Page",
-          "working for shepherd neame": "Working for Shepherd Neame",
-          "pub tenancies": "Pub Tenancies",
-          "legal": "Legal",
-          "direct to trade": "Direct to Trade",
-          "general": "General",
-          "history": "History",
-          "environment": "Environment",
-          "about": "About",
-          "brewery history": "Brewery History",
-          "brewing process": "Brewing Process",
-          "facilities": "Facilities",
-        };
-
-        // Page type normalization map
-        const pageTypeMap: Record<string, string> = {
-          "about": "About",
-          "history": "History",
-          "environment": "Environment",
-          "careers": "Careers",
-          "news": "News",
-          "beers": "Beers",
-          "brewery": "Brewery",
-          "pubs & hotels estate": "Pubs & Hotels Estate",
-        };
-
-        // Domain normalization map
-        const domainMap: Record<string, string> = {
-          "corporate": "Corporate",
-          "beer": "Beer",
-          "pub": "Pub",
-        };
 
         const rows = lines.slice(dataStartIndex).map((line, index) => {
           const values = line.split(",").map((v) => v.trim());
@@ -283,22 +261,19 @@ export default function WIZmode() {
           headers.forEach((header, i) => {
             let value = values[i] || "";
             
-            // Normalize domain values
             if (header === "domain" && value) {
               const normalizedKey = value.toLowerCase();
-              value = domainMap[normalizedKey] || value;
+              value = DOMAIN_NORMALIZATION_MAP[normalizedKey] || value;
             }
             
-            // Normalize page_type values
             if (header === "page_type" && value) {
               const normalizedKey = value.toLowerCase();
-              value = pageTypeMap[normalizedKey] || value;
+              value = PAGE_TYPE_NORMALIZATION_MAP[normalizedKey] || value;
             }
             
-            // Normalize category values
             if (header === "category" && value) {
               const normalizedKey = value.toLowerCase();
-              value = categoryMap[normalizedKey] || value;
+              value = CATEGORY_NORMALIZATION_MAP[normalizedKey] || value;
             }
             
             row[header] = value;
@@ -314,7 +289,7 @@ export default function WIZmode() {
     });
   };
 
-  const handleStartRun = async () => {
+  const handleStartCsvRun = async () => {
     if (!csvFile) {
       toast.error("Please select a CSV file");
       return;
@@ -324,7 +299,6 @@ export default function WIZmode() {
     setStartTime(Date.now());
 
     try {
-      // Parse CSV
       const rows = await parseCsv(csvFile);
       
       if (rows.length === 0) {
@@ -336,11 +310,10 @@ export default function WIZmode() {
 
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Create run
       const { data: run, error: runError } = await supabase
         .from("wizmode_runs")
         .insert({
-          label: batchLabel || `Batch ${new Date().toISOString()}`,
+          label: batchLabel || `CSV Batch ${new Date().toLocaleDateString()}`,
           total_rows: rows.length,
           status: "pending",
           created_by_user_id: user?.id,
@@ -350,7 +323,6 @@ export default function WIZmode() {
 
       if (runError) throw runError;
 
-      // Create run items
       const items = rows.map((row) => ({
         run_id: run.id,
         row_number: row.row_number,
@@ -370,7 +342,6 @@ export default function WIZmode() {
       if (itemsError) throw itemsError;
 
       setCurrentRun(run);
-      // Fetch the items back to get full records with IDs
       const { data: createdItems } = await supabase
         .from("wizmode_run_items")
         .select("*")
@@ -380,12 +351,15 @@ export default function WIZmode() {
       setRunItems(createdItems || []);
       toast.success(`WIZmode run created with ${rows.length} rows`);
 
-      // Start processing in background
       await supabase.functions.invoke("wizmode-process", {
         body: { run_id: run.id },
       });
 
       toast.info("Processing started in background...");
+      
+      // Clear CSV file
+      setCsvFile(null);
+      setBatchLabel("");
     } catch (error: any) {
       console.error("Error starting run:", error);
       toast.error(error.message || "Failed to start run");
@@ -393,6 +367,200 @@ export default function WIZmode() {
       setUploading(false);
     }
   };
+
+  // ============================================
+  // TABLE MODE FUNCTIONS
+  // ============================================
+
+  const addTableRow = () => {
+    setTableRows([...tableRows, {
+      id: crypto.randomUUID(),
+      urlOrPath: '',
+      domain: null,
+      page_type: null,
+      category: null,
+    }]);
+  };
+
+  const deleteTableRow = (id: string) => {
+    if (tableRows.length === 1) {
+      // Reset to single empty row
+      setTableRows([{
+        id: crypto.randomUUID(),
+        urlOrPath: '',
+        domain: null,
+        page_type: null,
+        category: null,
+      }]);
+    } else {
+      setTableRows(tableRows.filter(row => row.id !== id));
+    }
+    // Clear validation errors for deleted row
+    setValidationErrors(new Set([...validationErrors].filter(err => !err.startsWith(id))));
+  };
+
+  const clearTable = () => {
+    setTableRows([{
+      id: crypto.randomUUID(),
+      urlOrPath: '',
+      domain: null,
+      page_type: null,
+      category: null,
+    }]);
+    setValidationErrors(new Set());
+  };
+
+  const updateTableRow = (id: string, field: keyof TableRow, value: any) => {
+    setTableRows(tableRows.map(row => {
+      if (row.id !== id) return row;
+      
+      const updated = { ...row, [field]: value };
+      
+      // Reset dependent fields when parent changes
+      if (field === 'domain') {
+        updated.page_type = null;
+        updated.category = null;
+      } else if (field === 'page_type') {
+        updated.category = null;
+      }
+      
+      return updated;
+    }));
+    
+    // Clear validation errors for this field
+    setValidationErrors(new Set([...validationErrors].filter(err => !err.startsWith(`${id}-${field}`))));
+  };
+
+  const validateTableRows = (): { valid: boolean; validRows: any[]; errors: string[] } => {
+    const errors: string[] = [];
+    const validRows: any[] = [];
+    const newValidationErrors = new Set<string>();
+
+    tableRows.forEach((row, index) => {
+      // Skip completely empty rows
+      if (!row.urlOrPath && !row.domain && !row.page_type && !row.category) {
+        return;
+      }
+
+      // Check required fields
+      if (!row.urlOrPath.trim()) {
+        errors.push(`Row ${index + 1}: URL/Path is required`);
+        newValidationErrors.add(`${row.id}-urlOrPath`);
+      }
+      if (!row.domain) {
+        errors.push(`Row ${index + 1}: Domain is required`);
+        newValidationErrors.add(`${row.id}-domain`);
+      }
+      if (!row.page_type) {
+        errors.push(`Row ${index + 1}: Page Type is required`);
+        newValidationErrors.add(`${row.id}-page_type`);
+      }
+      if (!row.category) {
+        errors.push(`Row ${index + 1}: Category is required`);
+        newValidationErrors.add(`${row.id}-category`);
+      }
+
+      // If all required fields present, add to valid rows
+      if (row.urlOrPath.trim() && row.domain && row.page_type && row.category) {
+        const normalizedPathValue = normalizePath(row.urlOrPath);
+        validRows.push({
+          row_number: index + 1,
+          domain: row.domain,
+          path: normalizedPathValue,
+          page_type: row.page_type,
+          category: row.category,
+        });
+      }
+    });
+
+    setValidationErrors(newValidationErrors);
+
+    return {
+      valid: errors.length === 0 && validRows.length > 0,
+      validRows,
+      errors,
+    };
+  };
+
+  const handleStartTableRun = async () => {
+    const validation = validateTableRows();
+
+    if (!validation.valid) {
+      if (validation.validRows.length === 0) {
+        toast.error("Please add at least one complete row before starting WIZmode");
+      } else {
+        toast.error(`Found ${validation.errors.length} validation error(s). Please fix highlighted fields.`);
+      }
+      return;
+    }
+
+    setUploading(true);
+    setStartTime(Date.now());
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { data: run, error: runError } = await supabase
+        .from("wizmode_runs")
+        .insert({
+          label: batchLabel || `Table Batch ${new Date().toLocaleDateString()}`,
+          total_rows: validation.validRows.length,
+          status: "pending",
+          created_by_user_id: user?.id,
+        })
+        .select()
+        .single();
+
+      if (runError) throw runError;
+
+      const items = validation.validRows.map((row) => ({
+        run_id: run.id,
+        row_number: row.row_number,
+        domain: row.domain,
+        path: row.path,
+        page_type: row.page_type,
+        category: row.category,
+        result: "pending",
+        html_status: "pending",
+        schema_status: "pending",
+      }));
+
+      const { error: itemsError } = await supabase
+        .from("wizmode_run_items")
+        .insert(items);
+
+      if (itemsError) throw itemsError;
+
+      setCurrentRun(run);
+      const { data: createdItems } = await supabase
+        .from("wizmode_run_items")
+        .select("*")
+        .eq("run_id", run.id)
+        .order("row_number");
+      
+      setRunItems(createdItems || []);
+      toast.success(`WIZmode run created with ${validation.validRows.length} rows`);
+
+      await supabase.functions.invoke("wizmode-process", {
+        body: { run_id: run.id },
+      });
+
+      toast.info("Processing started in background...");
+      
+      // Clear table
+      clearTable();
+      setBatchLabel("");
+    } catch (error: any) {
+      console.error("Error starting run:", error);
+      toast.error(error.message || "Failed to start run");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ============================================
+  // HELPER FUNCTIONS
+  // ============================================
 
   const viewRunDetails = async (runId: string) => {
     setSelectedRunId(runId);
@@ -426,20 +594,23 @@ export default function WIZmode() {
     const remaining = currentRun.total_rows - completed;
     const estimatedMs = remaining * avgTimePerRow;
 
-    return {
-      completed,
-      total: currentRun.total_rows,
-      estimatedMs,
-      avgTimePerRow
-    };
+    return { completed, estimatedMs, avgTimePerRow };
   };
 
-  const formatTime = (ms: number) => {
+  const formatTime = (ms: number): string => {
     const seconds = Math.floor(ms / 1000);
-    if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
+    
+    if (minutes === 0) return `${remainingSeconds}s`;
     return `${minutes}m ${remainingSeconds}s`;
+  };
+
+  const getInitialEstimate = (): string => {
+    if (!estimatedRowCount) return "Unknown";
+    const avgTimePerRow = 12000;
+    const totalMs = estimatedRowCount * avgTimePerRow;
+    return formatTime(totalMs);
   };
 
   const checkOldRuns = async () => {
@@ -474,7 +645,6 @@ export default function WIZmode() {
         return;
       }
 
-      // Get the runs to be deleted for audit log
       const { data: runsToDelete, error: fetchError } = await supabase
         .from("wizmode_runs")
         .select("id, label, total_rows")
@@ -483,7 +653,6 @@ export default function WIZmode() {
 
       if (fetchError) throw fetchError;
 
-      // Delete old completed runs (items will cascade delete automatically)
       const { error: deleteError } = await supabase
         .from("wizmode_runs")
         .delete()
@@ -492,104 +661,262 @@ export default function WIZmode() {
 
       if (deleteError) throw deleteError;
 
-      // Log the cleanup
       await supabase.from("audit_log").insert({
         user_id: user.id,
         entity_type: "wizmode_runs",
         action: "cleanup_old_runs",
         details: {
-          runs_deleted: runsToDelete?.length || 0,
-          cutoff_date: thirtyDaysAgo.toISOString(),
-          deleted_runs: runsToDelete?.map(r => ({ id: r.id, label: r.label, total_rows: r.total_rows })),
+          deleted_count: runsToDelete?.length || 0,
+          deleted_runs: runsToDelete?.map(r => ({ id: r.id, label: r.label, total_rows: r.total_rows })) || [],
         },
       });
 
-      toast.success(`Cleaned up ${runsToDelete?.length || 0} old completed runs`);
+      toast.success(`Cleaned up ${runsToDelete?.length || 0} old runs`);
       setCleanupDialogOpen(false);
       fetchPastRuns();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error cleaning up old runs:", error);
-      toast.error(error.message || "Failed to clean up old runs");
+      toast.error("Failed to clean up old runs");
     } finally {
       setCleaningUp(false);
     }
   };
 
-  const getInitialEstimate = () => {
-    if (!estimatedRowCount) return null;
-    // Rough estimate: ~10-15 seconds per row (fetch HTML + generate schema)
-    const avgTimePerRow = 12000; // 12 seconds average
-    const totalMs = estimatedRowCount * avgTimePerRow;
-    return formatTime(totalMs);
-  };
-
   const summary = getSummary();
   const progress = currentRun ? (runItems.filter((i) => i.result !== "pending").length / currentRun.total_rows) * 100 : 0;
+
+  // ============================================
+  // RENDER
+  // ============================================
 
   return (
     <Layout>
       <div className="space-y-8">
+        {/* Header */}
         <div>
-          <h1 className="text-4xl font-bold tracking-tight mb-2">WIZmode v1</h1>
+          <h1 className="text-4xl font-bold tracking-tight mb-2">WIZmode v3.1</h1>
           <p className="text-lg text-muted-foreground">
-            Batch page creation and schema generation from CSV
+            Batch page creation and schema generation
           </p>
         </div>
 
-        <Card className="rounded-2xl border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle>Upload CSV Batch</CardTitle>
-            <CardDescription>
-              CSV format: domain, path, page_type, category (all required).
-              Example: <code className="bg-muted px-1 py-0.5 rounded">Beer,/beers/double-stout,Beers,Drink Brands</code>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="batch-label">Batch Label (optional)</Label>
-              <Input
-                id="batch-label"
-                placeholder="e.g., January 2025 Beer Launch"
-                value={batchLabel}
-                onChange={(e) => setBatchLabel(e.target.value)}
-                className="rounded-full"
-              />
-            </div>
-            <div>
-              <Label htmlFor="csv-file">CSV File</Label>
-              <Input
-                id="csv-file"
-                type="file"
-                accept=".csv"
-                onChange={handleFileChange}
-                className="rounded-full"
-              />
-              {estimatedRowCount && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  {estimatedRowCount} rows detected • Estimated time: ~{getInitialEstimate()}
-                </p>
-              )}
-            </div>
-            <Button
-              onClick={handleStartRun}
-              disabled={!csvFile || uploading}
-              className="rounded-full"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Starting...
-                </>
-              ) : (
-                <>
-                  <PlayCircle className="mr-2 h-4 w-4" />
-                  Start WIZmode Run
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Mode Selection Tabs */}
+        <Tabs defaultValue="csv" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="csv">Upload CSV</TabsTrigger>
+            <TabsTrigger value="table">Table Entry</TabsTrigger>
+          </TabsList>
 
+          {/* CSV Upload Mode */}
+          <TabsContent value="csv" className="space-y-4 mt-6">
+            <Card className="rounded-2xl border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle>Upload CSV Batch</CardTitle>
+                <CardDescription>
+                  CSV format: <code className="bg-muted px-2 py-1 rounded text-xs">domain, path, page_type, category</code>
+                  <br />
+                  Example row: <code className="bg-muted px-2 py-1 rounded text-xs">Beer,/beers/double-stout,Beers,Drink Brands</code>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="batch-label">Batch Label (optional)</Label>
+                  <Input
+                    id="batch-label"
+                    placeholder="e.g., January 2025 Beer Launch"
+                    value={batchLabel}
+                    onChange={(e) => setBatchLabel(e.target.value)}
+                    className="rounded-full"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="csv-file">CSV File</Label>
+                  <Input
+                    id="csv-file"
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileChange}
+                    className="rounded-full"
+                  />
+                  {estimatedRowCount && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {estimatedRowCount} rows detected • Estimated time: ~{getInitialEstimate()}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  onClick={handleStartCsvRun}
+                  disabled={!csvFile || uploading}
+                  className="rounded-full"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="mr-2 h-4 w-4" />
+                      Start WIZmode Run
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Table Entry Mode */}
+          <TabsContent value="table" className="space-y-4 mt-6">
+            <Card className="rounded-2xl border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle>Add by Table</CardTitle>
+                <CardDescription>
+                  Paste or type rows and run WIZmode without preparing a CSV file.
+                  <br />
+                  Example: <code className="bg-muted px-2 py-1 rounded text-xs">/beers/orchard-view | Beer | Beers | Drink Brands</code>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Shared Batch Label */}
+                <div>
+                  <Label htmlFor="table-batch-label">Batch Label (optional)</Label>
+                  <Input
+                    id="table-batch-label"
+                    placeholder="e.g., Manual Beer Entry"
+                    value={batchLabel}
+                    onChange={(e) => setBatchLabel(e.target.value)}
+                    className="rounded-full"
+                  />
+                </div>
+
+                {/* Table */}
+                <div className="border rounded-xl overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[30%]">URL / Path</TableHead>
+                        <TableHead className="w-[15%]">Domain</TableHead>
+                        <TableHead className="w-[20%]">Page Type</TableHead>
+                        <TableHead className="w-[25%]">Category</TableHead>
+                        <TableHead className="w-[10%]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tableRows.map((row, index) => (
+                        <TableRow key={row.id}>
+                          <TableCell>
+                            <Input
+                              placeholder="/beers/orchard-view"
+                              value={row.urlOrPath}
+                              onChange={(e) => updateTableRow(row.id, 'urlOrPath', e.target.value)}
+                              className={`rounded-md ${validationErrors.has(`${row.id}-urlOrPath`) ? 'border-red-500' : ''}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={row.domain || undefined}
+                              onValueChange={(value) => updateTableRow(row.id, 'domain', value)}
+                            >
+                              <SelectTrigger className={`rounded-md ${validationErrors.has(`${row.id}-domain`) ? 'border-red-500' : ''}`}>
+                                <SelectValue placeholder="Select..." />
+                              </SelectTrigger>
+                              <SelectContent className="bg-background border border-border shadow-lg z-50">
+                                {DOMAIN_CONFIG.domains.map(domain => (
+                                  <SelectItem key={domain} value={domain}>{domain}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={row.page_type || undefined}
+                              onValueChange={(value) => updateTableRow(row.id, 'page_type', value)}
+                              disabled={!row.domain}
+                            >
+                              <SelectTrigger className={`rounded-md ${validationErrors.has(`${row.id}-page_type`) ? 'border-red-500' : ''}`}>
+                                <SelectValue placeholder="Select..." />
+                              </SelectTrigger>
+                              <SelectContent className="bg-background border border-border shadow-lg z-50">
+                                {getPageTypesForDomain(row.domain).map(pt => (
+                                  <SelectItem key={pt} value={pt}>{pt}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={row.category || undefined}
+                              onValueChange={(value) => updateTableRow(row.id, 'category', value)}
+                              disabled={!row.page_type}
+                            >
+                              <SelectTrigger className={`rounded-md ${validationErrors.has(`${row.id}-category`) ? 'border-red-500' : ''}`}>
+                                <SelectValue placeholder="Select..." />
+                              </SelectTrigger>
+                              <SelectContent className="bg-background border border-border shadow-lg z-50">
+                                {getCategoriesForPageType(row.page_type).map(cat => (
+                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteTableRow(row.id)}
+                              className="h-8 w-8"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Table Controls */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={addTableRow}
+                    className="rounded-full"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Row
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={clearTable}
+                    className="rounded-full"
+                  >
+                    Clear Table
+                  </Button>
+                  <div className="flex-1" />
+                  <Button
+                    onClick={handleStartTableRun}
+                    disabled={uploading}
+                    className="rounded-full"
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle className="mr-2 h-4 w-4" />
+                        Start WIZmode Run from Table
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Current Run Section */}
         {currentRun && (
           <Card className="rounded-2xl border-0 shadow-sm">
             <CardHeader>
@@ -776,12 +1103,13 @@ export default function WIZmode() {
           </Card>
         )}
 
+        {/* Past Runs Section */}
         <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader>
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Past Runs</CardTitle>
-                <CardDescription>Recent WIZmode batch processing runs</CardDescription>
+                <CardDescription>Recent WIZmode batches</CardDescription>
               </div>
               {isAdmin && (
                 <Button
@@ -797,90 +1125,84 @@ export default function WIZmode() {
             </div>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Label</TableHead>
-                  <TableHead>Total Rows</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pastRuns.map((run) => (
-                  <TableRow key={run.id}>
-                    <TableCell className="text-xs">
-                      {new Date(run.created_at).toLocaleString()}
-                    </TableCell>
-                    <TableCell>{run.label || "Unnamed"}</TableCell>
-                    <TableCell>{run.total_rows}</TableCell>
-                    <TableCell>
-                      {run.status === "completed" && (
-                        <Badge className="rounded-full bg-green-500">Completed</Badge>
-                      )}
-                      {run.status === "running" && (
-                        <Badge className="rounded-full bg-blue-500">Running</Badge>
-                      )}
-                      {run.status === "failed" && (
-                        <Badge className="rounded-full bg-red-500">Failed</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => viewRunDetails(run.id)}
-                        className="rounded-full"
-                      >
-                        View Details
-                      </Button>
-                    </TableCell>
+            <div className="border rounded-xl overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Label</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Rows</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {pastRuns.map((run) => (
+                    <TableRow key={run.id}>
+                      <TableCell className="font-medium">{run.label}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(run.created_at).toLocaleString()}
+                      </TableCell>
+                      <TableCell>{run.total_rows}</TableCell>
+                      <TableCell>
+                        {run.status === "completed" && (
+                          <Badge className="rounded-full bg-green-500">Completed</Badge>
+                        )}
+                        {run.status === "pending" && (
+                          <Badge className="rounded-full bg-gray-500">Pending</Badge>
+                        )}
+                        {run.status === "running" && (
+                          <Badge className="rounded-full bg-blue-500">Running</Badge>
+                        )}
+                        {run.status === "failed" && (
+                          <Badge className="rounded-full bg-red-500">Failed</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => viewRunDetails(run.id)}
+                        >
+                          <Eye className="mr-2 h-4 w-4" />
+                          View Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
         {/* Cleanup Dialog */}
         <AlertDialog open={cleanupDialogOpen} onOpenChange={setCleanupDialogOpen}>
-          <AlertDialogContent className="rounded-2xl">
+          <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Clean Up Old WIZmode Runs</AlertDialogTitle>
+              <AlertDialogTitle>Clean Up Old Runs</AlertDialogTitle>
               <AlertDialogDescription>
-                {oldRunsCount === 0 ? (
-                  <p>No old completed runs found (older than 30 days).</p>
-                ) : (
-                  <div className="space-y-2">
-                    <p>
-                      This will permanently delete <strong>{oldRunsCount}</strong> completed run{oldRunsCount !== 1 ? 's' : ''} older than 30 days and all their associated items.
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      This action cannot be undone. Pages created by these runs will NOT be deleted.
-                    </p>
-                  </div>
-                )}
+                This will permanently delete {oldRunsCount} completed WIZmode run{oldRunsCount !== 1 ? 's' : ''} older than 30 days, along with their run items.
+                <br /><br />
+                <strong>Note:</strong> This will NOT delete any pages - only the WIZmode run history.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={cleaningUp}>Cancel</AlertDialogCancel>
-              {oldRunsCount > 0 && (
-                <AlertDialogAction
-                  onClick={handleCleanup}
-                  disabled={cleaningUp}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  {cleaningUp ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Cleaning up...
-                    </>
-                  ) : (
-                    `Delete ${oldRunsCount} Run${oldRunsCount !== 1 ? 's' : ''}`
-                  )}
-                </AlertDialogAction>
-              )}
+              <AlertDialogAction
+                onClick={handleCleanup}
+                disabled={cleaningUp}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {cleaningUp ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  `Delete ${oldRunsCount} Run${oldRunsCount !== 1 ? 's' : ''}`
+                )}
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
