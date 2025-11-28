@@ -44,6 +44,10 @@ interface WizmodeRunItem {
   error_message: string | null;
   html_status: string;
   schema_status: string;
+  validation_status: string;
+  validation_error_count: number;
+  validation_warning_count: number;
+  validation_issues: any;
 }
 
 export default function WIZmode() {
@@ -404,9 +408,11 @@ export default function WIZmode() {
     const errors = runItems.filter((i) => i.result === "error").length;
     const htmlSuccess = runItems.filter((i) => i.html_status === "success").length;
     const schemaSuccess = runItems.filter((i) => i.schema_status === "success").length;
+    const validationValid = runItems.filter((i) => i.validation_status === "valid").length;
+    const validationInvalid = runItems.filter((i) => i.validation_status === "invalid").length;
     const completed = runItems.filter((i) => i.result !== "pending").length;
 
-    return { created, updated, skipped, errors, htmlSuccess, schemaSuccess, completed };
+    return { created, updated, skipped, errors, htmlSuccess, schemaSuccess, validationValid, validationInvalid, completed };
   };
 
   const getEstimatedTimeRemaining = () => {
@@ -618,23 +624,23 @@ export default function WIZmode() {
               })()}
 
               {summary && (
-                <div className="grid gap-4 md:grid-cols-6">
+                <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-8">
                   <Card className="rounded-xl">
                     <CardContent className="pt-6">
                       <div className="text-2xl font-bold">{summary.created}</div>
-                      <p className="text-xs text-muted-foreground">Pages Created</p>
+                      <p className="text-xs text-muted-foreground">Created</p>
                     </CardContent>
                   </Card>
                   <Card className="rounded-xl">
                     <CardContent className="pt-6">
                       <div className="text-2xl font-bold">{summary.updated}</div>
-                      <p className="text-xs text-muted-foreground">Pages Updated</p>
+                      <p className="text-xs text-muted-foreground">Updated</p>
                     </CardContent>
                   </Card>
                   <Card className="rounded-xl">
                     <CardContent className="pt-6">
                       <div className="text-2xl font-bold">{summary.skipped}</div>
-                      <p className="text-xs text-muted-foreground">Skipped (Duplicates)</p>
+                      <p className="text-xs text-muted-foreground">Skipped</p>
                     </CardContent>
                   </Card>
                   <Card className="rounded-xl">
@@ -646,13 +652,25 @@ export default function WIZmode() {
                   <Card className="rounded-xl">
                     <CardContent className="pt-6">
                       <div className="text-2xl font-bold">{summary.htmlSuccess}</div>
-                      <p className="text-xs text-muted-foreground">HTML Success</p>
+                      <p className="text-xs text-muted-foreground">HTML ✓</p>
                     </CardContent>
                   </Card>
                   <Card className="rounded-xl">
                     <CardContent className="pt-6">
                       <div className="text-2xl font-bold">{summary.schemaSuccess}</div>
-                      <p className="text-xs text-muted-foreground">Schema Success</p>
+                      <p className="text-xs text-muted-foreground">Schema ✓</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-xl">
+                    <CardContent className="pt-6">
+                      <div className="text-2xl font-bold text-green-600">{summary.validationValid}</div>
+                      <p className="text-xs text-muted-foreground">Valid</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-xl">
+                    <CardContent className="pt-6">
+                      <div className="text-2xl font-bold text-red-600">{summary.validationInvalid}</div>
+                      <p className="text-xs text-muted-foreground">Invalid</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -669,6 +687,7 @@ export default function WIZmode() {
                       <TableHead>Result</TableHead>
                       <TableHead>HTML</TableHead>
                       <TableHead>Schema</TableHead>
+                      <TableHead>Validation</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -715,6 +734,37 @@ export default function WIZmode() {
                           )}
                           {item.schema_status === "pending" && (
                             <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {item.validation_status === "valid" && (
+                            <div className="flex items-center gap-1">
+                              <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              {item.validation_warning_count > 0 && (
+                                <span className="text-xs text-yellow-600">
+                                  ({item.validation_warning_count}⚠️)
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {item.validation_status === "invalid" && (
+                            <div className="flex items-center gap-1">
+                              <XCircle className="h-4 w-4 text-red-500" />
+                              <span className="text-xs text-red-600">
+                                {item.validation_error_count}❌
+                              </span>
+                            </div>
+                          )}
+                          {item.validation_status === "pending" && (
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                          )}
+                          {item.validation_status === "skipped" && (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                          {item.validation_status === "error" && (
+                            <div title="Validation error">
+                              <AlertCircle className="h-4 w-4 text-orange-500" />
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
