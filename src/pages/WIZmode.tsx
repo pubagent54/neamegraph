@@ -1115,20 +1115,27 @@ export default function WIZmode() {
             <CardContent className="space-y-6">
               {(() => {
                 const timeEstimate = getEstimatedTimeRemaining();
+                const isCompleted = currentRun.status === "completed" || currentRun.status === "failed";
+                const completedCount = runItems.filter((i) => i.result !== "pending").length;
+                const displayProgress = isCompleted ? 100 : progress;
+                
                 return (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium">
-                        Processing row {timeEstimate?.completed || 0} of {currentRun.total_rows}
+                        {isCompleted 
+                          ? `Completed ${completedCount} of ${currentRun.total_rows} rows`
+                          : `Processing row ${completedCount} of ${currentRun.total_rows}`
+                        }
                       </span>
-                      {timeEstimate && timeEstimate.completed > 0 && (
+                      {!isCompleted && timeEstimate && timeEstimate.completed > 0 && (
                         <span className="text-sm text-muted-foreground">
                           ~{formatTime(timeEstimate.estimatedMs)} remaining
                         </span>
                       )}
                     </div>
-                    <Progress value={progress} className="h-2" />
-                    {timeEstimate && timeEstimate.completed > 0 && (
+                    <Progress value={displayProgress} className="h-2" />
+                    {!isCompleted && timeEstimate && timeEstimate.completed > 0 && (
                       <p className="text-xs text-muted-foreground">
                         Average: {formatTime(timeEstimate.avgTimePerRow)} per row
                       </p>
