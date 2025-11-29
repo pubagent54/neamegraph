@@ -37,6 +37,7 @@ import type { PageTypeDefinition, CategoryDefinition } from "@/lib/taxonomy";
 interface WizmodeRun {
   id: string;
   created_at: string;
+  updated_at: string;
   label: string | null;
   total_rows: number;
   status: string;
@@ -770,6 +771,16 @@ export default function WIZmode() {
     return `${minutes}m ${remainingSeconds}s`;
   };
 
+  const getRunDuration = (run: WizmodeRun): string => {
+    if (run.status !== "completed" && run.status !== "failed") return "—";
+    
+    const startTime = new Date(run.created_at).getTime();
+    const endTime = new Date(run.updated_at).getTime();
+    const durationMs = endTime - startTime;
+    
+    return formatTime(durationMs);
+  };
+
   const getInitialEstimate = (): string => {
     if (!estimatedRowCount) return "Unknown";
     const avgTimePerRow = 12000;
@@ -1327,6 +1338,7 @@ export default function WIZmode() {
                     <TableHead>Created</TableHead>
                     <TableHead>Rows</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Time</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1351,6 +1363,9 @@ export default function WIZmode() {
                         {run.status === "failed" && (
                           <Badge className="rounded-full bg-red-500">Failed</Badge>
                         )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {getRunDuration(run)}
                       </TableCell>
                       <TableCell>
                         <Button

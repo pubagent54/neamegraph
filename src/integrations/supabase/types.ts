@@ -684,6 +684,7 @@ export type Database = {
           label: string | null
           status: string
           total_rows: number
+          updated_at: string | null
         }
         Insert: {
           created_at?: string
@@ -692,6 +693,7 @@ export type Database = {
           label?: string | null
           status?: string
           total_rows?: number
+          updated_at?: string | null
         }
         Update: {
           created_at?: string
@@ -700,6 +702,7 @@ export type Database = {
           label?: string | null
           status?: string
           total_rows?: number
+          updated_at?: string | null
         }
         Relationships: [
           {
