@@ -317,7 +317,17 @@ export default function SettingsTaxonomy() {
         <div className="space-y-3">
           {filteredPageTypes.length === 0 ? (
             <Card className="p-8 text-center rounded-2xl border-0 shadow-sm">
-              <p className="text-muted-foreground">No page types match your filters</p>
+              {domainFilter === "Pub" ? (
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold">Pub domain is reserved</h3>
+                  <p className="text-muted-foreground max-w-md mx-auto">
+                    The Pub domain is reserved for future pub and hotel detail pages. 
+                    For now, all live pages use the Corporate and Beer domains.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No page types match your filters</p>
+              )}
             </Card>
           ) : (
             filteredPageTypes.map(pageType => (
