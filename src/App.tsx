@@ -12,6 +12,7 @@ import Pages from "./pages/Pages";
 import PageDetail from "./pages/PageDetail";
 import Rules from "./pages/Rules";
 import Settings from "./pages/Settings";
+import SettingsTaxonomy from "./pages/SettingsTaxonomy";
 import Graph from "./pages/Graph";
 import AuditLog from "./pages/AuditLog";
 import WIZmode from "./pages/WIZmode";
@@ -90,6 +91,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="admin">
                   <Settings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings/taxonomy"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <SettingsTaxonomy />
                 </ProtectedRoute>
               }
             />
