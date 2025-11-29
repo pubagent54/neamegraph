@@ -628,8 +628,9 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // Charter rule: Individual beer pages should model the beer as a Product with rich data
       // Supporting Brand node is allowed but must be lean and secondary
       // Collection pages (like /Beers) remain as ItemList/CollectionPage
+      const BEERS_COLLECTION_URL = "https://www.shepherdneame.co.uk/Beers";
       const isBeerDetailPage = page.page_type === "Beers" && page.category === "Drink Brands";
-      const isBeersCollectionPage = page.path?.toLowerCase() === "/beers";
+      const isBeersCollectionPage = canonicalUrl.toLowerCase() === BEERS_COLLECTION_URL.toLowerCase();
       
       if (isBeerDetailPage) {
         console.log("Beer detail page detected - applying Product/Brand canonicalisation");
@@ -641,6 +642,24 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         });
         
         if (pageWebPageNode) {
+          // Derive clean beer name (remove "| Shepherd Neame" suffix)
+          const deriveBeerName = () => {
+            // Prefer WebPage name without brand suffixes
+            if (pageWebPageNode.name && typeof pageWebPageNode.name === "string") {
+              return pageWebPageNode.name.replace(/\s*\|\s*Shepherd Neame\s*$/i, "").trim();
+            }
+            
+            // Fallback: slug → words
+            const slugPart = page.path?.split("/").pop() || "";
+            if (slugPart) {
+              return slugPart.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()).trim();
+            }
+            
+            return "Beer";
+          };
+          
+          const beerName = deriveBeerName();
+          
           const productId = `${canonicalUrl}#product`;
           let productNode = graph.find((node: any) => node["@id"] === productId);
           
@@ -649,7 +668,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             productNode = {
               "@type": "Product",
               "@id": productId,
-              name: pageWebPageNode.name || page.path.split('/').pop()?.replace(/-/g, ' ') || "",
+              name: beerName,
               url: canonicalUrl,
               brand: { "@id": ORG_ID },
               manufacturer: { "@id": ORG_ID }
@@ -657,6 +676,9 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             graph.push(productNode);
             console.log("✓ Created Product node for beer");
           }
+          
+          // Apply clean beer name to Product
+          productNode.name = beerName;
           
           // Find the Brand node for this beer (if any)
           const brandNode = graph.find((node: any) => {
@@ -749,13 +771,40 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             productNode.description = pageWebPageNode.description;
           }
           
-          // Add image from page metadata if not already present
-          if (!productNode.image) {
-            const imgUrl = page.hero_image_url || page.logo_url;
-            if (imgUrl) {
-              productNode.image = { "@type": "ImageObject", url: imgUrl };
+          // Prefer hero image for Product (beer photo over generic logo)
+          // Preferred image sources (in order):
+          // 1) page.hero_image_url
+          // 2) Brand image/logo
+          // 3) existing Product.image
+          // 4) final fallback: ORG_LOGO_URL
+          let chosenImageUrl: string | undefined = undefined;
+          
+          if (page.hero_image_url) {
+            chosenImageUrl = page.hero_image_url;
+          } else if (brandNode) {
+            if (typeof brandNode.image === "string") {
+              chosenImageUrl = brandNode.image;
+            } else if (brandNode.image?.url) {
+              chosenImageUrl = brandNode.image.url;
+            } else if (typeof brandNode.logo === "string") {
+              chosenImageUrl = brandNode.logo;
             }
           }
+          
+          if (!chosenImageUrl && productNode.image) {
+            chosenImageUrl = typeof productNode.image === "string"
+              ? productNode.image
+              : productNode.image.url;
+          }
+          
+          if (!chosenImageUrl) {
+            chosenImageUrl = ORG_LOGO_URL; // final fallback only
+          }
+          
+          productNode.image = {
+            "@type": "ImageObject",
+            url: chosenImageUrl
+          };
           
           console.log("✓ Enriched Product with page-backed descriptive properties");
           
@@ -764,7 +813,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             const leanBrand: any = {
               "@type": brandNode["@type"] || "Brand",
               "@id": brandNode["@id"],
-              name: brandNode.name,
+              name: beerName,
               url: brandNode.url,
               brand: brandNode.brand || { "@id": ORG_ID }
             };
@@ -797,11 +846,12 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         });
         
         if (breadcrumbNode && breadcrumbNode.itemListElement) {
-          // Normalize breadcrumbs: Home → Beers → Beer name
-          // Beer detail breadcrumbs are standardised onto /beers collection
-          const beerName = graph.find((n: any) => n["@id"] === `${canonicalUrl}#product`)?.name || 
+          // Get cleaned beer name from Product node
+          const productNode = graph.find((n: any) => n["@id"] === `${canonicalUrl}#product`);
+          const beerName = productNode?.name || 
                           canonicalUrl.split('/').pop()?.replace(/-/g, ' ') || "Beer";
           
+          // Normalize breadcrumbs: Home → Beers (canonical URL) → Beer name (clean)
           breadcrumbNode.itemListElement = [
             {
               "@type": "ListItem",
@@ -813,7 +863,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
               "@type": "ListItem",
               position: 2,
               name: "Beers",
-              item: "https://www.shepherdneame.co.uk/beers"
+              item: BEERS_COLLECTION_URL
             },
             {
               "@type": "ListItem",
