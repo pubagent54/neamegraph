@@ -674,6 +674,25 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
               productNode.sameAs = [`https://www.wikidata.org/wiki/${page.wikidata_qid}`];
             }
             
+            // ========================================
+            // Page-backed descriptive enhancements
+            // ----------------------------------------
+            // Add tasting notes and other descriptive properties
+            // sourced from page data. Intentionally avoid prices,
+            // ratings, and invented data to keep Product schema
+            // descriptive rather than transactional.
+            // ========================================
+            
+            // Add tasting notes from page.notes if available
+            if (page.notes && page.notes.trim()) {
+              productNode.additionalProperty = productNode.additionalProperty || [];
+              productNode.additionalProperty.push({
+                "@type": "PropertyValue",
+                "name": "Tasting notes",
+                "value": page.notes.trim()
+              });
+            }
+            
             graph.push(productNode);
             console.log("✓ Created Product node for beer");
           } else {
@@ -714,6 +733,63 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           if (brandNodesToRemove.length > 0) {
             console.log(`✓ Removed ${brandNodesToRemove.length} Brand node(s) (replaced with Product)`);
           }
+        }
+      }
+      
+      // STEP 7: Update /Beers collection ItemList to reference Product nodes by @id
+      // ----------------------------------------
+      // For the /Beers collection page, update the ItemList items to reference
+      // individual beer Product nodes by @id instead of standalone Brand blobs.
+      // This strengthens internal graph connectivity.
+      // ----------------------------------------
+      const isBeersCollectionPage = page.path?.toLowerCase() === "/beers";
+      
+      if (isBeersCollectionPage) {
+        console.log("/Beers collection page detected - updating ItemList to reference Products");
+        
+        // Find the ItemList node for beers
+        const itemListNode = graph.find((node: any) => {
+          const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+          return types.includes("ItemList");
+        });
+        
+        if (itemListNode && itemListNode.itemListElement && Array.isArray(itemListNode.itemListElement)) {
+          console.log(`Found ItemList with ${itemListNode.itemListElement.length} items`);
+          
+          // Build a set of existing Product node @ids for validation
+          const existingProductIds = new Set(
+            graph
+              .filter((node: any) => {
+                const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+                return types.includes("Product");
+              })
+              .map((node: any) => node["@id"])
+              .filter((id: any) => typeof id === "string")
+          );
+          
+          // Update each list item
+          let updatedCount = 0;
+          itemListNode.itemListElement.forEach((listItem: any) => {
+            if (listItem.item && listItem.item.url) {
+              // Derive the expected Product @id from the item URL
+              const itemUrl = listItem.item.url;
+              const expectedProductId = `${itemUrl}#product`;
+              
+              // Check if a Product node with this @id exists
+              if (existingProductIds.has(expectedProductId)) {
+                // Replace the full Brand object with an @id reference
+                listItem.item = { "@id": expectedProductId };
+                updatedCount++;
+              } else {
+                // Fallback: keep existing Brand node if Product doesn't exist
+                console.log(`⚠ Product node not found for ${expectedProductId}, keeping Brand`);
+              }
+            }
+          });
+          
+          console.log(`✓ Updated ${updatedCount} ItemList items to reference Product nodes by @id`);
+        } else {
+          console.log("⚠ No ItemList found on /Beers page");
         }
       }
       
