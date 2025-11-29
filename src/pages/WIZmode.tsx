@@ -63,9 +63,9 @@ interface WizmodeRunItem {
 interface TableRow {
   id: string;
   urlOrPath: string;
-  domain: string | null;
-  page_type: string | null;
-  category: string | null;
+  domain: string;
+  page_type: string;
+  category: string;
 }
 
 export default function WIZmode() {
@@ -94,7 +94,7 @@ export default function WIZmode() {
 
   // Table mode state
   const [tableRows, setTableRows] = useState<TableRow[]>([
-    { id: crypto.randomUUID(), urlOrPath: '', domain: null, page_type: null, category: null }
+    { id: crypto.randomUUID(), urlOrPath: '', domain: '', page_type: '', category: '' }
   ]);
   const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
 
@@ -233,13 +233,13 @@ export default function WIZmode() {
   };
 
   // Helper to get page types for a domain
-  const getPageTypesForDomain = (domain: string | null): PageTypeDefinition[] => {
+  const getPageTypesForDomain = (domain: string): PageTypeDefinition[] => {
     if (!domain) return [];
     return allPageTypes.filter(pt => pt.domain === domain && pt.active);
   };
 
   // Helper to get categories for a page type
-  const getCategoriesForPageType = (pageTypeId: string | null): CategoryDefinition[] => {
+  const getCategoriesForPageType = (pageTypeId: string): CategoryDefinition[] => {
     if (!pageTypeId) return [];
     return allCategories.filter(cat => cat.page_type_id === pageTypeId && cat.active);
   };
@@ -429,9 +429,9 @@ export default function WIZmode() {
     setTableRows([...tableRows, {
       id: crypto.randomUUID(),
       urlOrPath: '',
-      domain: null,
-      page_type: null,
-      category: null,
+      domain: '',
+      page_type: '',
+      category: '',
     }]);
   };
 
@@ -441,9 +441,9 @@ export default function WIZmode() {
       setTableRows([{
         id: crypto.randomUUID(),
         urlOrPath: '',
-        domain: null,
-        page_type: null,
-        category: null,
+        domain: '',
+        page_type: '',
+        category: '',
       }]);
     } else {
       setTableRows(tableRows.filter(row => row.id !== id));
@@ -456,9 +456,9 @@ export default function WIZmode() {
     setTableRows([{
       id: crypto.randomUUID(),
       urlOrPath: '',
-      domain: null,
-      page_type: null,
-      category: null,
+      domain: '',
+      page_type: '',
+      category: '',
     }]);
     setValidationErrors(new Set());
   };
@@ -471,10 +471,10 @@ export default function WIZmode() {
       
       // Reset dependent fields when parent changes
       if (field === 'domain') {
-        updated.page_type = null;
-        updated.category = null;
+        updated.page_type = '';
+        updated.category = '';
       } else if (field === 'page_type') {
-        updated.category = null;
+        updated.category = '';
       }
       
       return updated;
@@ -484,14 +484,14 @@ export default function WIZmode() {
     setValidationErrors(new Set([...validationErrors].filter(err => !err.startsWith(`${id}-${field}`))));
   };
 
-  const matchValueCaseInsensitive = (value: string, options: { id: string; label: string }[]): string | null => {
-    if (!value) return null;
+  const matchValueCaseInsensitive = (value: string, options: { id: string; label: string }[]): string => {
+    if (!value) return '';
     const normalized = value.trim().toLowerCase();
     const matched = options.find(opt => 
       opt.id.toLowerCase() === normalized || 
       opt.label.toLowerCase() === normalized
     );
-    return matched ? matched.id : null;
+    return matched ? matched.id : '';
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -518,9 +518,9 @@ export default function WIZmode() {
       updatedRows.push({
         id: crypto.randomUUID(),
         urlOrPath: '',
-        domain: null,
-        page_type: null,
-        category: null,
+        domain: '',
+        page_type: '',
+        category: '',
       });
     }
 
@@ -537,11 +537,11 @@ export default function WIZmode() {
       // Column 2: Domain
       if (cells[1]) {
         const matchedDomain = domains.find(d => d.toLowerCase() === cells[1].trim().toLowerCase());
-        row.domain = matchedDomain || null;
+        row.domain = matchedDomain || '';
         // Reset dependent fields if domain changes
         if (!matchedDomain) {
-          row.page_type = null;
-          row.category = null;
+          row.page_type = '';
+          row.category = '';
         }
       }
 
@@ -552,7 +552,7 @@ export default function WIZmode() {
         row.page_type = matchedPageType;
         // Reset category if page type changes
         if (!matchedPageType) {
-          row.category = null;
+          row.category = '';
         }
       }
 
@@ -988,9 +988,9 @@ export default function WIZmode() {
                                 className={`rounded-md ${validationErrors.has(`${row.id}-urlOrPath`) ? 'border-red-500' : ''}`}
                               />
                             </TableCell>
-                            <TableCell>
+                             <TableCell>
                               <Select
-                                value={row.domain || undefined}
+                                value={row.domain || ""}
                                 onValueChange={(value) => updateTableRow(row.id, 'domain', value)}
                                 disabled={taxonomyLoading}
                               >
@@ -1004,9 +1004,9 @@ export default function WIZmode() {
                                 </SelectContent>
                               </Select>
                             </TableCell>
-                            <TableCell>
+                             <TableCell>
                               <Select
-                                value={row.page_type || undefined}
+                                value={row.page_type || ""}
                                 onValueChange={(value) => updateTableRow(row.id, 'page_type', value)}
                                 disabled={!row.domain || taxonomyLoading}
                               >
@@ -1020,9 +1020,9 @@ export default function WIZmode() {
                                 </SelectContent>
                               </Select>
                             </TableCell>
-                            <TableCell>
+                             <TableCell>
                               <Select
-                                value={row.category || undefined}
+                                value={row.category || ""}
                                 onValueChange={(value) => updateTableRow(row.id, 'category', value)}
                                 disabled={!row.page_type || taxonomyLoading}
                               >
