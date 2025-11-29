@@ -40,11 +40,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { usePageTypes, useCategories } from "@/hooks/use-taxonomy";
 import { getDomains } from "@/lib/taxonomy";
 
+interface RuleBackup {
+  content: string;
+  timestamp: string;
+}
+
 interface Rule {
   id: string;
   name: string;
   body: string;
-  rules_backup: string | null;
+  rules_backup: RuleBackup[] | null;
   is_active: boolean;
   created_at: string;
   created_by_user_id: string | null;
@@ -96,7 +101,12 @@ export default function Rules() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setRules(data || []);
+      // Cast rules_backup from Json to RuleBackup[]
+      const rulesWithTypedBackups = (data || []).map(rule => ({
+        ...rule,
+        rules_backup: (rule.rules_backup as unknown as RuleBackup[]) || null
+      }));
+      setRules(rulesWithTypedBackups);
     } catch (error) {
       console.error("Error fetching rules:", error);
       toast.error("Failed to fetch rules");
@@ -110,7 +120,16 @@ export default function Rules() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (editingRule) {
-        // Before updating, backup the current body
+        // Rotate backups: keep last 3 versions
+        const existingBackups = editingRule.rules_backup || [];
+        const newBackup: RuleBackup = {
+          content: editingRule.body,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Add current content as newest backup and keep only last 3
+        const updatedBackups = [newBackup, ...existingBackups].slice(0, 3);
+
         const { error } = await supabase
           .from("rules")
           .update({ 
@@ -120,7 +139,7 @@ export default function Rules() {
             category: formData.category || null,
             domain: formData.domain || null,
             is_active: formData.is_active,
-            rules_backup: editingRule.body // Backup current rules before updating
+            rules_backup: updatedBackups as any // Cast to any for Supabase Json type
           })
           .eq("id", editingRule.id);
 
@@ -645,6 +664,58 @@ export default function Rules() {
             <Button onClick={handleSave} className="w-full rounded-full">
               Save Rule
             </Button>
+
+            {/* Backup history - show last 3 versions */}
+            {editingRule && editingRule.rules_backup && editingRule.rules_backup.length > 0 && (
+              <div className="pt-4 border-t space-y-3">
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-xl justify-between"
+                      type="button"
+                    >
+                      <span className="text-sm font-medium">
+                        View previous versions ({editingRule.rules_backup.length})
+                      </span>
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-3 space-y-3">
+                    {editingRule.rules_backup.map((backup, index) => (
+                      <div 
+                        key={index}
+                        className="rounded-xl border bg-muted/30 p-4 space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Version from {new Date(backup.timestamp).toLocaleString()}
+                          </p>
+                          {isAdmin && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm(`Restore this version from ${new Date(backup.timestamp).toLocaleString()}?`)) {
+                                  setFormData({ ...formData, body: backup.content });
+                                  toast.success("Version restored to editor");
+                                }
+                              }}
+                              className="rounded-full h-7 text-xs"
+                            >
+                              Restore
+                            </Button>
+                          )}
+                        </div>
+                        <pre className="text-xs font-mono bg-background/50 rounded-lg p-3 overflow-x-auto max-h-[200px] overflow-y-auto">
+                          {backup.content}
+                        </pre>
+                      </div>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

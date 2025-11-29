@@ -419,7 +419,7 @@ export type Database = {
           is_active: boolean
           name: string
           page_type: string | null
-          rules_backup: string | null
+          rules_backup: Json | null
         }
         Insert: {
           body: string
@@ -431,7 +431,7 @@ export type Database = {
           is_active?: boolean
           name: string
           page_type?: string | null
-          rules_backup?: string | null
+          rules_backup?: Json | null
         }
         Update: {
           body?: string
@@ -443,7 +443,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           page_type?: string | null
-          rules_backup?: string | null
+          rules_backup?: Json | null
         }
         Relationships: [
           {
