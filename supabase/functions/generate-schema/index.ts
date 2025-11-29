@@ -606,6 +606,8 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
 
       console.log("v2 Schema generation completed successfully");
 
+      // charterWarnings is derived from the Schema Quality Charter checks and is used by the UI
+      // to show Charter compliance per schema run. Empty array if no warnings.
       return new Response(
         JSON.stringify({
           success: true,
@@ -618,6 +620,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             page_type: matchedRule.page_type,
             category: matchedRule.category,
           },
+          charterWarnings, // String array of Charter compliance warnings
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
