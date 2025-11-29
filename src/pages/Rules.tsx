@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Edit2, Plus, Trash2, FileText, ExternalLink, Layers } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -63,7 +64,8 @@ export default function Rules() {
     body: "", 
     page_type: "",
     category: "",
-    domain: ""
+    domain: "",
+    is_active: true
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [ruleToDelete, setRuleToDelete] = useState<Rule | null>(null);
@@ -117,6 +119,7 @@ export default function Rules() {
             page_type: formData.page_type || null,
             category: formData.category || null,
             domain: formData.domain || null,
+            is_active: formData.is_active,
             rules_backup: editingRule.body // Backup current rules before updating
           })
           .eq("id", editingRule.id);
@@ -142,7 +145,7 @@ export default function Rules() {
 
       setDialogOpen(false);
       setEditingRule(null);
-      setFormData({ name: "", body: "", page_type: "", category: "", domain: "" });
+      setFormData({ name: "", body: "", page_type: "", category: "", domain: "", is_active: true });
       fetchRules();
     } catch (error) {
       console.error("Error saving rule:", error);
@@ -178,6 +181,7 @@ export default function Rules() {
       page_type: rule.page_type || "",
       category: rule.category || "",
       domain: rule.domain || "",
+      is_active: rule.is_active,
     });
     setEditingRule(rule);
     setDialogOpen(true);
@@ -267,7 +271,8 @@ export default function Rules() {
                         body: `# ${domain} Schema Generation Prompt\n\nYou will generate JSON-LD schema for ${domain} pages.\n\nContext provided:\n- domain: ${domain}\n- pageType: (will be provided)\n- category: (will be provided)\n\nUse this context to adapt schema generation behavior. Follow the Schema Quality Charter principles.\n\n## Instructions\n\nTODO: Add specific instructions for ${domain} schema generation.`, 
                         page_type: "",
                         category: "",
-                        domain: domain
+                        domain: domain,
+                        is_active: true
                       });
                       setEditingRule(null);
                       setDialogOpen(true);
@@ -392,7 +397,7 @@ export default function Rules() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setFormData({ name: "", body: "", page_type: "", category: "", domain: "" });
+                          setFormData({ name: "", body: "", page_type: "", category: "", domain: "", is_active: true });
                           setEditingRule(null);
                           setDialogOpen(true);
                         }}
@@ -518,6 +523,24 @@ export default function Rules() {
                 }
                 placeholder="e.g., Corporate Schema Prompt v1.1"
                 className="rounded-xl"
+              />
+            </div>
+            
+            <div className="flex items-center justify-between p-4 rounded-xl border bg-muted/20">
+              <div className="space-y-0.5">
+                <Label htmlFor="is_active" className="text-base font-medium">
+                  Active Rule
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Enable this rule for schema generation. Disabled rules are ignored.
+                </p>
+              </div>
+              <Switch
+                id="is_active"
+                checked={formData.is_active}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, is_active: checked })
+                }
               />
             </div>
             
