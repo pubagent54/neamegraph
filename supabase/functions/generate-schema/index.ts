@@ -412,6 +412,97 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       }
 
       // ========================================
+      // SCHEMA QUALITY CHARTER VALIDATION
+      // ----------------------------------------
+      // Apply global quality rules from Schema Quality Charter (docs/schema-quality-charter.md)
+      // These checks are derived from src/config/schemaQualityRules.ts
+      // Violations are logged as warnings but do not block schema generation
+      // ========================================
+      const charterWarnings: string[] = [];
+      const graph = v2Jsonld["@graph"] || [];
+
+      // Rule: mustLinkToCanonicalOrg
+      // Check for canonical Organization node
+      const hasOrgNode = graph.some((node: any) =>
+        node["@id"] === "https://www.shepherdneame.co.uk/#organization"
+      );
+      if (!hasOrgNode) {
+        charterWarnings.push("CHARTER VIOLATION: Missing canonical Organization node (@id: https://www.shepherdneame.co.uk/#organization)");
+      } else {
+        // Check that key entities link to Organization
+        const hasOrgReferences = graph.some((node: any) =>
+          node.publisher === "https://www.shepherdneame.co.uk/#organization" ||
+          node.manufacturer === "https://www.shepherdneame.co.uk/#organization" ||
+          node.parentOrganization === "https://www.shepherdneame.co.uk/#organization" ||
+          node.brand === "https://www.shepherdneame.co.uk/#organization"
+        );
+        if (!hasOrgReferences) {
+          charterWarnings.push("CHARTER WARNING: No entities link to the canonical Organization node");
+        }
+      }
+
+      // Rule: mustLinkToWebsite
+      // Check that WebPage nodes link to WebSite via isPartOf
+      const webPageNodes = graph.filter((node: any) => {
+        const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+        return types.some((t: string) => t.includes("Page"));
+      });
+      const hasWebsiteLink = webPageNodes.every((node: any) =>
+        node.isPartOf === "https://www.shepherdneame.co.uk/#website" ||
+        (typeof node.isPartOf === "object" && node.isPartOf?.["@id"] === "https://www.shepherdneame.co.uk/#website")
+      );
+      if (webPageNodes.length > 0 && !hasWebsiteLink) {
+        charterWarnings.push("CHARTER WARNING: Not all WebPage nodes link to the main Website via isPartOf");
+      }
+
+      // Rule: requireVisibleFAQForFAQSchema
+      // Check if FAQ schema is present when faq_mode is not 'auto' or has_faq is false
+      const hasFAQSchema = graph.some((node: any) => {
+        const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+        return types.includes("FAQPage") || types.includes("Question");
+      });
+      if (hasFAQSchema && (page.faq_mode === "ignore" || !page.has_faq)) {
+        charterWarnings.push("CHARTER WARNING: FAQ schema present but FAQ mode is disabled or no FAQ content detected");
+      }
+
+      // Rule: enforceStableIds
+      // Check for duplicate @id values
+      const seenIds = new Set<string>();
+      const duplicateIds: string[] = [];
+      graph.forEach((node: any) => {
+        if (node["@id"]) {
+          if (seenIds.has(node["@id"])) {
+            duplicateIds.push(node["@id"]);
+          } else {
+            seenIds.add(node["@id"]);
+          }
+        }
+      });
+      if (duplicateIds.length > 0) {
+        charterWarnings.push(`CHARTER VIOLATION: Duplicate @id values found: ${duplicateIds.join(", ")}`);
+      }
+
+      // Rule: oneMainEntityPerPage
+      // Count WebPage nodes with mainEntity or about properties
+      const webPagesWithMainEntity = webPageNodes.filter((node: any) =>
+        node.mainEntity || node.about
+      );
+      if (webPagesWithMainEntity.length > 1) {
+        charterWarnings.push("CHARTER WARNING: Multiple WebPage nodes with mainEntity/about detected - page may have competing primary entities");
+      }
+
+      // Log all Charter warnings
+      if (charterWarnings.length > 0) {
+        console.warn("=== Schema Quality Charter Warnings ===");
+        charterWarnings.forEach((warning) => console.warn(warning));
+        console.warn("=======================================");
+        console.warn(`Charter compliance: ${charterWarnings.filter(w => w.includes("VIOLATION")).length} violations, ${charterWarnings.filter(w => w.includes("WARNING")).length} warnings`);
+        console.warn("See docs/schema-quality-charter.md for quality standards");
+      } else {
+        console.log("✓ Schema Quality Charter: All checks passed");
+      }
+
+      // ========================================
       // WIKIDATA SAMEAS INJECTION
       // ----------------------------------------
       // If this is a Beer page with a wikidata_qid, inject the sameAs URL
