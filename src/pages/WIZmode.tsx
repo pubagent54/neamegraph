@@ -580,44 +580,52 @@ export default function WIZmode() {
         return;
       }
 
+      let rowHasErrors = false;
+
       // Check required fields
       if (!row.urlOrPath.trim()) {
         errors.push(`Row ${index + 1}: URL/Path is required`);
         newValidationErrors.add(`${row.id}-urlOrPath`);
+        rowHasErrors = true;
       }
       if (!row.domain) {
         errors.push(`Row ${index + 1}: Domain is required`);
         newValidationErrors.add(`${row.id}-domain`);
+        rowHasErrors = true;
       } else if (!domains.includes(row.domain)) {
         errors.push(`Row ${index + 1}: Invalid domain "${row.domain}"`);
         newValidationErrors.add(`${row.id}-domain`);
+        rowHasErrors = true;
       }
       
       if (!row.page_type) {
         errors.push(`Row ${index + 1}: Page Type is required`);
         newValidationErrors.add(`${row.id}-page_type`);
+        rowHasErrors = true;
       } else if (row.domain) {
         const validPageTypes = getPageTypesForDomain(row.domain);
         if (!validPageTypes.find(pt => pt.id === row.page_type)) {
           errors.push(`Row ${index + 1}: Invalid page type "${row.page_type}" for domain "${row.domain}"`);
           newValidationErrors.add(`${row.id}-page_type`);
+          rowHasErrors = true;
         }
       }
       
       if (!row.category) {
         errors.push(`Row ${index + 1}: Category is required`);
         newValidationErrors.add(`${row.id}-category`);
+        rowHasErrors = true;
       } else if (row.page_type) {
         const validCategories = getCategoriesForPageType(row.page_type);
         if (!validCategories.find(cat => cat.id === row.category)) {
           errors.push(`Row ${index + 1}: Invalid category "${row.category}" for page type "${row.page_type}"`);
           newValidationErrors.add(`${row.id}-category`);
+          rowHasErrors = true;
         }
       }
 
-      // If all required fields present and valid, add to valid rows
-      if (row.urlOrPath.trim() && row.domain && row.page_type && row.category && 
-          newValidationErrors.size === validRows.length * 4) { // No new errors for this row
+      // If row has no errors, add to valid rows
+      if (!rowHasErrors) {
         const normalizedPathValue = normalizePath(row.urlOrPath);
         validRows.push({
           row_number: index + 1,
