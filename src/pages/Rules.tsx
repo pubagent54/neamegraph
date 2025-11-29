@@ -666,7 +666,7 @@ export default function Rules() {
             </Button>
 
             {/* Backup history - show last 3 versions */}
-            {editingRule && editingRule.rules_backup && editingRule.rules_backup.length > 0 && (
+            {editingRule && Array.isArray(editingRule.rules_backup) && editingRule.rules_backup.length > 0 && (
               <div className="pt-4 border-t space-y-3">
                 <Collapsible>
                   <CollapsibleTrigger asChild>
