@@ -480,9 +480,11 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       
       // STEP 2: Fix isPartOf on all WebPage nodes
       // Charter rule: WebPage nodes must link to WebSite via isPartOf, not Organization
+      // NOTE: This filter only matches primary WebPage nodes, not specialized types like FAQPage
+      // to avoid false positives in Charter validation (e.g. WebPage + FAQPage is a valid pattern)
       let webPageNodes = graph.filter((node: any) => {
         const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
-        return types.some((t: string) => t && t.includes("Page"));
+        return types.includes("WebPage");
       });
       
       webPageNodes.forEach((node: any) => {
@@ -533,6 +535,56 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         if (removedCount > 0) {
           console.log(`✓ Removed ${removedCount} FAQ-related node(s) (no real FAQ content)`);
         }
+      }
+      
+      // STEP 5: Clean up dangling hasPart references
+      // Prevent validation errors like "hasPart references non-existent node .../Beers#brewery-faq"
+      // This can happen when FAQ nodes are removed but hasPart still references them
+      const existingIds = new Set(
+        graph
+          .map((node: any) => node["@id"])
+          .filter((id: any) => typeof id === "string")
+      );
+      
+      const cleanHasPart = (value: any) => {
+        if (!value) return undefined;
+        
+        const toIds = (v: any): string[] => {
+          if (!v) return [];
+          if (typeof v === "string") return [v];
+          if (Array.isArray(v)) return v.flatMap(toIds);
+          if (typeof v === "object" && v["@id"]) return [v["@id"]];
+          return [];
+        };
+        
+        const ids = toIds(value).filter((id) => existingIds.has(id));
+        
+        if (ids.length === 0) return undefined;
+        
+        if (Array.isArray(value)) {
+          // Return array of objects with @id
+          return ids.map((id) => ({ "@id": id }));
+        }
+        
+        // Single reference: return as object with @id
+        return { "@id": ids[0] };
+      };
+      
+      let cleanedHasPartCount = 0;
+      graph.forEach((node: any) => {
+        if (node.hasPart) {
+          const cleaned = cleanHasPart(node.hasPart);
+          if (cleaned) {
+            node.hasPart = cleaned;
+          } else {
+            delete node.hasPart;
+            cleanedHasPartCount++;
+          }
+        }
+      });
+      
+      if (cleanedHasPartCount > 0) {
+        console.log(`✓ Cleaned ${cleanedHasPartCount} dangling hasPart reference(s)`);
       }
       
       // Update the graph in the jsonld object
@@ -606,7 +658,9 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       }
 
       // Rule: oneMainEntityPerPage
-      // Count WebPage nodes with mainEntity or about properties
+      // Count primary WebPage nodes with mainEntity or about properties
+      // NOTE: This only checks true WebPage nodes, not specialized types like FAQPage
+      // A WebPage + FAQPage combination is valid and should not trigger this warning
       const webPagesWithMainEntity = webPageNodes.filter((node: any) =>
         node.mainEntity || node.about
       );
