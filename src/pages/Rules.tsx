@@ -133,6 +133,7 @@ export default function Rules() {
             category: formData.category || null,
             domain: formData.domain || null,
             created_by_user_id: user?.id,
+            is_active: true,
           });
 
         if (error) throw error;
