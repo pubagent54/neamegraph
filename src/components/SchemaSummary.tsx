@@ -356,7 +356,11 @@ export function SchemaSummary({ jsonld, section, createdAt, status }: SchemaSumm
             ) : (
               <Circle className="h-4 w-4 text-amber-600" />
             )}
-            <span>Corporate vs commerce separation respected</span>
+            <span>
+              {summary.validation.noCommerceSchema 
+                ? "Corporate vs commerce separation respected – descriptive Product schema allowed, no offers or prices" 
+                : "Corporate vs commerce issue – this page includes offers, prices, or other e-commerce fields"}
+            </span>
           </div>
         </div>
       </div>
@@ -390,7 +394,7 @@ function renderHowFits(summary: any, section?: string | null): string {
   const sectionName = section || "the site";
 
   if (summary.keyFacts?.type === "beer") {
-    return `This page sits in the beers section of the Shepherd Neame site and marks ${entityName} as one of the brewery's beer brands. In the schema it links back to Shepherd Neame Limited as the parent organisation and into the Shepherd Neame beers collection, so search engines can see it as part of the wider range rather than an isolated product page.`;
+    return `This page sits in the beers section of the Shepherd Neame site and marks ${entityName} as one of the brewery's products. In the schema it's modelled as a descriptive Product (not a shop listing) and links back to Shepherd Neame Limited as the manufacturer and brand owner, and into the Shepherd Neame beers collection, so search engines can see it as part of the wider range rather than an isolated product page.`;
   }
 
   if (summary.keyFacts?.type === "article") {
@@ -404,7 +408,7 @@ function renderHowFits(summary: any, section?: string | null): string {
 // Helper function to render "Why this is safe and useful"
 function renderWhySafe(summary: any): string {
   if (summary.keyFacts?.type === "beer") {
-    return `For this beer brand, the schema sticks to what's clearly on the page: the brand name, its place in the beers collection, key details like style, colour, ABV and flavour notes, plus any provenance or awards that are explicitly mentioned. It avoids any price, SKU or ecommerce-style data, so search engines see this as a corporate brand page, not a sales listing. That gives AI and search a rich, trustworthy view of the beer without over-claiming.`;
+    return `For this beer, the schema models it as a Product (with supporting Brand references) but keeps it descriptive rather than transactional. It sticks to what's clearly on the page: the name, its place in the beers collection, key details like style, colour, ABV and flavour notes, plus any provenance or awards that are explicitly mentioned. It avoids any offers, prices, cart data or stock information, so search engines see this as a descriptive product page, not a sales listing. That gives AI and search a rich, trustworthy view of the beer without over-claiming or implying e-commerce.`;
   }
 
   if (summary.keyFacts?.type === "article") {

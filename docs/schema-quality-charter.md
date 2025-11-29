@@ -111,7 +111,9 @@ If the page contains a Q&A block, generate an `FAQPage` / `FAQ` node that matche
 
 ### 5.2 Beers
 
-* Use `Product` with `brand` and `manufacturer`
+* Use `Product` with `brand` and `manufacturer` for descriptive purposes
+* Corporate pages may use `Product` to describe beers and other non-transactional entities, but must remain non-e-commerce: **no offers, prices, carts, or stock data**
+* Beers should be represented as `Product` entities (and may also include supporting `Brand` nodes where helpful) for rich factual description
 * Should include where available:
 
   * `name`, `description`
