@@ -412,14 +412,107 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       }
 
       // ========================================
+      // SCHEMA QUALITY CHARTER ENFORCEMENT
+      // ----------------------------------------
+      // Post-process the AI-generated JSON-LD to enforce Charter rules:
+      // 1. Always emit a proper WebSite node
+      // 2. Make all WebPage nodes point to WebSite via isPartOf (not Organization)
+      // 3. Ensure publisher correctly links back to canonical Organization
+      // 4. Only emit FAQ schema when there is real on-page FAQ content
+      // See docs/schema-quality-charter.md for quality standards
+      // ========================================
+      const graph = v2Jsonld["@graph"] || [];
+      let charterWarnings: string[] = [];
+      
+      // STEP 1: Ensure canonical WebSite node exists
+      // Required by Charter: single WebSite node that all WebPage nodes link to
+      const websiteId = "https://www.shepherdneame.co.uk/#website";
+      const orgId = "https://www.shepherdneame.co.uk/#organization";
+      
+      let websiteNode = graph.find((node: any) => node["@id"] === websiteId);
+      
+      if (!websiteNode) {
+        // Create the canonical WebSite node
+        websiteNode = {
+          "@type": "WebSite",
+          "@id": websiteId,
+          "url": "https://www.shepherdneame.co.uk",
+          "name": "Shepherd Neame",
+          "publisher": { "@id": orgId }
+        };
+        graph.push(websiteNode);
+        console.log("✓ Added canonical WebSite node");
+      } else {
+        // Ensure existing WebSite has correct publisher
+        websiteNode.publisher = { "@id": orgId };
+        console.log("✓ Updated existing WebSite node");
+      }
+      
+      // STEP 2: Fix isPartOf on all WebPage nodes
+      // Charter rule: WebPage nodes must link to WebSite via isPartOf, not Organization
+      let webPageNodes = graph.filter((node: any) => {
+        const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+        return types.some((t: string) => t && t.includes("Page"));
+      });
+      
+      webPageNodes.forEach((node: any) => {
+        // Set isPartOf to WebSite (not Organization)
+        node.isPartOf = { "@id": websiteId };
+      });
+      
+      if (webPageNodes.length > 0) {
+        console.log(`✓ Fixed isPartOf for ${webPageNodes.length} WebPage node(s)`);
+      }
+      
+      // STEP 3: Ensure WebPage nodes have publisher linking to Organization
+      // Charter rule: key entities must explicitly link back to canonical Organization
+      webPageNodes.forEach((node: any) => {
+        if (!node.publisher) {
+          node.publisher = { "@id": orgId };
+        } else if (typeof node.publisher === "string") {
+          // Normalize string to object form
+          node.publisher = { "@id": orgId };
+        }
+      });
+      
+      console.log(`✓ Ensured publisher on ${webPageNodes.length} WebPage node(s)`);
+      
+      // STEP 4: Remove FAQ schema if not appropriate
+      // Charter rule: FAQ schema only when real on-page FAQ content exists
+      const shouldHaveFAQ = page.has_faq === true && page.faq_mode !== "ignore";
+      
+      if (!shouldHaveFAQ) {
+        // Remove any FAQPage, Question, or Answer nodes
+        const beforeLength = graph.length;
+        for (let i = graph.length - 1; i >= 0; i--) {
+          const node = graph[i];
+          const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+          
+          if (types.includes("FAQPage") || types.includes("Question") || types.includes("Answer")) {
+            graph.splice(i, 1);
+          } else if (Array.isArray(node["@type"]) && node["@type"].includes("FAQPage")) {
+            // Remove FAQPage from type array if present with other types
+            node["@type"] = node["@type"].filter((t: string) => t !== "FAQPage");
+            if (node["@type"].length === 0) {
+              graph.splice(i, 1);
+            }
+          }
+        }
+        
+        const removedCount = beforeLength - graph.length;
+        if (removedCount > 0) {
+          console.log(`✓ Removed ${removedCount} FAQ-related node(s) (no real FAQ content)`);
+        }
+      }
+      
+      // Update the graph in the jsonld object
+      v2Jsonld["@graph"] = graph;
+      
+      // ========================================
       // SCHEMA QUALITY CHARTER VALIDATION
       // ----------------------------------------
-      // Apply global quality rules from Schema Quality Charter (docs/schema-quality-charter.md)
-      // These checks are derived from src/config/schemaQualityRules.ts
-      // Violations are logged as warnings but do not block schema generation
+      // Validate that enforcements worked correctly
       // ========================================
-      const charterWarnings: string[] = [];
-      const graph = v2Jsonld["@graph"] || [];
 
       // Rule: mustLinkToCanonicalOrg
       // Check for canonical Organization node
@@ -429,12 +522,16 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       if (!hasOrgNode) {
         charterWarnings.push("CHARTER VIOLATION: Missing canonical Organization node (@id: https://www.shepherdneame.co.uk/#organization)");
       } else {
-        // Check that key entities link to Organization
+        // Check that key entities link to Organization (string or object form)
         const hasOrgReferences = graph.some((node: any) =>
           node.publisher === "https://www.shepherdneame.co.uk/#organization" ||
+          (typeof node.publisher === "object" && node.publisher?.["@id"] === "https://www.shepherdneame.co.uk/#organization") ||
           node.manufacturer === "https://www.shepherdneame.co.uk/#organization" ||
+          (typeof node.manufacturer === "object" && node.manufacturer?.["@id"] === "https://www.shepherdneame.co.uk/#organization") ||
           node.parentOrganization === "https://www.shepherdneame.co.uk/#organization" ||
-          node.brand === "https://www.shepherdneame.co.uk/#organization"
+          (typeof node.parentOrganization === "object" && node.parentOrganization?.["@id"] === "https://www.shepherdneame.co.uk/#organization") ||
+          node.brand === "https://www.shepherdneame.co.uk/#organization" ||
+          (typeof node.brand === "object" && node.brand?.["@id"] === "https://www.shepherdneame.co.uk/#organization")
         );
         if (!hasOrgReferences) {
           charterWarnings.push("CHARTER WARNING: No entities link to the canonical Organization node");
@@ -442,11 +539,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       }
 
       // Rule: mustLinkToWebsite
-      // Check that WebPage nodes link to WebSite via isPartOf
-      const webPageNodes = graph.filter((node: any) => {
-        const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
-        return types.some((t: string) => t.includes("Page"));
-      });
+      // Check that WebPage nodes link to WebSite via isPartOf (should be enforced already)
       const hasWebsiteLink = webPageNodes.every((node: any) =>
         node.isPartOf === "https://www.shepherdneame.co.uk/#website" ||
         (typeof node.isPartOf === "object" && node.isPartOf?.["@id"] === "https://www.shepherdneame.co.uk/#website")
