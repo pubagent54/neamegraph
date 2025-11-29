@@ -21,12 +21,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { SettingsIssuesLog } from "@/components/SettingsIssuesLog";
+import { Bug } from "lucide-react";
 
 interface Settings {
   id: string;
@@ -50,6 +52,7 @@ export default function Settings() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [unlockCode, setUnlockCode] = useState("");
   const [unlockError, setUnlockError] = useState("");
+  const [issuesLogOpen, setIssuesLogOpen] = useState(false);
   
   const isAdmin = userRole === 'admin';
 
@@ -233,6 +236,28 @@ export default function Settings() {
             Configure system-wide options
           </p>
         </div>
+
+        {/* Issues Log Panel */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Bug className="h-5 w-5 text-muted-foreground" />
+                  Issues log
+                </CardTitle>
+                <CardDescription>
+                  Track small bugs, schema quirks and testing notes while we refine NeameGraph.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => setIssuesLogOpen(true)} className="rounded-full">
+              Open issues log
+            </Button>
+          </CardContent>
+        </Card>
 
         <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader>
@@ -472,27 +497,6 @@ export default function Settings() {
           </Card>
         )}
 
-        <Card className="rounded-2xl border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-xl">Advanced</CardTitle>
-            <CardDescription>
-              Additional settings and tools
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="issues-log" className="border-b-0">
-                <AccordionTrigger className="hover:no-underline py-3">
-                  <span className="text-sm font-medium">Issues log (testing)</span>
-                </AccordionTrigger>
-                <AccordionContent className="pt-4">
-                  <SettingsIssuesLog />
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </CardContent>
-        </Card>
-
         <div className="flex gap-3">
           <Button onClick={handleSave} disabled={saving} className="rounded-full">
             <Save className="mr-2 h-4 w-4" />
@@ -527,6 +531,22 @@ export default function Settings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Issues Log Dialog */}
+      <Dialog open={issuesLogOpen} onOpenChange={setIssuesLogOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bug className="h-5 w-5 text-muted-foreground" />
+              Issues log
+            </DialogTitle>
+            <DialogDescription>
+              Track and manage testing issues, bugs, and notes
+            </DialogDescription>
+          </DialogHeader>
+          <SettingsIssuesLog />
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
