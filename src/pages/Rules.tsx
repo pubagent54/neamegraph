@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Edit2, Plus, Trash2, FileText, ExternalLink, Layers } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -668,26 +669,17 @@ export default function Rules() {
             {/* Backup history - show last 3 versions */}
             {editingRule && Array.isArray(editingRule.rules_backup) && editingRule.rules_backup.length > 0 && (
               <div className="pt-4 border-t space-y-3">
-                <Collapsible>
-                  <CollapsibleTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full rounded-xl justify-between"
-                      type="button"
+                <p className="text-sm font-medium">Previous versions ({editingRule.rules_backup.length})</p>
+                <Accordion type="single" collapsible className="space-y-2">
+                  {editingRule.rules_backup.map((backup, index) => (
+                    <AccordionItem 
+                      key={index} 
+                      value={`version-${index}`}
+                      className="rounded-xl border bg-muted/30 px-4"
                     >
-                      <span className="text-sm font-medium">
-                        View previous versions ({editingRule.rules_backup.length})
-                      </span>
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-3 space-y-3">
-                    {editingRule.rules_backup.map((backup, index) => (
-                      <div 
-                        key={index}
-                        className="rounded-xl border bg-muted/30 p-4 space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-medium text-muted-foreground">
+                      <AccordionTrigger className="hover:no-underline py-3">
+                        <div className="flex items-center justify-between w-full pr-2">
+                          <p className="text-xs font-medium text-muted-foreground text-left">
                             Version from {new Date(backup.timestamp).toLocaleString()}
                           </p>
                           {isAdmin && (
@@ -695,7 +687,8 @@ export default function Rules() {
                               type="button"
                               variant="outline"
                               size="sm"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 if (confirm(`Restore this version from ${new Date(backup.timestamp).toLocaleString()}?`)) {
                                   setFormData({ ...formData, body: backup.content });
                                   toast.success("Version restored to editor");
@@ -707,13 +700,15 @@ export default function Rules() {
                             </Button>
                           )}
                         </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-3">
                         <pre className="text-xs font-mono bg-background/50 rounded-lg p-3 overflow-x-auto max-h-[200px] overflow-y-auto">
                           {backup.content}
                         </pre>
-                      </div>
-                    ))}
-                  </CollapsibleContent>
-                </Collapsible>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               </div>
             )}
           </div>
