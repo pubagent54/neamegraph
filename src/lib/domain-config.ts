@@ -80,7 +80,8 @@ export function normalizePath(path: string): string {
 
 /**
  * Get page types for a given domain
- * @deprecated Use getPageTypesForDomain from taxonomy.ts instead for async loading
+ * @deprecated Use getPageTypesForDomain from taxonomy.ts instead for async loading from database
+ * This function returns hard-coded values and is kept only for backward compatibility
  */
 export function getPageTypesForDomain(domain: string | null): string[] {
   if (!domain) return [];
@@ -89,7 +90,8 @@ export function getPageTypesForDomain(domain: string | null): string[] {
 
 /**
  * Get categories for a given page type
- * @deprecated Use getCategoriesForPageType from taxonomy.ts instead for async loading
+ * @deprecated Use getCategoriesForPageType from taxonomy.ts instead for async loading from database
+ * This function returns hard-coded values and is kept only for backward compatibility
  */
 export function getCategoriesForPageType(pageType: string | null): string[] {
   if (!pageType) return [];
