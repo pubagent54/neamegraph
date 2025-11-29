@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatusBadge } from "@/components/StatusBadge";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle, Save, ChevronDown, Copy, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, CheckCircle, XCircle, Save, ChevronDown, Copy, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { validateJsonLdSchema, formatValidationIssue } from "@/lib/schema-validator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -32,6 +32,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ========================================
 // DOMAIN LANE LOGIC
@@ -148,6 +149,10 @@ export default function PageDetail() {
   
   // Validation dialog state
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
+  
+  // Charter warnings state - live from most recent generate call
+  // null = no Charter data yet (older versions), [] = no warnings, [warnings] = has warnings
+  const [liveCharterWarnings, setLiveCharterWarnings] = useState<string[] | null>(null);
   const [validationResult, setValidationResult] = useState<any>(null);
   const [validatingVersionId, setValidatingVersionId] = useState<string | null>(null);
 
@@ -316,6 +321,14 @@ export default function PageDetail() {
       // Store the used rule info if provided
       if (data?.used_rule) {
         setUsedRule(data.used_rule);
+      }
+
+      // Store Charter warnings from the response (v2 engine only)
+      // If charterWarnings is undefined (older versions or v1), treat as empty array
+      if (data?.charterWarnings) {
+        setLiveCharterWarnings(data.charterWarnings);
+      } else {
+        setLiveCharterWarnings([]);
       }
 
       toast.success(`Schema v${data.version_number} generated successfully`);
@@ -1227,10 +1240,56 @@ export default function PageDetail() {
         )}
 
         <Tabs defaultValue="schema" className="w-full">
-          <TabsList>
-            <TabsTrigger value="schema">Schema Versions</TabsTrigger>
-            <TabsTrigger value="notes">Notes</TabsTrigger>
-          </TabsList>
+          <div className="flex items-center gap-3 mb-4">
+            <TabsList>
+              <TabsTrigger value="schema">Schema Versions</TabsTrigger>
+              <TabsTrigger value="notes">Notes</TabsTrigger>
+            </TabsList>
+            
+            {/* Charter Status Pill - Non-blocking quality indicator */}
+            {/* Powered by Schema Quality Charter checks (docs/schema-quality-charter.md) */}
+            {/* Future iterations might make this stricter (e.g. blocking approval on hard violations) */}
+            {/* Only shown when Charter data is available (after a v2 schema generation) */}
+            {liveCharterWarnings !== null && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium cursor-help ${
+                      liveCharterWarnings.length === 0
+                        ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
+                        : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                    }`}>
+                      {liveCharterWarnings.length === 0 ? (
+                        <>
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          <span>Charter: OK</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          <span>Charter: Warnings</span>
+                        </>
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-md">
+                    {liveCharterWarnings.length === 0 ? (
+                      <p>All Schema Quality Charter checks passed for this version.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="font-semibold">Schema Quality Charter warnings:</p>
+                        <ul className="list-disc pl-4 space-y-1 text-sm">
+                          {liveCharterWarnings.map((warning, idx) => (
+                            <li key={idx}>{warning}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           <TabsContent value="schema" className="space-y-4">
             {versions.length === 0 ? (
               <Card>
