@@ -231,45 +231,78 @@ serve(async (req) => {
     const canonicalUrl = `${canonicalBaseUrl}${page.path}`;
     
     if (schemaEngineVersion === "v2") {
-      // Validate v2 requirements
-      const v2PageTypes = [
-        "Pubs & Hotels Estate",
-        "Beers",
-        "Brewery",
-        "History",
-        "Environment",
-        "About",
-        "Careers",
-        "News"
-      ];
+      // Load v2 rules from the rules table based on domain, page_type, and category
+      // The rules matching system handles missing/invalid page_type by falling back to default domain rule
+      console.log(`Loading v2 rules for domain: ${pageDomain}, pageType: ${page.page_type || 'none'}, category: ${page.category || 'none'}`);
       
-      if (!page.page_type || !v2PageTypes.includes(page.page_type)) {
-        return new Response(
-          JSON.stringify({ 
-            error: "Corporate v2 schema generation requires a valid Page Type. Please set the Page Type before generating schema.",
-            validation_errors: ["Missing or invalid page_type for v2"]
-          }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      // RULES MATCHING ALGORITHM (with domain priority):
+      // 1. Try: domain + page_type + category match
+      // 2. Try: domain + page_type (category null)
+      // 3. Try: domain-level default (page_type & category both null)
+      // 4. Fall back to any active rule if no domain match
+      
+      let matchedRule = null;
+      
+      // Try domain + page_type + category
+      if (page.page_type && page.category) {
+        const { data: specificRule } = await supabase
+          .from("rules")
+          .select("*")
+          .eq("domain", pageDomain)
+          .eq("page_type", page.page_type)
+          .eq("category", page.category)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (specificRule) {
+          matchedRule = specificRule;
+          console.log(`Using specific rule for ${pageDomain} · ${page.page_type} · ${page.category}: ${matchedRule.name}`);
+        }
       }
-
-      // Load v2 rules from the rules table based on page_type AND category
-      console.log(`Loading v2 rules for pageType: ${page.page_type}, category: ${page.category || 'none'}`);
       
-      // 1) Try to find a specific rule for this page type + category (is_active = true)
-      let { data: matchedRule, error: matchError } = await supabase
-        .from("rules")
-        .select("*")
-        .eq("page_type", page.page_type)
-        .eq("category", page.category)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      // 2) If no specific rule found, fall back to the default rule (page_type AND category both NULL)
+      // Try domain + page_type (category null)
+      if (!matchedRule && page.page_type) {
+        const { data: pageTypeRule } = await supabase
+          .from("rules")
+          .select("*")
+          .eq("domain", pageDomain)
+          .eq("page_type", page.page_type)
+          .is("category", null)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (pageTypeRule) {
+          matchedRule = pageTypeRule;
+          console.log(`Using page type rule for ${pageDomain} · ${page.page_type}: ${matchedRule.name}`);
+        }
+      }
+      
+      // Try domain-level default (page_type & category both null)
       if (!matchedRule) {
-        const { data: defaultRule } = await supabase
+        const { data: domainRule } = await supabase
+          .from("rules")
+          .select("*")
+          .eq("domain", pageDomain)
+          .is("page_type", null)
+          .is("category", null)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (domainRule) {
+          matchedRule = domainRule;
+          console.log(`Using domain-level default rule for ${pageDomain}: ${matchedRule.name}`);
+        }
+      }
+      
+      // Final fallback: any active default rule (no domain filter)
+      if (!matchedRule) {
+        const { data: fallbackRule } = await supabase
           .from("rules")
           .select("*")
           .is("page_type", null)
@@ -279,19 +312,17 @@ serve(async (req) => {
           .limit(1)
           .maybeSingle();
         
-        matchedRule = defaultRule;
+        matchedRule = fallbackRule;
         
         if (matchedRule) {
-          console.log(`Using default rule (page_type=null, category=null): ${matchedRule.name}`);
+          console.log(`Using fallback default rule (no domain match): ${matchedRule.name}`);
         }
-      } else {
-        console.log(`Using specific rule for ${page.page_type} · ${page.category}: ${matchedRule.name}`);
       }
 
       if (!matchedRule) {
         return new Response(
           JSON.stringify({ 
-            error: `No active rule found for page type "${page.page_type}" and category "${page.category || 'none'}". Please create a rule for this combination or set a default rule.`
+            error: `No active rule found for domain "${pageDomain}". Please create a rule for this domain in the Brain Rules section.`
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -299,7 +330,7 @@ serve(async (req) => {
 
       const v2Rules = matchedRule.body;
       const usedRuleId = matchedRule.id;
-      console.log(`Using rule: ${matchedRule.name} (${matchedRule.page_type || 'any'} · ${matchedRule.category || 'baseline'})`);
+      console.log(`Final matched rule: ${matchedRule.name} (domain: ${matchedRule.domain || 'any'})`);
       console.log(`v2 rules loaded, length: ${v2Rules.length}`);
 
       // Build v2 user message with rules at the top
