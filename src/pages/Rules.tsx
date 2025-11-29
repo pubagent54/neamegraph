@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Copy, Edit2, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle, Copy, Edit2, Plus, RotateCcw, Trash2, FileText, ExternalLink } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -34,6 +34,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { V2_CATEGORIES } from "@/lib/rules";
+import { SCHEMA_QUALITY_RULES, SCHEMA_QUALITY_RULE_DESCRIPTIONS } from "@/config/schemaQualityRules";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface Rule {
   id: string;
@@ -435,6 +437,72 @@ export default function Rules() {
             Manage schema engine prompts for each page type and category combination. Set a default rule (no page type or category) to handle pages without specific rules.
           </p>
         </div>
+
+        {/* 0. SCHEMA QUALITY CHARTER (GLOBAL) */}
+        <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-primary/5">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-2xl">Schema Quality Charter (Global)</CardTitle>
+                </div>
+                <CardDescription>
+                  These global quality rules apply to every schema run (Corporate, Beers, Pubs). They are defined in the Schema Quality Charter and enforced by the schema engine.
+                </CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.open('/docs/schema-quality-charter.md', '_blank')}
+                className="rounded-full"
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                View Full Charter
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[250px]">Rule</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-center w-[100px]">Enabled</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(SCHEMA_QUALITY_RULES).map(([key, enabled]) => (
+                    <TableRow key={key}>
+                      <TableCell className="font-mono text-sm">
+                        {key}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {SCHEMA_QUALITY_RULE_DESCRIPTIONS[key as keyof typeof SCHEMA_QUALITY_RULES]}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {enabled ? (
+                          <Badge className="bg-primary rounded-full">
+                            <CheckCircle className="mr-1 h-3 w-3" />
+                            Yes
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="rounded-full">
+                            No
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <p className="text-xs text-muted-foreground italic">
+                These rules are currently non-configurable and apply to all domains. Changes to schema quality philosophy should be reflected in both the Charter document and the schema engine validation logic.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* 1. RULES LIST (TOP) */}
         <div>
