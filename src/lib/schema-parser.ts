@@ -208,12 +208,19 @@ export function parseSchemaForSummary(
     }
 
     // --- Check for forbidden commerce schema ----------------------------------
+    // Product itself is allowed for descriptive purposes (e.g. beers).
+    // The real rule: no transactional/e-commerce fields like offers, prices, cart, stock.
     const hasCommerceSchema = graph.some((node) => {
       const types = normaliseTypes(node);
-      return types.some(
-        (t) =>
-          t === "Product" || t === "Offer" || t === "AggregateOffer"
-      );
+      // Check for explicit e-commerce types
+      if (types.some((t) => t === "Offer" || t === "AggregateOffer")) {
+        return true;
+      }
+      // Check for e-commerce properties on any node (especially Product nodes)
+      if (node.offers || node.price || node.priceCurrency || node.availability) {
+        return true;
+      }
+      return false;
     });
 
     // --- Extract image URLs ----------------------------------------------------
