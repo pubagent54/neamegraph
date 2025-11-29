@@ -6,6 +6,11 @@
  * 2. Table Entry - manual entry/paste of rows
  * 
  * Both modes feed into the same backend engine (wizmode-process)
+ * 
+ * TAXONOMY INTEGRATION:
+ * Domain, Page Type, and Category options now come from database taxonomy tables
+ * (page_type_definitions, page_category_definitions). Changes in /settings/taxonomy
+ * automatically flow through to Wizmode dropdowns with no code changes.
  */
 
 import { useState, useEffect } from "react";
@@ -19,21 +24,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { Upload, PlayCircle, Loader2, CheckCircle2, XCircle, AlertCircle, Trash2, Plus, Eye, X } from "lucide-react";
+import { Wand2, PlayCircle, Loader2, CheckCircle2, XCircle, AlertCircle, Trash2, Plus, Eye, X } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useNavigate } from "react-router-dom";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { 
-  DOMAIN_CONFIG, 
-  getPageTypesForDomain, 
-  getCategoriesForPageType, 
-  normalizePath,
-  DOMAIN_NORMALIZATION_MAP,
-  PAGE_TYPE_NORMALIZATION_MAP,
-  CATEGORY_NORMALIZATION_MAP
-} from "@/lib/domain-config";
+import { normalizePath } from "@/lib/domain-config";
+import { loadPageTypes, loadCategories } from "@/lib/taxonomy";
+import type { PageTypeDefinition, CategoryDefinition } from "@/lib/taxonomy";
 
 interface WizmodeRun {
   id: string;
@@ -74,6 +73,12 @@ export default function WIZmode() {
   const navigate = useNavigate();
   const isAdmin = userRole === "admin";
 
+  // Taxonomy data loaded once at component mount
+  const [domains, setDomains] = useState<string[]>([]);
+  const [allPageTypes, setAllPageTypes] = useState<PageTypeDefinition[]>([]);
+  const [allCategories, setAllCategories] = useState<CategoryDefinition[]>([]);
+  const [taxonomyLoading, setTaxonomyLoading] = useState(true);
+
   // Shared state
   const [batchLabel, setBatchLabel] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -111,6 +116,33 @@ export default function WIZmode() {
       </Layout>
     );
   }
+
+  // Load taxonomy data on mount
+  useEffect(() => {
+    const loadTaxonomy = async () => {
+      try {
+        setTaxonomyLoading(true);
+        const [pageTypes, categories] = await Promise.all([
+          loadPageTypes(true),
+          loadCategories(true)
+        ]);
+        
+        setAllPageTypes(pageTypes);
+        setAllCategories(categories);
+        
+        // Extract unique domains from page types
+        const uniqueDomains = Array.from(new Set(pageTypes.map(pt => pt.domain))).sort();
+        setDomains(uniqueDomains);
+      } catch (error) {
+        console.error("Error loading taxonomy:", error);
+        toast.error("Failed to load taxonomy data");
+      } finally {
+        setTaxonomyLoading(false);
+      }
+    };
+    
+    loadTaxonomy();
+  }, []);
 
   useEffect(() => {
     fetchPastRuns();
@@ -200,6 +232,18 @@ export default function WIZmode() {
     }
   };
 
+  // Helper to get page types for a domain
+  const getPageTypesForDomain = (domain: string | null): PageTypeDefinition[] => {
+    if (!domain) return [];
+    return allPageTypes.filter(pt => pt.domain === domain && pt.active);
+  };
+
+  // Helper to get categories for a page type
+  const getCategoriesForPageType = (pageTypeId: string | null): CategoryDefinition[] => {
+    if (!pageTypeId) return [];
+    return allCategories.filter(cat => cat.page_type_id === pageTypeId && cat.active);
+  };
+
   // ============================================
   // CSV MODE FUNCTIONS
   // ============================================
@@ -261,19 +305,28 @@ export default function WIZmode() {
           headers.forEach((header, i) => {
             let value = values[i] || "";
             
+            // Normalize domain (case-insensitive match)
             if (header === "domain" && value) {
-              const normalizedKey = value.toLowerCase();
-              value = DOMAIN_NORMALIZATION_MAP[normalizedKey] || value;
+              const matchedDomain = domains.find(d => d.toLowerCase() === value.toLowerCase());
+              value = matchedDomain || value;
             }
             
+            // Normalize page_type (case-insensitive match against IDs)
             if (header === "page_type" && value) {
-              const normalizedKey = value.toLowerCase();
-              value = PAGE_TYPE_NORMALIZATION_MAP[normalizedKey] || value;
+              const matchedPageType = allPageTypes.find(pt => 
+                pt.id.toLowerCase() === value.toLowerCase() || 
+                pt.label.toLowerCase() === value.toLowerCase()
+              );
+              value = matchedPageType ? matchedPageType.id : value;
             }
             
+            // Normalize category (case-insensitive match against IDs)
             if (header === "category" && value) {
-              const normalizedKey = value.toLowerCase();
-              value = CATEGORY_NORMALIZATION_MAP[normalizedKey] || value;
+              const matchedCategory = allCategories.find(cat => 
+                cat.id.toLowerCase() === value.toLowerCase() || 
+                cat.label.toLowerCase() === value.toLowerCase()
+              );
+              value = matchedCategory ? matchedCategory.id : value;
             }
             
             row[header] = value;
@@ -431,11 +484,14 @@ export default function WIZmode() {
     setValidationErrors(new Set([...validationErrors].filter(err => !err.startsWith(`${id}-${field}`))));
   };
 
-  const matchValueCaseInsensitive = (value: string, options: string[]): string | null => {
+  const matchValueCaseInsensitive = (value: string, options: { id: string; label: string }[]): string | null => {
     if (!value) return null;
     const normalized = value.trim().toLowerCase();
-    const matched = options.find(opt => opt.toLowerCase() === normalized);
-    return matched || null;
+    const matched = options.find(opt => 
+      opt.id.toLowerCase() === normalized || 
+      opt.label.toLowerCase() === normalized
+    );
+    return matched ? matched.id : null;
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -480,8 +536,8 @@ export default function WIZmode() {
 
       // Column 2: Domain
       if (cells[1]) {
-        const matchedDomain = matchValueCaseInsensitive(cells[1], DOMAIN_CONFIG.domains);
-        row.domain = matchedDomain;
+        const matchedDomain = domains.find(d => d.toLowerCase() === cells[1].trim().toLowerCase());
+        row.domain = matchedDomain || null;
         // Reset dependent fields if domain changes
         if (!matchedDomain) {
           row.page_type = null;
@@ -491,8 +547,8 @@ export default function WIZmode() {
 
       // Column 3: Page Type
       if (cells[2] && row.domain) {
-        const pageTypes = getPageTypesForDomain(row.domain);
-        const matchedPageType = matchValueCaseInsensitive(cells[2], pageTypes);
+        const pageTypesForDomain = getPageTypesForDomain(row.domain);
+        const matchedPageType = matchValueCaseInsensitive(cells[2], pageTypesForDomain);
         row.page_type = matchedPageType;
         // Reset category if page type changes
         if (!matchedPageType) {
@@ -502,8 +558,8 @@ export default function WIZmode() {
 
       // Column 4: Category
       if (cells[3] && row.page_type) {
-        const categories = getCategoriesForPageType(row.page_type);
-        const matchedCategory = matchValueCaseInsensitive(cells[3], categories);
+        const categoriesForPageType = getCategoriesForPageType(row.page_type);
+        const matchedCategory = matchValueCaseInsensitive(cells[3], categoriesForPageType);
         row.category = matchedCategory;
       }
     });
@@ -532,18 +588,36 @@ export default function WIZmode() {
       if (!row.domain) {
         errors.push(`Row ${index + 1}: Domain is required`);
         newValidationErrors.add(`${row.id}-domain`);
+      } else if (!domains.includes(row.domain)) {
+        errors.push(`Row ${index + 1}: Invalid domain "${row.domain}"`);
+        newValidationErrors.add(`${row.id}-domain`);
       }
+      
       if (!row.page_type) {
         errors.push(`Row ${index + 1}: Page Type is required`);
         newValidationErrors.add(`${row.id}-page_type`);
+      } else if (row.domain) {
+        const validPageTypes = getPageTypesForDomain(row.domain);
+        if (!validPageTypes.find(pt => pt.id === row.page_type)) {
+          errors.push(`Row ${index + 1}: Invalid page type "${row.page_type}" for domain "${row.domain}"`);
+          newValidationErrors.add(`${row.id}-page_type`);
+        }
       }
+      
       if (!row.category) {
         errors.push(`Row ${index + 1}: Category is required`);
         newValidationErrors.add(`${row.id}-category`);
+      } else if (row.page_type) {
+        const validCategories = getCategoriesForPageType(row.page_type);
+        if (!validCategories.find(cat => cat.id === row.category)) {
+          errors.push(`Row ${index + 1}: Invalid category "${row.category}" for page type "${row.page_type}"`);
+          newValidationErrors.add(`${row.id}-category`);
+        }
       }
 
-      // If all required fields present, add to valid rows
-      if (row.urlOrPath.trim() && row.domain && row.page_type && row.category) {
+      // If all required fields present and valid, add to valid rows
+      if (row.urlOrPath.trim() && row.domain && row.page_type && row.category && 
+          newValidationErrors.size === validRows.length * 4) { // No new errors for this row
         const normalizedPathValue = normalizePath(row.urlOrPath);
         validRows.push({
           row_number: index + 1,
@@ -774,12 +848,19 @@ export default function WIZmode() {
   return (
     <Layout>
       <div className="space-y-8">
-        {/* Header */}
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight mb-2">WIZmode v3.1</h1>
-          <p className="text-lg text-muted-foreground">
-            Batch page creation and schema generation
-          </p>
+        {/* Header with Wizard Branding */}
+        <div className="flex items-start gap-4">
+          <div className="rounded-xl bg-primary/10 p-3">
+            <Wand2 className="h-8 w-8 text-primary" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-4xl font-bold tracking-tight mb-2">
+              Wizmode – Large Batch Processing Facility
+            </h1>
+            <p className="text-lg text-muted-foreground">
+              Use Wizmode when you need to upload or update lots of pages in one go. Paste data from Google Sheets or upload a CSV, and NeameGraph will map each row to the correct domain, page type, and category using the central taxonomy.
+            </p>
+          </div>
         </div>
 
         {/* Mode Selection Tabs */}
@@ -795,9 +876,11 @@ export default function WIZmode() {
               <CardHeader>
                 <CardTitle>Upload CSV Batch</CardTitle>
                 <CardDescription>
+                  Upload a CSV file with pages and taxonomy columns for bulk import or update.
+                  <br />
                   CSV format: <code className="bg-muted px-2 py-1 rounded text-xs">domain, path, page_type, category</code>
                   <br />
-                  Example row: <code className="bg-muted px-2 py-1 rounded text-xs">Beer,/beers/double-stout,Beers,Drink Brands</code>
+                  Example row: <code className="bg-muted px-2 py-1 rounded text-xs">Beer,/beers/double-stout,beers,drink_brands</code>
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -828,7 +911,7 @@ export default function WIZmode() {
                 </div>
                 <Button
                   onClick={handleStartCsvRun}
-                  disabled={!csvFile || uploading}
+                  disabled={!csvFile || uploading || taxonomyLoading}
                   className="rounded-full"
                 >
                   {uploading ? (
@@ -853,11 +936,13 @@ export default function WIZmode() {
               <CardHeader>
                 <CardTitle>Add by Table</CardTitle>
                 <CardDescription>
+                  Paste or type rows directly here for quick bulk entry from Sheets or Excel.
+                  <br />
                   Type rows directly or paste from Google Sheets / Excel (Ctrl/Cmd+V).
                   <br />
                   Paste 1-4 columns: URL/Path | Domain | Page Type | Category
                   <br />
-                  Example: <code className="bg-muted px-2 py-1 rounded text-xs">/beers/orchard-view | Beer | Beers | Drink Brands</code>
+                  Example: <code className="bg-muted px-2 py-1 rounded text-xs">/beers/orchard-view | Beer | beers | drink_brands</code>
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -889,100 +974,107 @@ export default function WIZmode() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {tableRows.map((row, index) => (
-                        <TableRow key={row.id}>
-                          <TableCell>
-                            <Input
-                              placeholder="/beers/orchard-view"
-                              value={row.urlOrPath}
-                              onChange={(e) => updateTableRow(row.id, 'urlOrPath', e.target.value)}
-                              className={`rounded-md ${validationErrors.has(`${row.id}-urlOrPath`) ? 'border-red-500' : ''}`}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Select
-                              value={row.domain || undefined}
-                              onValueChange={(value) => updateTableRow(row.id, 'domain', value)}
-                            >
-                              <SelectTrigger className={`rounded-md ${validationErrors.has(`${row.id}-domain`) ? 'border-red-500' : ''}`}>
-                                <SelectValue placeholder="Select..." />
-                              </SelectTrigger>
-                              <SelectContent className="bg-background border border-border shadow-lg z-50">
-                                {DOMAIN_CONFIG.domains.map(domain => (
-                                  <SelectItem key={domain} value={domain}>{domain}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Select
-                              value={row.page_type || undefined}
-                              onValueChange={(value) => updateTableRow(row.id, 'page_type', value)}
-                              disabled={!row.domain}
-                            >
-                              <SelectTrigger className={`rounded-md ${validationErrors.has(`${row.id}-page_type`) ? 'border-red-500' : ''}`}>
-                                <SelectValue placeholder="Select..." />
-                              </SelectTrigger>
-                              <SelectContent className="bg-background border border-border shadow-lg z-50">
-                                {getPageTypesForDomain(row.domain).map(pt => (
-                                  <SelectItem key={pt} value={pt}>{pt}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Select
-                              value={row.category || undefined}
-                              onValueChange={(value) => updateTableRow(row.id, 'category', value)}
-                              disabled={!row.page_type}
-                            >
-                              <SelectTrigger className={`rounded-md ${validationErrors.has(`${row.id}-category`) ? 'border-red-500' : ''}`}>
-                                <SelectValue placeholder="Select..." />
-                              </SelectTrigger>
-                              <SelectContent className="bg-background border border-border shadow-lg z-50">
-                                {getCategoriesForPageType(row.page_type).map(cat => (
-                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteTableRow(row.id)}
-                              className="h-8 w-8"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {tableRows.map((row, index) => {
+                        const pageTypesForRow = getPageTypesForDomain(row.domain);
+                        const categoriesForRow = getCategoriesForPageType(row.page_type);
+                        
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell>
+                              <Input
+                                placeholder="/beers/orchard-view"
+                                value={row.urlOrPath}
+                                onChange={(e) => updateTableRow(row.id, 'urlOrPath', e.target.value)}
+                                className={`rounded-md ${validationErrors.has(`${row.id}-urlOrPath`) ? 'border-red-500' : ''}`}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={row.domain || undefined}
+                                onValueChange={(value) => updateTableRow(row.id, 'domain', value)}
+                                disabled={taxonomyLoading}
+                              >
+                                <SelectTrigger className={`rounded-md ${validationErrors.has(`${row.id}-domain`) ? 'border-red-500' : ''}`}>
+                                  <SelectValue placeholder={taxonomyLoading ? "Loading..." : "Select..."} />
+                                </SelectTrigger>
+                                <SelectContent className="bg-background border border-border shadow-lg z-50">
+                                  {domains.map(domain => (
+                                    <SelectItem key={domain} value={domain}>{domain}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={row.page_type || undefined}
+                                onValueChange={(value) => updateTableRow(row.id, 'page_type', value)}
+                                disabled={!row.domain || taxonomyLoading}
+                              >
+                                <SelectTrigger className={`rounded-md ${validationErrors.has(`${row.id}-page_type`) ? 'border-red-500' : ''}`}>
+                                  <SelectValue placeholder={!row.domain ? "Select domain first" : taxonomyLoading ? "Loading..." : "Select..."} />
+                                </SelectTrigger>
+                                <SelectContent className="bg-background border border-border shadow-lg z-50">
+                                  {pageTypesForRow.map(pt => (
+                                    <SelectItem key={pt.id} value={pt.id}>{pt.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={row.category || undefined}
+                                onValueChange={(value) => updateTableRow(row.id, 'category', value)}
+                                disabled={!row.page_type || taxonomyLoading}
+                              >
+                                <SelectTrigger className={`rounded-md ${validationErrors.has(`${row.id}-category`) ? 'border-red-500' : ''}`}>
+                                  <SelectValue placeholder={!row.page_type ? "Select page type first" : taxonomyLoading ? "Loading..." : "Select..."} />
+                                </SelectTrigger>
+                                <SelectContent className="bg-background border border-border shadow-lg z-50">
+                                  {categoriesForRow.map(cat => (
+                                    <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteTableRow(row.id)}
+                                className="rounded-full"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
 
-                {/* Table Controls */}
+                {/* Action Buttons */}
                 <div className="flex gap-2">
                   <Button
-                    variant="outline"
                     onClick={addTableRow}
+                    variant="outline"
                     className="rounded-full"
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Add Row
                   </Button>
                   <Button
-                    variant="outline"
                     onClick={clearTable}
+                    variant="outline"
                     className="rounded-full"
                   >
-                    Clear Table
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear All
                   </Button>
                   <div className="flex-1" />
                   <Button
                     onClick={handleStartTableRun}
-                    disabled={uploading}
+                    disabled={uploading || taxonomyLoading}
                     className="rounded-full"
                   >
                     {uploading ? (
@@ -993,7 +1085,7 @@ export default function WIZmode() {
                     ) : (
                       <>
                         <PlayCircle className="mr-2 h-4 w-4" />
-                        Start WIZmode Run from Table
+                        Start WIZmode Run
                       </>
                     )}
                   </Button>
