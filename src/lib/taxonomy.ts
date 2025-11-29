@@ -94,11 +94,12 @@ export async function getCategoriesForPageType(pageTypeId: string, activeOnly = 
 
 /**
  * Get all domains
+ * Always returns the canonical set of domains: Corporate, Beer, Pub
  */
 export async function getDomains(): Promise<string[]> {
-  const pageTypes = await loadPageTypes();
-  const domains = new Set(pageTypes.map(pt => pt.domain));
-  return Array.from(domains).sort();
+  // Return canonical domain list regardless of whether page types exist
+  // Pub domain is reserved for future use
+  return ['Corporate', 'Beer', 'Pub'];
 }
 
 /**
