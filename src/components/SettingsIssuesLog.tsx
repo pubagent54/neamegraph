@@ -6,8 +6,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Pencil, Check, X } from "lucide-react";
+import { Plus, Pencil, Check, X, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Issue {
   id: string;
@@ -28,6 +38,8 @@ export function SettingsIssuesLog() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editIssue, setEditIssue] = useState("");
   const [editComments, setEditComments] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [issueToDelete, setIssueToDelete] = useState<Issue | null>(null);
 
   useEffect(() => {
     fetchIssues();
@@ -150,6 +162,33 @@ export function SettingsIssuesLog() {
     setEditComments("");
   };
 
+  const confirmDelete = (issue: Issue) => {
+    setIssueToDelete(issue);
+    setDeleteDialogOpen(true);
+  };
+
+  const deleteIssue = async () => {
+    if (!issueToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from("issues")
+        .delete()
+        .eq("id", issueToDelete.id);
+
+      if (error) throw error;
+
+      toast.success("Issue deleted");
+      await fetchIssues();
+    } catch (error) {
+      console.error("Error deleting issue:", error);
+      toast.error("Failed to delete issue");
+    } finally {
+      setDeleteDialogOpen(false);
+      setIssueToDelete(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -269,14 +308,24 @@ export function SettingsIssuesLog() {
                           >
                             {issue.issue}
                           </p>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => startEdit(issue)}
-                            className="h-7 w-7 p-0 rounded-full"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => startEdit(issue)}
+                              className="h-7 w-7 p-0 rounded-full"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => confirmDelete(issue)}
+                              className="h-7 w-7 p-0 rounded-full text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
 
                         {issue.comments && (
@@ -304,6 +353,35 @@ export function SettingsIssuesLog() {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete issue?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this issue? This action cannot be undone.
+              {issueToDelete && (
+                <div className="mt-3 p-3 rounded-lg bg-muted/50 border">
+                  <p className="font-medium text-foreground">{issueToDelete.issue}</p>
+                  {issueToDelete.comments && (
+                    <p className="text-sm mt-1 text-muted-foreground">{issueToDelete.comments}</p>
+                  )}
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={deleteIssue}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
