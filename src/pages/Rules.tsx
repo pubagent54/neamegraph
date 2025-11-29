@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Copy, Edit2, Plus, RotateCcw, Trash2, FileText, ExternalLink } from "lucide-react";
+import { CheckCircle, Copy, Edit2, Plus, RotateCcw, Trash2, FileText, ExternalLink, Settings, AlertCircle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,10 +33,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { V2_CATEGORIES } from "@/lib/rules";
 import { SCHEMA_QUALITY_RULES, SCHEMA_QUALITY_RULE_DESCRIPTIONS } from "@/config/schemaQualityRules";
 import { ORG_DESCRIPTION } from "@/config/organization";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { usePageTypes, useCategories } from "@/hooks/use-taxonomy";
+import { useNavigate } from "react-router-dom";
 
 interface Rule {
   id: string;
@@ -50,19 +51,9 @@ interface Rule {
   category: string | null;
 }
 
-const V2_PAGE_TYPES = [
-  'Pubs & Hotels Estate',
-  'Beers',
-  'Brewery',
-  'History',
-  'Environment',
-  'About',
-  'Careers',
-  'News',
-];
-
 export default function Rules() {
   const { userRole } = useAuth();
+  const navigate = useNavigate();
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -85,6 +76,12 @@ export default function Rules() {
   const [pages, setPages] = useState<Array<{ id: string; path: string; page_type: string | null }>>([]);
   const [previewPageId, setPreviewPageId] = useState<string>("");
   const [ruleCoverage, setRuleCoverage] = useState<Record<string, { rule: Rule | null; count: number }>>({});
+  
+  // Taxonomy-aware state
+  const { pageTypes, loading: pageTypesLoading } = usePageTypes();
+  const { categories, loading: categoriesLoading } = useCategories();
+  const [filterPageType, setFilterPageType] = useState<string>("all");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
 
   useEffect(() => {
     fetchRules();
@@ -429,6 +426,66 @@ export default function Rules() {
     setRuleCoverage(coverage);
   };
 
+  // Compute taxonomy coverage
+  const taxonomyCoverage = pageTypes.map((pageType) => {
+    const pageTypeCategories = categories.filter(cat => cat.page_type_id === pageType.id);
+    
+    const categoriesWithRules = pageTypeCategories.map(cat => {
+      const specificRule = rules.find(
+        r => r.is_active && r.page_type === pageType.id && r.category === cat.id
+      );
+      const pageTypeDefaultRule = rules.find(
+        r => r.is_active && r.page_type === pageType.id && r.category === null
+      );
+      const globalDefaultRule = rules.find(
+        r => r.is_active && r.page_type === null && r.category === null
+      );
+      
+      let status: "has_rule" | "page_type_default" | "global_default" | "no_rule";
+      let appliedRule: Rule | null = null;
+      
+      if (specificRule) {
+        status = "has_rule";
+        appliedRule = specificRule;
+      } else if (pageTypeDefaultRule) {
+        status = "page_type_default";
+        appliedRule = pageTypeDefaultRule;
+      } else if (globalDefaultRule) {
+        status = "global_default";
+        appliedRule = globalDefaultRule;
+      } else {
+        status = "no_rule";
+      }
+      
+      return {
+        category: cat,
+        status,
+        rule: appliedRule
+      };
+    });
+    
+    const withRules = categoriesWithRules.filter(c => c.status === "has_rule").length;
+    const total = pageTypeCategories.length;
+    
+    return {
+      pageType,
+      categories: categoriesWithRules,
+      coverage: { withRules, total }
+    };
+  });
+
+  // Filter rules based on selected filters
+  const filteredRules = rules.filter(rule => {
+    if (filterPageType !== "all" && rule.page_type !== filterPageType) return false;
+    if (filterCategory !== "all" && rule.category !== filterCategory) return false;
+    return true;
+  });
+
+  // Get available categories for selected page type
+  const availableCategories = filterPageType !== "all" 
+    ? categories.filter(cat => cat.page_type_id === filterPageType)
+    : [];
+
   return (
     <Layout>
       <div className="space-y-8">
@@ -438,6 +495,156 @@ export default function Rules() {
             Manage schema engine prompts for each page type and category combination. Set a default rule (no page type or category) to handle pages without specific rules.
           </p>
         </div>
+
+        {/* TAXONOMY COVERAGE PANEL (NEW - TOP) */}
+        <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-primary/5">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-2xl">Schema Coverage by Page Type & Category</CardTitle>
+                </div>
+                <CardDescription>
+                  Read-only view of how your canonical page taxonomy is wired into the schema engine.
+                </CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => navigate("/settings/taxonomy")}
+                className="rounded-full"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Manage Page Types & Categories
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {pageTypesLoading || categoriesLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            ) : pageTypes.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>No page types found.</p>
+                <Button 
+                  variant="link" 
+                  onClick={() => navigate("/settings/taxonomy")}
+                  className="mt-2"
+                >
+                  Go to Settings → Page Types & Categories to define your taxonomy
+                </Button>
+              </div>
+            ) : (
+              <Accordion type="multiple" className="space-y-2">
+                {taxonomyCoverage.map(({ pageType, categories: cats, coverage }) => (
+                  <AccordionItem 
+                    key={pageType.id} 
+                    value={pageType.id}
+                    className="border rounded-xl bg-card/50"
+                  >
+                    <AccordionTrigger className="px-4 hover:no-underline">
+                      <div className="flex items-center gap-3 flex-1">
+                        <span className="font-semibold">{pageType.label}</span>
+                        <Badge variant="outline" className="rounded-full font-mono text-xs">
+                          {pageType.id}
+                        </Badge>
+                        <Badge 
+                          variant={coverage.withRules === coverage.total ? "default" : "secondary"} 
+                          className="rounded-full ml-auto mr-2"
+                        >
+                          {coverage.withRules} of {coverage.total} categories have rules
+                        </Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                      {cats.length === 0 ? (
+                        <p className="text-sm text-muted-foreground italic py-2">
+                          No categories defined for this page type
+                        </p>
+                      ) : (
+                        <div className="rounded-lg border overflow-hidden">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b bg-muted/30">
+                                <th className="text-left p-2 text-xs font-medium">Category Label</th>
+                                <th className="text-left p-2 text-xs font-medium">Category ID</th>
+                                <th className="text-left p-2 text-xs font-medium">Status</th>
+                                <th className="text-left p-2 text-xs font-medium">Rule(s)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {cats.map(({ category, status, rule }) => (
+                                <tr 
+                                  key={category.id} 
+                                  className="border-b last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
+                                  onClick={() => {
+                                    setFilterPageType(pageType.id);
+                                    setFilterCategory(category.id);
+                                    // Scroll to rules list
+                                    document.querySelector('[data-rules-list]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                  }}
+                                >
+                                  <td className="p-2 text-sm">{category.label}</td>
+                                  <td className="p-2">
+                                    <code className="text-xs text-muted-foreground">{category.id}</code>
+                                  </td>
+                                  <td className="p-2">
+                                    {status === "has_rule" && (
+                                      <Badge className="bg-primary rounded-full text-xs">
+                                        <CheckCircle className="mr-1 h-3 w-3" />
+                                        Has rule
+                                      </Badge>
+                                    )}
+                                    {status === "page_type_default" && (
+                                      <Badge variant="secondary" className="rounded-full text-xs">
+                                        Page type default
+                                      </Badge>
+                                    )}
+                                    {status === "global_default" && (
+                                      <Badge variant="outline" className="rounded-full text-xs">
+                                        Global default
+                                      </Badge>
+                                    )}
+                                    {status === "no_rule" && (
+                                      <Badge variant="outline" className="rounded-full text-xs text-muted-foreground">
+                                        <AlertCircle className="mr-1 h-3 w-3" />
+                                        No rule
+                                      </Badge>
+                                    )}
+                                  </td>
+                                  <td className="p-2">
+                                    {rule ? (
+                                      <button 
+                                        className="text-sm text-primary hover:underline"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setFilterPageType(pageType.id);
+                                          setFilterCategory(category.id);
+                                          document.querySelector('[data-rules-list]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        }}
+                                      >
+                                        {rule.name}
+                                      </button>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground italic">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
+          </CardContent>
+        </Card>
 
         {/* 0. SCHEMA QUALITY CHARTER (GLOBAL) */}
         <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-primary/5">
@@ -515,13 +722,67 @@ export default function Rules() {
         </Card>
 
         {/* 1. RULES LIST (TOP) */}
-        <div>
+        <div data-rules-list>
           <div className="flex items-center justify-between mb-6">
-            <div>
+            <div className="flex-1">
               <h2 className="text-2xl font-bold tracking-tight">Rules</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Create rules for specific page type and category combinations. The default rule (no page type/category set) applies to pages without a matching specific rule.
               </p>
+              
+              {/* Filters */}
+              <div className="flex items-center gap-3 mt-4">
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground">Page Type:</Label>
+                  <Select value={filterPageType} onValueChange={(value) => {
+                    setFilterPageType(value);
+                    setFilterCategory("all");
+                  }}>
+                    <SelectTrigger className="w-[200px] h-8 text-xs rounded-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All page types</SelectItem>
+                      {pageTypes.filter(pt => pt.active).map(pt => (
+                        <SelectItem key={pt.id} value={pt.id}>{pt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground">Category:</Label>
+                  <Select 
+                    value={filterCategory} 
+                    onValueChange={setFilterCategory}
+                    disabled={filterPageType === "all"}
+                  >
+                    <SelectTrigger className="w-[200px] h-8 text-xs rounded-full">
+                      <SelectValue placeholder={filterPageType === "all" ? "Select page type first" : "All categories"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All categories</SelectItem>
+                      {availableCategories.filter(cat => cat.active).map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {(filterPageType !== "all" || filterCategory !== "all") && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      setFilterPageType("all");
+                      setFilterCategory("all");
+                    }}
+                    className="h-8 text-xs rounded-full"
+                  >
+                    Clear filters
+                  </Button>
+                )}
+              </div>
             </div>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
@@ -568,19 +829,19 @@ export default function Rules() {
                       </Button>
                     )}
                   </div>
-                  <Select
+                   <Select
                     value={formData.page_type}
                     onValueChange={(value) => {
-                      setFormData({ ...formData, page_type: value });
+                      setFormData({ ...formData, page_type: value, category: "" });
                     }}
                   >
                     <SelectTrigger id="page_type" className="rounded-xl">
                       <SelectValue placeholder="Default (all page types)" />
                     </SelectTrigger>
                     <SelectContent>
-                      {V2_PAGE_TYPES.map((pt) => (
-                        <SelectItem key={pt} value={pt}>
-                          {pt}
+                      {pageTypes.filter(pt => pt.active).map((pt) => (
+                        <SelectItem key={pt.id} value={pt.id}>
+                          {pt.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -616,11 +877,13 @@ export default function Rules() {
                       <SelectValue placeholder={formData.page_type ? "Select category" : "Select page type first"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {formData.page_type && V2_CATEGORIES[formData.page_type]?.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
+                      {formData.page_type && categories
+                        .filter(cat => cat.page_type_id === formData.page_type && cat.active)
+                        .map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.label}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
@@ -661,15 +924,19 @@ export default function Rules() {
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
-          ) : rules.length === 0 ? (
+          ) : filteredRules.length === 0 ? (
             <Card className="rounded-2xl border-0 shadow-sm">
               <CardContent className="py-12 text-center text-muted-foreground">
-                No rules created yet
+                {rules.length === 0 ? "No rules created yet" : "No rules match the selected filters"}
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-6">
-              {rules.map((rule) => (
+              {filteredRules.map((rule) => {
+                const rulePageType = pageTypes.find(pt => pt.id === rule.page_type);
+                const ruleCategory = categories.find(cat => cat.id === rule.category);
+                
+                return (
               <Card 
                 key={rule.id}
                 className={`rounded-2xl border-0 shadow-sm transition-all ${
@@ -688,11 +955,11 @@ export default function Rules() {
                           </Badge>
                         )}
                         <Badge variant="outline" className="rounded-full">
-                          {rule.page_type || "Default (all page types)"}
+                          {rulePageType?.label || "Default (all page types)"}
                         </Badge>
-                        {rule.category && (
+                        {ruleCategory && (
                           <Badge variant="outline" className="rounded-full bg-muted">
-                            {rule.category}
+                            {ruleCategory.label}
                           </Badge>
                         )}
                       </div>
@@ -814,7 +1081,8 @@ export default function Rules() {
                   )}
                 </CardContent>
               </Card>
-              ))}
+              );
+            })}
             </div>
           )}
         </div>
@@ -896,9 +1164,9 @@ export default function Rules() {
                     <SelectValue placeholder="Choose a page type..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {V2_PAGE_TYPES.map((pt) => (
-                      <SelectItem key={pt} value={pt}>
-                        {pt}
+                    {pageTypes.filter(pt => pt.active).map((pt) => (
+                      <SelectItem key={pt.id} value={pt.id}>
+                        {pt.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
