@@ -203,19 +203,22 @@ export function SettingsIssuesLog() {
       <div className="space-y-4 p-4 bg-muted/30 rounded-xl border">
         <div className="space-y-2">
           <Label htmlFor="new-issue">Issue</Label>
-          <Input
+          <Textarea
             id="new-issue"
             value={newIssue}
             onChange={(e) => setNewIssue(e.target.value)}
             placeholder="Brief description of the issue"
-            className="rounded-xl"
+            className="rounded-xl min-h-[80px] resize-y"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
                 createIssue();
               }
             }}
           />
+          <p className="text-xs text-muted-foreground">
+            Press Ctrl+Enter to save
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -258,18 +261,24 @@ export function SettingsIssuesLog() {
                 {editingId === issue.id ? (
                   // Edit mode
                   <div className="space-y-3">
-                    <Input
-                      value={editIssue}
-                      onChange={(e) => setEditIssue(e.target.value)}
-                      className="rounded-xl"
-                      autoFocus
-                    />
-                    <Textarea
-                      value={editComments}
-                      onChange={(e) => setEditComments(e.target.value)}
-                      className="rounded-xl min-h-[60px]"
-                      placeholder="Comments"
-                    />
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Issue</Label>
+                      <Textarea
+                        value={editIssue}
+                        onChange={(e) => setEditIssue(e.target.value)}
+                        className="rounded-xl min-h-[80px] resize-y"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Comments</Label>
+                      <Textarea
+                        value={editComments}
+                        onChange={(e) => setEditComments(e.target.value)}
+                        className="rounded-xl min-h-[60px] resize-y"
+                        placeholder="Additional notes or context"
+                      />
+                    </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"
