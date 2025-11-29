@@ -1,7 +1,20 @@
 /**
  * Domain Configuration for WIZmode v3.1
- * Defines the hierarchical relationship between domains, page types, and categories
+ * 
+ * DEPRECATED: This file is maintained for backward compatibility only.
+ * The canonical source for taxonomy data is now in the database:
+ * - page_type_definitions table
+ * - page_category_definitions table
+ * 
+ * Use src/lib/taxonomy.ts helpers instead for new code.
  */
+
+import { 
+  loadPageTypes, 
+  loadCategories, 
+  getPageTypesForDomain as getPageTypesForDomainDB,
+  getCategoriesForPageType as getCategoriesForPageTypeDB,
+} from "./taxonomy";
 
 export interface DomainConfig {
   domains: string[];
@@ -9,40 +22,28 @@ export interface DomainConfig {
   categoriesByPageType: Record<string, string[]>;
 }
 
+/**
+ * @deprecated Use loadPageTypes() from taxonomy.ts instead
+ * Legacy sync config - kept for backward compatibility
+ */
 export const DOMAIN_CONFIG: DomainConfig = {
   domains: ['Corporate', 'Beer', 'Pub'],
   
   pageTypesByDomain: {
-    'Corporate': [
-      'About',
-      'History',
-      'Environment',
-      'Careers',
-      'News',
-      'Brewery',
-    ],
-    'Beer': [
-      'Beers',
-    ],
-    'Pub': [
-      'Pubs & Hotels Estate',
-    ],
+    'Corporate': ['about', 'history', 'environment', 'careers', 'news', 'brewery'],
+    'Beer': ['beers'],
+    'Pub': ['pubs_hotels_estate'],
   },
   
   categoriesByPageType: {
-    // Corporate page types
-    'About': ['General', 'Legal', 'Direct to Trade'],
-    'History': ['History'],
-    'Environment': ['Sustainability', 'Community'],
-    'Careers': ['Working for Shepherd Neame', 'Pub Tenancies'],
-    'News': ['Pubs & Hotels', 'Community', 'Beer and Drink Brands'],
-    'Brewery': ['Brewing Process', 'Visitors Centre'],
-    
-    // Beer page types
-    'Beers': ['Drink Brands', 'Collection Page'],
-    
-    // Pub page types
-    'Pubs & Hotels Estate': ['About', 'Collection Page'],
+    'about': ['General', 'Legal', 'Direct to Trade'],
+    'history': ['History'],
+    'environment': ['Sustainability', 'Community'],
+    'careers': ['Working for Shepherd Neame', 'Pub Tenancies'],
+    'news': ['Pubs & Hotels', 'Community', 'Beer and Drink Brands'],
+    'brewery': ['Brewing Process', 'Visitors Centre'],
+    'beers': ['Drink Brands', 'Collection Page'],
+    'pubs_hotels_estate': ['About', 'Collection Page'],
   },
 };
 
@@ -79,6 +80,7 @@ export function normalizePath(path: string): string {
 
 /**
  * Get page types for a given domain
+ * @deprecated Use getPageTypesForDomain from taxonomy.ts instead for async loading
  */
 export function getPageTypesForDomain(domain: string | null): string[] {
   if (!domain) return [];
@@ -87,10 +89,29 @@ export function getPageTypesForDomain(domain: string | null): string[] {
 
 /**
  * Get categories for a given page type
+ * @deprecated Use getCategoriesForPageType from taxonomy.ts instead for async loading
  */
 export function getCategoriesForPageType(pageType: string | null): string[] {
   if (!pageType) return [];
   return DOMAIN_CONFIG.categoriesByPageType[pageType] || [];
+}
+
+/**
+ * Async version that loads from database
+ */
+export async function getPageTypesForDomainAsync(domain: string | null): Promise<string[]> {
+  if (!domain) return [];
+  const types = await getPageTypesForDomainDB(domain, true);
+  return types.map(t => t.id);
+}
+
+/**
+ * Async version that loads from database
+ */
+export async function getCategoriesForPageTypeAsync(pageType: string | null): Promise<string[]> {
+  if (!pageType) return [];
+  const categories = await getCategoriesForPageTypeDB(pageType, true);
+  return categories.map(c => c.label);
 }
 
 /**

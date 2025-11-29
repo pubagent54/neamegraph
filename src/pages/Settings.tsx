@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -225,6 +226,25 @@ export default function Settings() {
             Configure system-wide options
           </p>
         </div>
+
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl">Quick Links</CardTitle>
+            <CardDescription>
+              Navigate to specialized settings pages
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link to="/settings/taxonomy">
+              <Button variant="outline" className="w-full rounded-xl justify-start">
+                <span className="font-semibold">Page Types & Categories</span>
+                <span className="ml-auto text-muted-foreground text-sm">
+                  Manage taxonomy →
+                </span>
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
 
         <Card className="rounded-2xl border-0 shadow-sm">
           <CardHeader>

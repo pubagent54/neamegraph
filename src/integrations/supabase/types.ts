@@ -147,6 +147,80 @@ export type Database = {
           },
         ]
       }
+      page_category_definitions: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          id: string
+          label: string
+          page_type_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id: string
+          label: string
+          page_type_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          label?: string
+          page_type_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_category_definitions_page_type_id_fkey"
+            columns: ["page_type_id"]
+            isOneToOne: false
+            referencedRelation: "page_type_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      page_type_definitions: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          domain: string
+          id: string
+          label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          domain: string
+          id: string
+          label: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          domain?: string
+          id?: string
+          label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pages: {
         Row: {
           beer_abv: number | null
