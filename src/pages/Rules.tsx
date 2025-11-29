@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { V2_CATEGORIES } from "@/lib/rules";
 import { SCHEMA_QUALITY_RULES, SCHEMA_QUALITY_RULE_DESCRIPTIONS } from "@/config/schemaQualityRules";
+import { ORG_DESCRIPTION } from "@/config/organization";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface Rule {
@@ -464,6 +465,15 @@ export default function Rules() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              {/* Organization Strap Display */}
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <p className="text-sm text-muted-foreground mb-1">
+                  <span className="font-semibold">Shepherd Neame Organisation strap (ORG_DESCRIPTION):</span>
+                </p>
+                <p className="text-sm leading-relaxed">
+                  {ORG_DESCRIPTION}
+                </p>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>

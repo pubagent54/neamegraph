@@ -1,5 +1,12 @@
 # NeameGraph – Schema Quality Charter
 
+**Shepherd Neame Organisation strap (ORG_DESCRIPTION)**  
+Shepherd Neame Limited is listed on the Aquis Stock Exchange and is Britain's oldest brewer, based in Faversham, Kent. It owns and operates a large estate of pubs and hotels across Kent, London and the South East.
+
+_Note: This strap is mirrored in the code via the `ORG_DESCRIPTION` constant (`src/config/organization.ts`) and should be kept in sync when edited._
+
+---
+
 ## 1. Purpose
 
 NeameGraph's job is to publish **world-class structured data** that:
