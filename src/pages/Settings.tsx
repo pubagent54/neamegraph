@@ -20,6 +20,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { SettingsIssuesLog } from "@/components/SettingsIssuesLog";
 
 interface Settings {
   id: string;
@@ -464,6 +471,27 @@ export default function Settings() {
             </CardContent>
           </Card>
         )}
+
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl">Advanced</CardTitle>
+            <CardDescription>
+              Additional settings and tools
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="issues-log" className="border-b-0">
+                <AccordionTrigger className="hover:no-underline py-3">
+                  <span className="text-sm font-medium">Issues log (testing)</span>
+                </AccordionTrigger>
+                <AccordionContent className="pt-4">
+                  <SettingsIssuesLog />
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+        </Card>
 
         <div className="flex gap-3">
           <Button onClick={handleSave} disabled={saving} className="rounded-full">

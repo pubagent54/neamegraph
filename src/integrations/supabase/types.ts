@@ -147,6 +147,36 @@ export type Database = {
           },
         ]
       }
+      issues: {
+        Row: {
+          comments: string | null
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          issue: string
+          resolved: boolean
+          resolved_at: string | null
+        }
+        Insert: {
+          comments?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          issue: string
+          resolved?: boolean
+          resolved_at?: string | null
+        }
+        Update: {
+          comments?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          issue?: string
+          resolved?: boolean
+          resolved_at?: string | null
+        }
+        Relationships: []
+      }
       page_category_definitions: {
         Row: {
           active: boolean
