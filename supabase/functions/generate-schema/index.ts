@@ -587,6 +587,136 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         console.log(`✓ Cleaned ${cleanedHasPartCount} dangling hasPart reference(s)`);
       }
       
+      // STEP 6: Transform beer detail pages to use Product as main entity
+      // Charter rule: Individual beer pages should model the beer as a Product
+      // Collection pages (like /Beers) remain as ItemList/CollectionPage
+      const isBeerDetailPage = page.page_type === "Beers" && page.category === "Drink Brands";
+      
+      if (isBeerDetailPage) {
+        console.log("Beer detail page detected - transforming to Product schema");
+        
+        // Find the main WebPage node for this page
+        const pageWebPageNode = graph.find((node: any) => {
+          const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+          return types.includes("WebPage") && node.url === canonicalUrl;
+        });
+        
+        if (pageWebPageNode) {
+          // Create Product node for the beer
+          const productId = `${canonicalUrl}#product`;
+          
+          // Check if Product node already exists (AI might have created it)
+          let productNode = graph.find((node: any) => node["@id"] === productId);
+          
+          if (!productNode) {
+            // Extract beer name from WebPage node or page metadata
+            const beerName = pageWebPageNode.name || page.path.split('/').pop()?.replace(/-/g, ' ');
+            
+            // Find hero image from page metadata or existing graph nodes
+            let beerImage = page.hero_image_url || page.logo_url;
+            
+            // Try to find image from existing Brand or ImageObject nodes
+            if (!beerImage) {
+              const imageNode = graph.find((node: any) => {
+                const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+                return types.includes("ImageObject") && node.url;
+              });
+              if (imageNode) {
+                beerImage = imageNode.url;
+              }
+            }
+            
+            // Create Product node
+            productNode = {
+              "@type": "Product",
+              "@id": productId,
+              "name": beerName,
+              "url": canonicalUrl,
+              "brand": { "@id": orgId },
+              "manufacturer": { "@id": orgId }
+            };
+            
+            // Add description from WebPage if available
+            if (pageWebPageNode.description) {
+              productNode.description = pageWebPageNode.description;
+            }
+            
+            // Add image if available
+            if (beerImage) {
+              productNode.image = {
+                "@type": "ImageObject",
+                "url": beerImage
+              };
+            }
+            
+            // Add beer-specific metadata if available
+            if (page.beer_abv) {
+              productNode.alcoholByVolume = page.beer_abv.toString();
+            }
+            
+            // Add additionalProperty for style if available
+            if (page.beer_style) {
+              productNode.additionalProperty = productNode.additionalProperty || [];
+              productNode.additionalProperty.push({
+                "@type": "PropertyValue",
+                "name": "Style",
+                "value": page.beer_style
+              });
+            }
+            
+            // Add launch year via releaseDate if available
+            if (page.beer_launch_year) {
+              productNode.releaseDate = page.beer_launch_year.toString();
+            }
+            
+            // Add sameAs for wikidata if available
+            if (page.wikidata_qid) {
+              productNode.sameAs = [`https://www.wikidata.org/wiki/${page.wikidata_qid}`];
+            }
+            
+            graph.push(productNode);
+            console.log("✓ Created Product node for beer");
+          } else {
+            // Product node exists - ensure it has correct brand/manufacturer
+            productNode.brand = { "@id": orgId };
+            productNode.manufacturer = { "@id": orgId };
+            console.log("✓ Updated existing Product node");
+          }
+          
+          // Update WebPage's mainEntity to reference Product
+          pageWebPageNode.mainEntity = { "@id": productId };
+          pageWebPageNode.about = { "@id": productId };
+          
+          console.log("✓ Linked WebPage mainEntity to Product");
+          
+          // Remove any Brand nodes that were the main entity (beer should be Product, not Brand)
+          // Keep Organization and other structural nodes
+          const brandNodesToRemove: number[] = [];
+          graph.forEach((node: any, index: number) => {
+            const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+            if (types.includes("Brand") && !types.includes("Organization") && node["@id"] !== orgId) {
+              // Check if this Brand was the main entity
+              const isMainEntity = node["@id"] && (
+                pageWebPageNode.mainEntity?.["@id"] === node["@id"] ||
+                pageWebPageNode.about?.["@id"] === node["@id"]
+              );
+              if (isMainEntity) {
+                brandNodesToRemove.push(index);
+              }
+            }
+          });
+          
+          // Remove Brand nodes in reverse order to maintain indices
+          for (let i = brandNodesToRemove.length - 1; i >= 0; i--) {
+            graph.splice(brandNodesToRemove[i], 1);
+          }
+          
+          if (brandNodesToRemove.length > 0) {
+            console.log(`✓ Removed ${brandNodesToRemove.length} Brand node(s) (replaced with Product)`);
+          }
+        }
+      }
+      
       // Update the graph in the jsonld object
       v2Jsonld["@graph"] = graph;
       
