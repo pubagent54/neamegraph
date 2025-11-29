@@ -1,10 +1,11 @@
 /**
  * Rules Management Screen (Admin Only)
  * 
- * Manages schema generation prompts matched by (page_type, category) pairs.
+ * Manages schema generation prompts at the Domain level (Corporate, Beer, Pub).
  * Rules are sent as system prompts to NeameGraph Brain (LLM) when generating JSON-LD.
- * Features: inline editing, backup/restore, coverage dashboard, and preview/test tool.
- * Default rule (both page_type and category NULL) serves as fallback for unmatched pages.
+ * Domain-level rules are the primary/default way to configure schema generation.
+ * Page Type and Category are passed as context to the prompt for adaptive behavior.
+ * Advanced users can optionally create page_type/category-specific overrides.
  */
 
 import { useEffect, useState } from "react";
@@ -13,15 +14,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Copy, Edit2, Plus, RotateCcw, Trash2, FileText, ExternalLink, Settings, AlertCircle } from "lucide-react";
+import { CheckCircle, Edit2, Plus, Trash2, FileText, ExternalLink, Layers } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -37,7 +37,7 @@ import { SCHEMA_QUALITY_RULES, SCHEMA_QUALITY_RULE_DESCRIPTIONS } from "@/config
 import { ORG_DESCRIPTION } from "@/config/organization";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePageTypes, useCategories } from "@/hooks/use-taxonomy";
-import { useNavigate } from "react-router-dom";
+import { getDomains } from "@/lib/taxonomy";
 
 interface Rule {
   id: string;
@@ -53,7 +53,6 @@ interface Rule {
 
 export default function Rules() {
   const { userRole } = useAuth();
-  const navigate = useNavigate();
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -64,43 +63,26 @@ export default function Rules() {
     page_type: "",
     category: ""
   });
-  const [originalBodies, setOriginalBodies] = useState<Record<string, string>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [ruleToDelete, setRuleToDelete] = useState<Rule | null>(null);
   
   const isAdmin = userRole === "admin";
-  const [pageTypeCounts, setPageTypeCounts] = useState<Record<string, number>>({});
-  const [previewPageType, setPreviewPageType] = useState<string>("");
-  const [previewRule, setPreviewRule] = useState<Rule | null>(null);
-  const [previewDefaultRule, setPreviewDefaultRule] = useState<Rule | null>(null);
-  const [pages, setPages] = useState<Array<{ id: string; path: string; page_type: string | null }>>([]);
-  const [previewPageId, setPreviewPageId] = useState<string>("");
-  const [ruleCoverage, setRuleCoverage] = useState<Record<string, { rule: Rule | null; count: number }>>({});
   
   // Taxonomy-aware state
-  const { pageTypes, loading: pageTypesLoading } = usePageTypes();
-  const { categories, loading: categoriesLoading } = useCategories();
-  const [filterPageType, setFilterPageType] = useState<string>("all");
-  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const { pageTypes } = usePageTypes();
+  const { categories } = useCategories();
+  const [domains, setDomains] = useState<string[]>([]);
+  const [showAdvancedOverrides, setShowAdvancedOverrides] = useState(false);
 
   useEffect(() => {
     fetchRules();
-    fetchPageTypeCounts();
-    fetchPages();
-    fetchRuleCoverage();
+    loadDomains();
   }, []);
 
-  useEffect(() => {
-    setPreviewRule(null);
-    setPreviewDefaultRule(null);
-  }, [previewPageType, previewPageId]);
-
-  useEffect(() => {
-    // Refetch coverage when rules change
-    if (rules.length > 0) {
-      fetchRuleCoverage();
-    }
-  }, [rules]);
+  const loadDomains = async () => {
+    const domainList = await getDomains();
+    setDomains(domainList);
+  };
 
   const fetchRules = async () => {
     try {
@@ -111,73 +93,11 @@ export default function Rules() {
 
       if (error) throw error;
       setRules(data || []);
-      
-      // Store original bodies for inline editing
-      const bodies: Record<string, string> = {};
-      (data || []).forEach((rule) => {
-        bodies[rule.id] = rule.body;
-      });
-      setOriginalBodies(bodies);
     } catch (error) {
       console.error("Error fetching rules:", error);
       toast.error("Failed to fetch rules");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchPageTypeCounts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("pages")
-        .select("page_type");
-
-      if (error) throw error;
-
-      const counts: Record<string, number> = {};
-      (data || []).forEach((page) => {
-        const type = page.page_type || "unknown";
-        counts[type] = (counts[type] || 0) + 1;
-      });
-      setPageTypeCounts(counts);
-    } catch (error) {
-      console.error("Error fetching page type counts:", error);
-    }
-  };
-
-  const fetchPages = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("pages")
-        .select("id, path, page_type")
-        .order("path");
-
-      if (error) throw error;
-      setPages(data || []);
-    } catch (error) {
-      console.error("Error fetching pages:", error);
-    }
-  };
-
-  const handleInlineUpdate = async (ruleId: string, newBody: string) => {
-    try {
-      const originalBody = originalBodies[ruleId];
-      
-      const { error } = await supabase
-        .from("rules")
-        .update({
-          body: newBody,
-          rules_backup: originalBody,
-        })
-        .eq("id", ruleId);
-
-      if (error) throw error;
-      
-      toast.success("Rules updated");
-      await fetchRules();
-    } catch (error) {
-      console.error("Error updating rules:", error);
-      toast.error("Failed to update rules");
     }
   };
 
@@ -246,74 +166,6 @@ export default function Rules() {
     }
   };
 
-  const handleRestoreBackup = async (rule: Rule) => {
-    if (!rule.rules_backup) {
-      toast.error("No backup available");
-      return;
-    }
-
-    try {
-      // Move current rules to backup, restore backup as current
-      const { error } = await supabase
-        .from("rules")
-        .update({
-          rules_backup: rule.body,
-          body: rule.rules_backup,
-        })
-        .eq("id", rule.id);
-
-      if (error) throw error;
-      
-      toast.success("Backup restored successfully");
-      fetchRules();
-    } catch (error) {
-      console.error("Error restoring backup:", error);
-      toast.error("Failed to restore backup");
-    }
-  };
-
-  const handleSetActive = async (id: string) => {
-    try {
-      const ruleToActivate = rules.find(r => r.id === id);
-      if (!ruleToActivate) return;
-
-      // Deactivate any other rule with the same page_type + category combination
-      const { error: deactivateError } = await supabase
-        .from("rules")
-        .update({ is_active: false })
-        .eq("page_type", ruleToActivate.page_type)
-        .eq("category", ruleToActivate.category)
-        .neq("id", id);
-
-      if (deactivateError) throw deactivateError;
-
-      // Activate selected rule
-      const { error } = await supabase
-        .from("rules")
-        .update({ is_active: true })
-        .eq("id", id);
-
-      if (error) throw error;
-
-      toast.success("Active rule updated");
-      fetchRules();
-    } catch (error) {
-      console.error("Error setting active rule:", error);
-      toast.error("Failed to update active rule");
-    }
-  };
-
-  const handleDuplicate = (rule: Rule) => {
-    setFormData({
-      name: `${rule.name} (Copy)`,
-      body: rule.body,
-      page_type: rule.page_type || "",
-      category: rule.category || "",
-    });
-    setEditingRule(null);
-    setDialogOpen(true);
-  };
-
   const handleEdit = (rule: Rule) => {
     setFormData({
       name: rule.name,
@@ -325,166 +177,49 @@ export default function Rules() {
     setDialogOpen(true);
   };
 
-  const openNewDialog = () => {
-    setFormData({ name: "", body: "", page_type: "", category: "" });
-    setEditingRule(null);
-    setDialogOpen(true);
-  };
-
   const openDeleteDialog = (rule: Rule) => {
     setRuleToDelete(rule);
     setDeleteDialogOpen(true);
   };
 
   // ========================================
-  // RULES MATCHING ALGORITHM
+  // RULES MATCHING ALGORITHM (PRIORITY ORDER)
   // ----------------------------------------
-  // Rules are matched by (page_type, category) pair
-  // 1. Try exact match: rules.page_type = page.page_type AND rules.category = page.category
-  // 2. Fallback: active default rule where both page_type and category are NULL
-  // 3. Database enforces unique constraint on active rules per (page_type, category)
+  // Rules are matched with the following priority:
+  // 1. Category-specific override: rules.page_type == page.page_type AND rules.category == page.category
+  // 2. Page Type override: rules.page_type == page.page_type AND rules.category IS NULL
+  // 3. Domain default: rules.page_type IS NULL AND rules.category IS NULL (matched by domain in app logic)
+  // 
+  // Domain context (domain, pageType, category) is always passed to the prompt for adaptive behavior.
+  // Database enforces unique constraint on active rules per (page_type, category) combination.
   // ----------------------------------------
-  const handlePreview = async () => {
-    let targetPageType = previewPageType;
-    let targetCategory: string | null = null;
-    
-    // If a specific page is selected, use its page type and category
-    if (previewPageId) {
-      const { data: selectedPage } = await supabase
-        .from("pages")
-        .select("page_type, category")
-        .eq("id", previewPageId)
-        .single();
-        
-      if (selectedPage?.page_type) {
-        targetPageType = selectedPage.page_type;
-        targetCategory = selectedPage.category;
-      }
-    }
-    
-    if (!targetPageType) return;
 
-    // Find specific rule for this page type + category combination
-    const specificRule = rules.find(
-      (r) => r.is_active && 
-             r.page_type === targetPageType && 
-             r.category === targetCategory
-    );
-
-    // Find the default rule for comparison (page_type and category both null)
-    const defaultRule = rules.find(
-      (r) => r.is_active && r.page_type === null && r.category === null
-    );
-    
-    if (specificRule) {
-      setPreviewRule(specificRule);
-      setPreviewDefaultRule(defaultRule || null);
-      return;
-    }
-
-    // Fallback to default rule
-    setPreviewRule(defaultRule || null);
-    setPreviewDefaultRule(null); // No need to show it twice
+  // Get domain-level rule for a given domain
+  const getDomainRule = (domain: string) => {
+    // For now, we use page_type=null, category=null as domain rules
+    // In the future, we could add a domain field to the rules table
+    return rules.find(r => r.is_active && r.page_type === null && r.category === null);
   };
 
-  const getRuleCoverage = async () => {
-    // Fetch pages with their page_type and category
-    const { data: pagesData } = await supabase
-      .from("pages")
-      .select("page_type, category");
-    
-    const coverage: Record<string, { rule: Rule | null; count: number }> = {};
-    
-    (pagesData || []).forEach((page) => {
-      const key = `${page.page_type || 'unknown'}::${page.category || 'none'}`;
-      
-      // Find matching rule for this page_type + category
-      const matchedRule = rules.find(
-        (r) => r.is_active && 
-               r.page_type === page.page_type && 
-               r.category === page.category
-      );
-      
-      // Fall back to default rule if no specific match
-      const defaultRule = rules.find(
-        (r) => r.is_active && r.page_type === null && r.category === null
-      );
-      
-      const ruleToUse = matchedRule || defaultRule;
-      
-      if (!coverage[key]) {
-        coverage[key] = { rule: ruleToUse, count: 0 };
-      }
-      coverage[key].count++;
-    });
-
-    return coverage;
+  // Get domain status
+  const getDomainStatus = (domain: string) => {
+    const domainRule = getDomainRule(domain);
+    if (!domainRule) return { status: "not_configured", label: "Not configured", variant: "outline" as const };
+    if (domainRule.is_active) return { status: "active", label: "Active", variant: "default" as const };
+    return { status: "draft", label: "Draft", variant: "secondary" as const };
   };
 
-  const fetchRuleCoverage = async () => {
-    const coverage = await getRuleCoverage();
-    setRuleCoverage(coverage);
+  // Get page type/category overrides for display in advanced section
+  const getOverrideRules = () => {
+    return rules.filter(r => r.page_type !== null || r.category !== null);
   };
 
-  // Compute taxonomy coverage
-  const taxonomyCoverage = pageTypes.map((pageType) => {
-    const pageTypeCategories = categories.filter(cat => cat.page_type_id === pageType.id);
-    
-    const categoriesWithRules = pageTypeCategories.map(cat => {
-      const specificRule = rules.find(
-        r => r.is_active && r.page_type === pageType.id && r.category === cat.id
-      );
-      const pageTypeDefaultRule = rules.find(
-        r => r.is_active && r.page_type === pageType.id && r.category === null
-      );
-      const globalDefaultRule = rules.find(
-        r => r.is_active && r.page_type === null && r.category === null
-      );
-      
-      let status: "has_rule" | "page_type_default" | "global_default" | "no_rule";
-      let appliedRule: Rule | null = null;
-      
-      if (specificRule) {
-        status = "has_rule";
-        appliedRule = specificRule;
-      } else if (pageTypeDefaultRule) {
-        status = "page_type_default";
-        appliedRule = pageTypeDefaultRule;
-      } else if (globalDefaultRule) {
-        status = "global_default";
-        appliedRule = globalDefaultRule;
-      } else {
-        status = "no_rule";
-      }
-      
-      return {
-        category: cat,
-        status,
-        rule: appliedRule
-      };
-    });
-    
-    const withRules = categoriesWithRules.filter(c => c.status === "has_rule").length;
-    const total = pageTypeCategories.length;
-    
-    return {
-      pageType,
-      categories: categoriesWithRules,
-      coverage: { withRules, total }
-    };
-  });
-
-  // Filter rules based on selected filters
-  const filteredRules = rules.filter(rule => {
-    if (filterPageType !== "all" && rule.page_type !== filterPageType) return false;
-    if (filterCategory !== "all" && rule.category !== filterCategory) return false;
-    return true;
-  });
-
-  // Get available categories for selected page type
-  const availableCategories = filterPageType !== "all" 
-    ? categories.filter(cat => cat.page_type_id === filterPageType)
-    : [];
+  // Domain rules for display
+  const domainRules = domains.map(domain => ({
+    domain,
+    rule: getDomainRule(domain),
+    status: getDomainStatus(domain)
+  }));
 
   return (
     <Layout>
@@ -492,161 +227,183 @@ export default function Rules() {
         <div>
           <h1 className="text-4xl font-bold tracking-tight mb-2">NeameGraph Brain Rules</h1>
           <p className="text-lg text-muted-foreground">
-            Manage schema engine prompts for each page type and category combination. Set a default rule (no page type or category) to handle pages without specific rules.
+            Domain-level schema generation prompts. Each domain has a primary rule that defines how the NeameGraph Brain generates JSON-LD schema. Page Type and Category are passed as context to enable adaptive behavior.
           </p>
         </div>
 
-        {/* TAXONOMY COVERAGE PANEL (NEW - TOP) */}
+        {/* DOMAIN-LEVEL RULES */}
         <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-primary/5">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <Settings className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-2xl">Schema Coverage by Page Type & Category</CardTitle>
+                  <Layers className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-2xl">Domain Rules</CardTitle>
                 </div>
                 <CardDescription>
-                  Read-only view of how your canonical page taxonomy is wired into the schema engine.
+                  Primary schema generation rules organized by domain. Domain rules are the default way to configure schema generation. {domainRules.filter(d => d.status.status === 'active').length} of {domains.length} domains configured.
                 </CardDescription>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => navigate("/settings/taxonomy")}
-                className="rounded-full"
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Manage Page Types & Categories
-              </Button>
             </div>
           </CardHeader>
           <CardContent>
-            {pageTypesLoading || categoriesLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-              </div>
-            ) : pageTypes.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No page types found.</p>
-                <Button 
-                  variant="link" 
-                  onClick={() => navigate("/settings/taxonomy")}
-                  className="mt-2"
+            <div className="space-y-3">
+              {domainRules.map(({ domain, rule, status }) => (
+                <div 
+                  key={domain}
+                  className="rounded-xl border bg-card p-4 hover:border-primary/40 transition-colors cursor-pointer"
+                  onClick={() => {
+                    if (rule) {
+                      handleEdit(rule);
+                    } else {
+                      // Create new rule for this domain
+                      setFormData({ 
+                        name: `${domain} Schema Rule`, 
+                        body: `# ${domain} Schema Generation Prompt\n\nYou will generate JSON-LD schema for ${domain} pages.\n\nContext provided:\n- domain: ${domain}\n- pageType: (will be provided)\n- category: (will be provided)\n\nUse this context to adapt schema generation behavior. Follow the Schema Quality Charter principles.\n\n## Instructions\n\nTODO: Add specific instructions for ${domain} schema generation.`, 
+                        page_type: "",
+                        category: ""
+                      });
+                      setEditingRule(null);
+                      setDialogOpen(true);
+                    }
+                  }}
                 >
-                  Go to Settings → Page Types & Categories to define your taxonomy
-                </Button>
-              </div>
-            ) : (
-              <Accordion type="multiple" className="space-y-2">
-                {taxonomyCoverage.map(({ pageType, categories: cats, coverage }) => (
-                  <AccordionItem 
-                    key={pageType.id} 
-                    value={pageType.id}
-                    className="border rounded-xl bg-card/50"
-                  >
-                    <AccordionTrigger className="px-4 hover:no-underline">
-                      <div className="flex items-center gap-3 flex-1">
-                        <span className="font-semibold">{pageType.label}</span>
-                        <Badge variant="outline" className="rounded-full font-mono text-xs">
-                          {pageType.id}
-                        </Badge>
-                        <Badge 
-                          variant={coverage.withRules === coverage.total ? "default" : "secondary"} 
-                          className="rounded-full ml-auto mr-2"
-                        >
-                          {coverage.withRules} of {coverage.total} categories have rules
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-lg font-semibold">{domain}</h3>
+                        <Badge variant={status.variant} className="rounded-full text-xs">
+                          {status.label}
                         </Badge>
                       </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
-                      {cats.length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic py-2">
-                          No categories defined for this page type
-                        </p>
-                      ) : (
-                        <div className="rounded-lg border overflow-hidden">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="border-b bg-muted/30">
-                                <th className="text-left p-2 text-xs font-medium">Category Label</th>
-                                <th className="text-left p-2 text-xs font-medium">Category ID</th>
-                                <th className="text-left p-2 text-xs font-medium">Status</th>
-                                <th className="text-left p-2 text-xs font-medium">Rule(s)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {cats.map(({ category, status, rule }) => (
-                                <tr 
-                                  key={category.id} 
-                                  className="border-b last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
-                                  onClick={() => {
-                                    setFilterPageType(pageType.id);
-                                    setFilterCategory(category.id);
-                                    // Scroll to rules list
-                                    document.querySelector('[data-rules-list]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                  }}
-                                >
-                                  <td className="p-2 text-sm">{category.label}</td>
-                                  <td className="p-2">
-                                    <code className="text-xs text-muted-foreground">{category.id}</code>
-                                  </td>
-                                  <td className="p-2">
-                                    {status === "has_rule" && (
-                                      <Badge className="bg-primary rounded-full text-xs">
-                                        <CheckCircle className="mr-1 h-3 w-3" />
-                                        Has rule
-                                      </Badge>
-                                    )}
-                                    {status === "page_type_default" && (
-                                      <Badge variant="secondary" className="rounded-full text-xs">
-                                        Page type default
-                                      </Badge>
-                                    )}
-                                    {status === "global_default" && (
-                                      <Badge variant="outline" className="rounded-full text-xs">
-                                        Global default
-                                      </Badge>
-                                    )}
-                                    {status === "no_rule" && (
-                                      <Badge variant="outline" className="rounded-full text-xs text-muted-foreground">
-                                        <AlertCircle className="mr-1 h-3 w-3" />
-                                        No rule
-                                      </Badge>
-                                    )}
-                                  </td>
-                                  <td className="p-2">
-                                    {rule ? (
-                                      <button 
-                                        className="text-sm text-primary hover:underline"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setFilterPageType(pageType.id);
-                                          setFilterCategory(category.id);
-                                          document.querySelector('[data-rules-list]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                        }}
-                                      >
-                                        {rule.name}
-                                      </button>
-                                    ) : (
-                                      <span className="text-sm text-muted-foreground italic">—</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                      {rule ? (
+                        <div className="space-y-1">
+                          <p className="text-sm text-muted-foreground">{rule.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Updated {new Date(rule.created_at).toLocaleDateString()}
+                          </p>
                         </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">
+                          No rule configured. Click to create.
+                        </p>
                       )}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            )}
+                    </div>
+                    {rule && isAdmin && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(rule);
+                          }}
+                          className="rounded-full"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Advanced Overrides Section */}
+            <div className="mt-6 pt-6 border-t">
+              <Collapsible open={showAdvancedOverrides} onOpenChange={setShowAdvancedOverrides}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="w-full justify-between rounded-xl">
+                    <span className="text-sm font-medium">Advanced overrides (optional)</span>
+                    <Badge variant="outline" className="rounded-full">
+                      {getOverrideRules().length} override{getOverrideRules().length !== 1 ? 's' : ''}
+                    </Badge>
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-3">
+                  <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      Advanced: Create page type or category-specific rule overrides. These are rarely needed—most schema generation should use the domain-level rule. Overrides take precedence over domain rules when matched.
+                    </p>
+                    {getOverrideRules().length === 0 ? (
+                      <div className="text-center py-6 text-muted-foreground">
+                        <p className="text-sm">No overrides configured.</p>
+                        <p className="text-xs mt-1">Domain-level rules handle all pages by default.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {getOverrideRules().map(rule => (
+                          <div 
+                            key={rule.id}
+                            className="rounded-lg border bg-card p-3 text-sm space-y-1"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <p className="font-medium">{rule.name}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  {rule.page_type && (
+                                    <Badge variant="outline" className="text-xs rounded-full">
+                                      Page Type: {pageTypes.find(pt => pt.id === rule.page_type)?.label || rule.page_type}
+                                    </Badge>
+                                  )}
+                                  {rule.category && (
+                                    <Badge variant="outline" className="text-xs rounded-full">
+                                      Category: {categories.find(c => c.id === rule.category)?.label || rule.category}
+                                    </Badge>
+                                  )}
+                                  {rule.is_active && (
+                                    <Badge className="text-xs rounded-full">Active</Badge>
+                                  )}
+                                </div>
+                              </div>
+                              {isAdmin && (
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEdit(rule)}
+                                    className="h-8 w-8 p-0 rounded-full"
+                                  >
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => openDeleteDialog(rule)}
+                                    className="h-8 w-8 p-0 rounded-full text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {isAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setFormData({ name: "", body: "", page_type: "", category: "" });
+                          setEditingRule(null);
+                          setDialogOpen(true);
+                        }}
+                        className="w-full rounded-full mt-3"
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Override Rule
+                      </Button>
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
           </CardContent>
         </Card>
 
-        {/* 0. SCHEMA QUALITY CHARTER (GLOBAL) */}
+        {/* SCHEMA QUALITY CHARTER (GLOBAL) */}
         <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-primary/5">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -656,7 +413,7 @@ export default function Rules() {
                   <CardTitle className="text-2xl">Schema Quality Charter (Global)</CardTitle>
                 </div>
                 <CardDescription>
-                  These global quality rules apply to every schema run (Corporate, Beers, Pubs). They are defined in the Schema Quality Charter and enforced by the schema engine.
+                  Global quality standards that apply to all domain rules. Domain-level prompts receive domain, pageType, and category as context to enable adaptive schema generation behavior.
                 </CardDescription>
               </div>
               <Button 
@@ -681,6 +438,17 @@ export default function Rules() {
                   {ORG_DESCRIPTION}
                 </p>
               </div>
+              
+              <div className="rounded-lg border bg-primary/5 p-4">
+                <p className="text-sm font-medium mb-2">Taxonomy Context Passed to Prompts:</p>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <p>• <span className="font-mono">domain</span> – The domain scope (Corporate, Beer, Pub)</p>
+                  <p>• <span className="font-mono">pageType</span> – The page type ID from taxonomy</p>
+                  <p>• <span className="font-mono">category</span> – The category ID from taxonomy</p>
+                  <p className="mt-2 italic">Use these values in your domain rule prompts to adapt schema generation behavior (e.g., treat FAQ categories as FAQPage, careers pages as JobPosting, etc.).</p>
+                </div>
+              </div>
+
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -720,544 +488,137 @@ export default function Rules() {
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        {/* 1. RULES LIST (TOP) */}
-        <div data-rules-list>
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold tracking-tight">Rules</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Create rules for specific page type and category combinations. The default rule (no page type/category set) applies to pages without a matching specific rule.
-              </p>
-              
-              {/* Filters */}
-              <div className="flex items-center gap-3 mt-4">
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground">Page Type:</Label>
-                  <Select value={filterPageType} onValueChange={(value) => {
-                    setFilterPageType(value);
-                    setFilterCategory("all");
-                  }}>
-                    <SelectTrigger className="w-[200px] h-8 text-xs rounded-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All page types</SelectItem>
-                      {pageTypes.filter(pt => pt.active).map(pt => (
-                        <SelectItem key={pt.id} value={pt.id}>{pt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground">Category:</Label>
-                  <Select 
-                    value={filterCategory} 
-                    onValueChange={setFilterCategory}
-                    disabled={filterPageType === "all"}
+      {/* RULE EDITOR DIALOG */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingRule ? "Edit Rule" : "Create New Rule"}
+            </DialogTitle>
+            <DialogDescription>
+              Define the NeameGraph Brain prompt for schema generation
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                placeholder="e.g., Corporate Schema Prompt v1.1"
+                className="rounded-xl"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="page_type">Page Type (Optional)</Label>
+                {formData.page_type && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFormData({ ...formData, page_type: "" })}
+                    className="h-auto py-1 px-2 text-xs"
                   >
-                    <SelectTrigger className="w-[200px] h-8 text-xs rounded-full">
-                      <SelectValue placeholder={filterPageType === "all" ? "Select page type first" : "All categories"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All categories</SelectItem>
-                      {availableCategories.filter(cat => cat.active).map(cat => (
-                        <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {(filterPageType !== "all" || filterCategory !== "all") && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => {
-                      setFilterPageType("all");
-                      setFilterCategory("all");
-                    }}
-                    className="h-8 text-xs rounded-full"
-                  >
-                    Clear filters
+                    Clear
                   </Button>
                 )}
               </div>
-            </div>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={openNewDialog} className="rounded-full">
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Rule
-                </Button>
-              </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto rounded-2xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingRule ? "Edit Rule" : "Create New Rule"}
-                </DialogTitle>
-                <DialogDescription>
-                  Define the NeameGraph Brain prompt for schema generation
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    placeholder="e.g., Corporate Schema Prompt v1.1"
-                    className="rounded-xl"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="page_type">Page Type (Optional)</Label>
-                    {formData.page_type && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setFormData({ ...formData, page_type: "" })}
-                        className="h-auto py-1 px-2 text-xs"
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                   <Select
-                    value={formData.page_type}
-                    onValueChange={(value) => {
-                      setFormData({ ...formData, page_type: value, category: "" });
-                    }}
-                  >
-                    <SelectTrigger id="page_type" className="rounded-xl">
-                      <SelectValue placeholder="Default (all page types)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {pageTypes.filter(pt => pt.active).map((pt) => (
-                        <SelectItem key={pt.id} value={pt.id}>
-                          {pt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                   <p className="text-xs text-muted-foreground">
-                    Leave blank for a default rule that applies to all page types. Set to create a specific rule for that page type.
-                   </p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="category">Category (Optional)</Label>
-                    {formData.category && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setFormData({ ...formData, category: "" })}
-                        className="h-auto py-1 px-2 text-xs"
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) => {
-                      setFormData({ ...formData, category: value });
-                    }}
-                    disabled={!formData.page_type}
-                  >
-                    <SelectTrigger id="category" className="rounded-xl">
-                      <SelectValue placeholder={formData.page_type ? "Select category" : "Select page type first"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {formData.page_type && categories
-                        .filter(cat => cat.page_type_id === formData.page_type && cat.active)
-                        .map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.label}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Optional category for this rule. Combine with Page Type for fine-grained rule matching.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="body">Prompt Body</Label>
-                    <span className="text-xs text-muted-foreground">
-                      {formData.body.length} characters
-                      {formData.body.length > 0 && ` • ${formData.body.split('\n').length} lines`}
-                    </span>
-                  </div>
-                  <Textarea
-                    id="body"
-                    value={formData.body}
-                    onChange={(e) =>
-                      setFormData({ ...formData, body: e.target.value })
-                    }
-                    placeholder="Enter the system prompt for NeameGraph Brain schema generation..."
-                    className="min-h-[400px] font-mono text-sm rounded-xl leading-relaxed"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    This prompt will be used by NeameGraph Brain to generate JSON-LD schema for matching pages.
-                  </p>
-                </div>
-                <Button onClick={handleSave} className="w-full rounded-full">
-                  Save Rule
-                </Button>
-              </div>
-            </DialogContent>
-            </Dialog>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : filteredRules.length === 0 ? (
-            <Card className="rounded-2xl border-0 shadow-sm">
-              <CardContent className="py-12 text-center text-muted-foreground">
-                {rules.length === 0 ? "No rules created yet" : "No rules match the selected filters"}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-6">
-              {filteredRules.map((rule) => {
-                const rulePageType = pageTypes.find(pt => pt.id === rule.page_type);
-                const ruleCategory = categories.find(cat => cat.id === rule.category);
-                
-                return (
-              <Card 
-                key={rule.id}
-                className={`rounded-2xl border-0 shadow-sm transition-all ${
-                  rule.is_active ? "ring-2 ring-primary bg-gradient-to-br from-card to-primary/5" : ""
-                }`}
+              <Select
+                value={formData.page_type}
+                onValueChange={(value) => {
+                  setFormData({ ...formData, page_type: value, category: "" });
+                }}
               >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        <CardTitle className="text-xl">{rule.name}</CardTitle>
-                        {rule.is_active && (
-                          <Badge className="bg-primary rounded-full">
-                            <CheckCircle className="mr-1 h-3 w-3" />
-                            Active
-                          </Badge>
-                        )}
-                        <Badge variant="outline" className="rounded-full">
-                          {rulePageType?.label || "Default (all page types)"}
-                        </Badge>
-                        {ruleCategory && (
-                          <Badge variant="outline" className="rounded-full bg-muted">
-                            {ruleCategory.label}
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription>
-                        Created {new Date(rule.created_at).toLocaleDateString()}
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(rule)}
-                        className="rounded-full"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDuplicate(rule)}
-                        className="rounded-full"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      {isAdmin && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openDeleteDialog(rule)}
-                          className="rounded-full text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {!rule.is_active && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleSetActive(rule.id)}
-                          className="rounded-full"
-                        >
-                          Set Active
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium">Schema Rules (prompt)</h3>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-muted-foreground">
-                          {rule.body.length} chars • {rule.body.split('\n').length} lines
-                        </span>
-                        {rule.created_at && (
-                          <span className="text-xs text-muted-foreground">
-                            Last updated {new Date(rule.created_at).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="bg-muted/30 p-4 rounded-xl border border-border/50">
-                      <Textarea
-                        value={rule.body}
-                        readOnly={!isAdmin}
-                        onChange={(e) => {
-                          if (isAdmin) {
-                            const updatedRules = rules.map((r) =>
-                              r.id === rule.id ? { ...r, body: e.target.value } : r
-                            );
-                            setRules(updatedRules);
-                          }
-                        }}
-                        onBlur={() => {
-                          if (isAdmin && rule.body !== originalBodies[rule.id]) {
-                            handleInlineUpdate(rule.id, rule.body);
-                          }
-                        }}
-                        className={`font-mono text-sm min-h-[180px] leading-relaxed bg-background/50 border-0 resize-none ${
-                          isAdmin ? "focus-visible:ring-1 focus-visible:ring-primary" : "focus-visible:ring-0"
-                        }`}
-                      />
-                    </div>
-                    {!isAdmin && (
-                      <p className="text-xs text-muted-foreground italic">
-                        These rules can only be edited by an admin.
-                      </p>
-                    )}
-                  </div>
-
-                  {rule.rules_backup && (
-                    <Collapsible className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <CollapsibleTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground">
-                            View previous rules (backup)
-                          </Button>
-                        </CollapsibleTrigger>
-                        {isAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRestoreBackup(rule)}
-                            className="text-xs rounded-full"
-                          >
-                            <RotateCcw className="h-3 w-3 mr-1" />
-                            Restore backup as current rules
-                          </Button>
-                        )}
-                      </div>
-                      <CollapsibleContent>
-                        <div className="bg-muted/20 p-3 rounded-lg border border-border/30">
-                          <pre className="font-mono text-xs whitespace-pre-wrap break-words text-muted-foreground">
-                            {rule.rules_backup}
-                          </pre>
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  )}
-                </CardContent>
-              </Card>
-              );
-            })}
+                <SelectTrigger id="page_type" className="rounded-xl">
+                  <SelectValue placeholder="Default (all page types)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {pageTypes.filter(pt => pt.active).map((pt) => (
+                    <SelectItem key={pt.id} value={pt.id}>
+                      {pt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Leave blank for a default rule that applies to all page types. Set to create a specific rule for that page type.
+              </p>
             </div>
-          )}
-        </div>
 
-        {/* 2. RULES COVERAGE BY PAGE TYPE (MIDDLE) */}
-        <Card className="rounded-2xl border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-xl">Rules Coverage by Page Type & Category</CardTitle>
-            <CardDescription>Shows which rule applies to each page type and category combination</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left p-3 font-medium text-sm">Page Type</th>
-                    <th className="text-left p-3 font-medium text-sm">Category</th>
-                    <th className="text-left p-3 font-medium text-sm">Rule Used</th>
-                    <th className="text-right p-3 font-medium text-sm"># Pages</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(ruleCoverage).map(([key, { rule, count }]) => {
-                    const [pageType, category] = key.split('::');
-                    return (
-                      <tr key={key} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="p-3">
-                          <Badge variant="outline" className="rounded-full font-normal">
-                            {pageType === 'unknown' ? 'Not Set' : pageType}
-                          </Badge>
-                        </td>
-                        <td className="p-3">
-                          <Badge variant="outline" className="rounded-full font-normal bg-muted">
-                            {category === 'none' ? 'Not Set' : category}
-                          </Badge>
-                        </td>
-                        <td className="p-3">
-                          {rule ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm">{rule.name}</span>
-                              {!rule.page_type && !rule.category && (
-                                <Badge variant="secondary" className="rounded-full text-xs">
-                                  default
-                                </Badge>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground italic">No active rule</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-right">
-                          <span className="text-sm font-medium">{count}</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 3. RULE PREVIEW & TEST (BOTTOM) */}
-        <Card className="rounded-2xl border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-xl">Rule Preview & Test</CardTitle>
-            <CardDescription>Preview which rule would be selected for a given page type or specific page</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Selection Controls */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Page Type</Label>
-                <Select value={previewPageType} onValueChange={(val) => {
-                  setPreviewPageType(val);
-                  setPreviewPageId(""); // Clear page selection when page type changes
-                }}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Choose a page type..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pageTypes.filter(pt => pt.active).map((pt) => (
-                      <SelectItem key={pt.id} value={pt.id}>
-                        {pt.label}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="category">Category (Optional)</Label>
+                {formData.category && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFormData({ ...formData, category: "" })}
+                    className="h-auto py-1 px-2 text-xs"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+              <Select
+                value={formData.category}
+                onValueChange={(value) => {
+                  setFormData({ ...formData, category: value });
+                }}
+                disabled={!formData.page_type}
+              >
+                <SelectTrigger id="category" className="rounded-xl">
+                  <SelectValue placeholder={formData.page_type ? "Select category" : "Select page type first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {formData.page_type && categories
+                    .filter(cat => cat.page_type_id === formData.page_type && cat.active)
+                    .map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.label}
                       </SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Specific Page (optional)</Label>
-                <Select value={previewPageId} onValueChange={setPreviewPageId}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Or choose a specific page..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pages.map((page) => (
-                      <SelectItem key={page.id} value={page.id}>
-                        {page.path} {page.page_type ? `(${page.page_type})` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Optional category for this rule. Combine with Page Type for fine-grained rule matching.
+              </p>
             </div>
 
-            <Button 
-              onClick={handlePreview} 
-              disabled={!previewPageType && !previewPageId} 
-              className="w-full rounded-full"
-            >
-              Preview Rule Selection
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="body">Prompt Body</Label>
+                <span className="text-xs text-muted-foreground">
+                  {formData.body.length} characters
+                  {formData.body.length > 0 && ` • ${formData.body.split('\n').length} lines`}
+                </span>
+              </div>
+              <Textarea
+                id="body"
+                value={formData.body}
+                onChange={(e) =>
+                  setFormData({ ...formData, body: e.target.value })
+                }
+                placeholder="Enter the system prompt for NeameGraph Brain schema generation..."
+                className="min-h-[400px] font-mono text-sm rounded-xl leading-relaxed"
+              />
+              <p className="text-xs text-muted-foreground">
+                This prompt will be used by NeameGraph Brain to generate JSON-LD schema for matching pages.
+              </p>
+            </div>
+            <Button onClick={handleSave} className="w-full rounded-full">
+              Save Rule
             </Button>
-
-            {/* Preview Results */}
-            {previewRule && (
-              <div className="space-y-4 p-6 bg-muted/30 rounded-xl border border-border/50">
-                {/* Summary Lines */}
-                <div className="space-y-2">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-muted-foreground mb-1">Rule that will be used:</p>
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-lg">{previewRule.name}</p>
-                        {previewRule.page_type ? (
-                          <Badge variant="outline" className="rounded-full">
-                            {previewRule.page_type}
-                          </Badge>
-                        ) : (
-                          <Badge className="rounded-full bg-primary">
-                            Default (all types)
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {previewDefaultRule && (
-                    <div className="pt-2 border-t">
-                      <p className="text-sm text-muted-foreground">
-                        Default rule (fallback): <span className="font-medium">{previewDefaultRule.name}</span>
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Accordion for Prompt Body */}
-                <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="prompt" className="border-0">
-                    <AccordionTrigger className="text-sm font-medium hover:no-underline py-2">
-                      Show prompt body
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="mt-2 p-4 bg-background rounded-lg border max-h-[400px] overflow-y-auto">
-                        <pre className="font-mono text-xs whitespace-pre-wrap break-words">
-                          {previewRule.body}
-                        </pre>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </div>
-            )}
-
-            {(previewPageType || previewPageId) && !previewRule && (
-              <div className="p-4 bg-destructive/10 rounded-xl border border-destructive/20">
-                <p className="text-sm text-destructive">
-                  No active rule found for this selection
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="rounded-2xl">
