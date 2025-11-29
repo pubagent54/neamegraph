@@ -49,6 +49,7 @@ interface Rule {
   created_by_user_id: string | null;
   page_type: string | null;
   category: string | null;
+  domain: string | null;
 }
 
 export default function Rules() {
@@ -61,7 +62,8 @@ export default function Rules() {
     name: "", 
     body: "", 
     page_type: "",
-    category: ""
+    category: "",
+    domain: ""
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [ruleToDelete, setRuleToDelete] = useState<Rule | null>(null);
@@ -114,6 +116,7 @@ export default function Rules() {
             body: formData.body,
             page_type: formData.page_type || null,
             category: formData.category || null,
+            domain: formData.domain || null,
             rules_backup: editingRule.body // Backup current rules before updating
           })
           .eq("id", editingRule.id);
@@ -128,6 +131,7 @@ export default function Rules() {
             body: formData.body,
             page_type: formData.page_type || null,
             category: formData.category || null,
+            domain: formData.domain || null,
             created_by_user_id: user?.id,
           });
 
@@ -137,7 +141,7 @@ export default function Rules() {
 
       setDialogOpen(false);
       setEditingRule(null);
-      setFormData({ name: "", body: "", page_type: "", category: "" });
+      setFormData({ name: "", body: "", page_type: "", category: "", domain: "" });
       fetchRules();
     } catch (error) {
       console.error("Error saving rule:", error);
@@ -172,6 +176,7 @@ export default function Rules() {
       body: rule.body,
       page_type: rule.page_type || "",
       category: rule.category || "",
+      domain: rule.domain || "",
     });
     setEditingRule(rule);
     setDialogOpen(true);
@@ -196,9 +201,8 @@ export default function Rules() {
 
   // Get domain-level rule for a given domain
   const getDomainRule = (domain: string) => {
-    // For now, we use page_type=null, category=null as domain rules
-    // In the future, we could add a domain field to the rules table
-    return rules.find(r => r.is_active && r.page_type === null && r.category === null);
+    // Domain rules have domain set and page_type/category null
+    return rules.find(r => r.is_active && r.domain === domain && r.page_type === null && r.category === null);
   };
 
   // Get domain status
@@ -261,7 +265,8 @@ export default function Rules() {
                         name: `${domain} Schema Rule`, 
                         body: `# ${domain} Schema Generation Prompt\n\nYou will generate JSON-LD schema for ${domain} pages.\n\nContext provided:\n- domain: ${domain}\n- pageType: (will be provided)\n- category: (will be provided)\n\nUse this context to adapt schema generation behavior. Follow the Schema Quality Charter principles.\n\n## Instructions\n\nTODO: Add specific instructions for ${domain} schema generation.`, 
                         page_type: "",
-                        category: ""
+                        category: "",
+                        domain: domain
                       });
                       setEditingRule(null);
                       setDialogOpen(true);
@@ -386,7 +391,7 @@ export default function Rules() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setFormData({ name: "", body: "", page_type: "", category: "" });
+                          setFormData({ name: "", body: "", page_type: "", category: "", domain: "" });
                           setEditingRule(null);
                           setDialogOpen(true);
                         }}
