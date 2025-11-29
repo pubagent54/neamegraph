@@ -384,6 +384,7 @@ export type Database = {
           category: string | null
           created_at: string
           created_by_user_id: string | null
+          domain: string | null
           id: string
           is_active: boolean
           name: string
@@ -395,6 +396,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          domain?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -406,6 +408,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          domain?: string | null
           id?: string
           is_active?: boolean
           name?: string
