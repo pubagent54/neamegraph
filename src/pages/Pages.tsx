@@ -1332,7 +1332,7 @@ export default function Pages() {
         ) : (
           <div className="border-0 rounded-2xl overflow-hidden shadow-sm bg-card">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                 <TableRow className="border-b bg-muted/30">
                   {canEdit && (
                     <TableHead className="w-12">
