@@ -177,25 +177,29 @@ export default function Rules() {
     try {
 
     // Call generate-schema edge function
+    console.log("Calling generate-schema with page_id:", selectedTestPageId);
     const { data, error } = await supabase.functions.invoke('generate-schema', {
       body: {
         page_id: selectedTestPageId || undefined
       }
     });
 
-    if (error) {
-      console.error("Edge function error:", error);
-      const errorMsg = error.message || "Failed to generate preview";
-      toast.error(errorMsg);
+    console.log("Edge function response:", { data, error });
+
+    // Check for error in data first (edge function returns errors as data)
+    if (data?.error) {
+      console.error("Schema generation error:", data.error);
+      toast.error(data.error);
       setPreviewJson("");
       setPreviewLoading(false);
       return;
     }
 
-    // Handle error in response data
-    if (data?.error) {
-      console.error("Schema generation error:", data.error);
-      toast.error(data.error);
+    // Then check for HTTP-level errors
+    if (error) {
+      console.error("Edge function HTTP error:", error);
+      const errorMsg = error.message || "Failed to generate preview";
+      toast.error(errorMsg);
       setPreviewJson("");
       setPreviewLoading(false);
       return;
