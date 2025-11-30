@@ -2,27 +2,23 @@ import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, CheckCircle2, AlertCircle, Clock, Rocket, Settings as SettingsIcon } from "lucide-react";
+import { FileText, CheckCircle2, AlertCircle, Clock, Settings as SettingsIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 interface Stats {
   total: number;
-  no_schema: number;
-  draft: number;
-  approved: number;
+  needs_attention: number;
+  in_progress: number;
   implemented: number;
-  needs_rework: number;
 }
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats>({
     total: 0,
-    no_schema: 0,
-    draft: 0,
-    approved: 0,
+    needs_attention: 0,
+    in_progress: 0,
     implemented: 0,
-    needs_rework: 0,
   });
   const [domainStats, setDomainStats] = useState({
     corporate: 0,
@@ -44,17 +40,25 @@ export default function Dashboard() {
       if (error) throw error;
 
       const total = pages?.length || 0;
-      const no_schema = pages?.filter((p) => p.status === "not_started").length || 0;
-      const draft = pages?.filter((p) => p.status === "ai_draft").length || 0;
-      const approved = pages?.filter((p) => p.status === "approved").length || 0;
+      
+      // Needs Attention: Naked, needs review, or needs rework
+      const needs_attention = pages?.filter((p) => 
+        ["not_started", "needs_review", "needs_rework"].includes(p.status)
+      ).length || 0;
+      
+      // In Progress: Approved or ready for upload
+      const in_progress = pages?.filter((p) => 
+        ["approved", "ai_draft"].includes(p.status)
+      ).length || 0;
+      
+      // Implemented: Live on site
       const implemented = pages?.filter((p) => p.status === "implemented").length || 0;
-      const needs_rework = pages?.filter((p) => p.status === "needs_rework").length || 0;
 
       const corporate = pages?.filter((p) => (p.domain || 'Corporate') === 'Corporate').length || 0;
       const beer = pages?.filter((p) => p.domain === 'Beer').length || 0;
       const pub = pages?.filter((p) => p.domain === 'Pub').length || 0;
 
-      setStats({ total, no_schema, draft, approved, implemented, needs_rework });
+      setStats({ total, needs_attention, in_progress, implemented });
       setDomainStats({ corporate, beer, pub });
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -72,39 +76,25 @@ export default function Dashboard() {
       color: "text-primary",
     },
     {
-      title: "No Schema",
-      value: stats.no_schema,
+      title: "Needs Attention",
+      value: stats.needs_attention,
       icon: AlertCircle,
-      description: "Pages without schema",
-      color: "text-muted-foreground",
+      description: "Naked, Draft, or Needs Review",
+      color: "text-amber-600 dark:text-amber-400",
     },
     {
-      title: "Brain Draft",
-      value: stats.draft,
+      title: "In Progress",
+      value: stats.in_progress,
       icon: Clock,
-      description: "Awaiting review",
-      color: "text-status-draft",
-    },
-    {
-      title: "Approved",
-      value: stats.approved,
-      icon: CheckCircle2,
-      description: "Ready for implementation",
-      color: "text-status-approved",
+      description: "Actively being worked on",
+      color: "text-blue-600 dark:text-blue-400",
     },
     {
       title: "Implemented",
       value: stats.implemented,
-      icon: Rocket,
-      description: "Live on site",
-      color: "text-status-implemented",
-    },
-    {
-      title: "Needs Rework",
-      value: stats.needs_rework,
-      icon: AlertCircle,
-      description: "Requires attention",
-      color: "text-status-error",
+      icon: CheckCircle2,
+      description: "Tested or live and verified",
+      color: "text-emerald-600 dark:text-emerald-400",
     },
   ];
 
@@ -128,7 +118,7 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {statCards.map((card) => {
             const Icon = card.icon;
             return (
@@ -210,16 +200,16 @@ export default function Dashboard() {
                   View All Pages
                 </Button>
               </Link>
-              <Link to="/pages?status=ai_draft">
-                <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
-                  <Clock className="mr-2 h-4 w-4" />
-                  Review Brain Drafts
-                </Button>
-              </Link>
-              <Link to="/pages?status=needs_rework">
+              <Link to="/pages?status=review">
                 <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
                   <AlertCircle className="mr-2 h-4 w-4" />
-                  Pages Needing Rework
+                  Pages Needing Attention
+                </Button>
+              </Link>
+              <Link to="/pages?status=upload">
+                <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
+                  <Clock className="mr-2 h-4 w-4" />
+                  Pages In Progress
                 </Button>
               </Link>
             </CardContent>
@@ -249,7 +239,7 @@ export default function Dashboard() {
                 <div>
                   <p className="font-semibold mb-1">Configure Rules</p>
                   <p className="text-sm text-muted-foreground">
-                    Set up NeameGraph Brain prompts for schema generation
+                    Set up prompts for schema generation
                   </p>
                 </div>
               </div>
