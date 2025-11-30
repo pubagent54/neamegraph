@@ -146,6 +146,8 @@ export default function Pages() {
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
   const [copyingSchemaForPageId, setCopyingSchemaForPageId] = useState<string | null>(null);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [modalCopyContent, setModalCopyContent] = useState("");
 
   // Load taxonomy from database
   const { domains, loading: domainsLoading } = useDomains();
@@ -608,47 +610,6 @@ export default function Pages() {
     }
   };
 
-  // Cross-browser clipboard copy with fallback
-  const copyToClipboard = async (text: string): Promise<boolean> => {
-    // Modern Clipboard API (Chrome, Firefox, Safari 13.1+)
-    if (navigator.clipboard && window.isSecureContext) {
-      try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch (err) {
-        console.warn("Clipboard API failed, trying fallback:", err);
-      }
-    }
-    
-    // Fallback for older browsers and non-secure contexts
-    try {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      
-      // Make the textarea invisible but still accessible
-      textArea.style.position = "fixed";
-      textArea.style.left = "-999999px";
-      textArea.style.top = "-999999px";
-      textArea.style.opacity = "0";
-      
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      
-      // Try the old execCommand method
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      
-      if (successful) {
-        return true;
-      }
-    } catch (err) {
-      console.error("Fallback copy failed:", err);
-    }
-    
-    return false;
-  };
-
   const handleCopyDrupalSchema = async (page: Page) => {
     setCopyingSchemaForPageId(page.id);
     try {
@@ -687,14 +648,9 @@ export default function Pages() {
       // Wrap in script tag
       const scriptTag = `<script type="application/ld+json">\n${prettyJson}\n</script>`;
 
-      // Copy to clipboard with cross-browser support
-      const success = await copyToClipboard(scriptTag);
-      
-      if (success) {
-        toast.success(`Copied Drupal script tag for ${page.path}`);
-      } else {
-        toast.error("Could not copy to clipboard. Please try selecting and copying manually.");
-      }
+      // Show modal with selectable text (works in all browsers)
+      setModalCopyContent(scriptTag);
+      setShowCopyModal(true);
     } catch (error: any) {
       console.error("Unexpected error copying schema:", error);
       toast.error("Unexpected error: " + (error.message || "Unknown error"));
@@ -1706,6 +1662,25 @@ export default function Pages() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Copy Modal - Works in all browsers */}
+        <Dialog open={showCopyModal} onOpenChange={setShowCopyModal}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Copy Drupal Schema</DialogTitle>
+              <DialogDescription>
+                Select all the text below (Cmd/Ctrl+A) and copy it (Cmd/Ctrl+C)
+              </DialogDescription>
+            </DialogHeader>
+            <textarea
+              readOnly
+              value={modalCopyContent}
+              className="w-full h-96 p-4 font-mono text-sm border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+              onFocus={(e) => e.target.select()}
+              autoFocus
+            />
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
