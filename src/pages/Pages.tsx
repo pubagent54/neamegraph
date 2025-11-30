@@ -1669,7 +1669,7 @@ export default function Pages() {
             <DialogHeader>
               <DialogTitle>Copy Drupal Schema</DialogTitle>
               <DialogDescription>
-                Select all the text below (Cmd/Ctrl+A) and copy it (Cmd/Ctrl+C)
+                Click the Copy button below, or manually select all (Cmd/Ctrl+A) and copy (Cmd/Ctrl+C)
               </DialogDescription>
             </DialogHeader>
             <textarea
@@ -1679,6 +1679,26 @@ export default function Pages() {
               onFocus={(e) => e.target.select()}
               autoFocus
             />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowCopyModal(false)}
+              >
+                Close
+              </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(modalCopyContent);
+                    toast.success("Copied to clipboard!");
+                  } catch (err) {
+                    toast.error("Could not auto-copy. Please select the text above and copy manually (Cmd/Ctrl+C)");
+                  }
+                }}
+              >
+                Copy to Clipboard
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
