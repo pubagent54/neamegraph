@@ -24,7 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DomainBadge } from "@/components/DomainBadge";
 import { Badge } from "@/components/ui/badge";
 import { Link, useSearchParams } from "react-router-dom";
-import { Plus, Search, Upload, Trash2, Edit, CheckCircle2, Circle, Loader2, ArrowUp, ArrowUpDown, ArrowUp as ArrowUpIcon, ArrowDown, Lock } from "lucide-react";
+import { Plus, Search, Upload, Trash2, Edit, CheckCircle2, Circle, Loader2, ArrowUp, ArrowUpDown, ArrowUp as ArrowUpIcon, ArrowDown, Lock, Crown } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -1446,7 +1446,10 @@ export default function Pages() {
                       <TableCell className="font-mono text-sm">
                         <div className="flex items-center gap-2">
                           {pageIsHomepage && (
-                            <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                            <>
+                              <Crown className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
+                              <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                            </>
                           )}
                           <Link 
                             to={`/pages/${page.id}`} 
