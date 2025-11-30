@@ -18,13 +18,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Edit2, Plus, Trash2, FileText, ExternalLink, Layers, Play, Copy, Loader2 } from "lucide-react";
+import { CheckCircle, Edit2, Plus, Trash2, FileText, ExternalLink, Layers, Play, Copy, Loader2, Wrench, ChevronDown, ChevronRight, Shield } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePageTypes, useCategories } from "@/hooks/use-taxonomy";
 import { getDomains } from "@/lib/taxonomy";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Link } from "react-router-dom";
 
 interface RuleBackup {
   content: string;
@@ -76,6 +78,12 @@ export default function Rules() {
   // Coverage state
   const [coveragePages, setCoveragePages] = useState<Page[]>([]);
   const [coverageLoading, setCoverageLoading] = useState(false);
+  
+  // UI state for rule grouping
+  const [showLegacyRules, setShowLegacyRules] = useState<Record<string, boolean>>({});
+  
+  // Dev tools accordion state
+  const [devToolsOpen, setDevToolsOpen] = useState(false);
   
   const isAdmin = userRole === "admin";
   
@@ -314,6 +322,31 @@ export default function Rules() {
     return rules.filter(r => r.domain && !r.page_type && !r.category);
   };
 
+  const getRulesByDomain = () => {
+    const domainGroups: Record<string, { primary: Rule[], legacy: Rule[] }> = {};
+    
+    rules.forEach(rule => {
+      if (!rule.domain) return;
+      
+      if (!domainGroups[rule.domain]) {
+        domainGroups[rule.domain] = { primary: [], legacy: [] };
+      }
+      
+      // Active rules are primary, inactive rules are legacy
+      if (rule.is_active) {
+        domainGroups[rule.domain].primary.push(rule);
+      } else {
+        domainGroups[rule.domain].legacy.push(rule);
+      }
+    });
+    
+    return domainGroups;
+  };
+
+  const toggleLegacyRules = (domain: string) => {
+    setShowLegacyRules(prev => ({ ...prev, [domain]: !prev[domain] }));
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -334,6 +367,27 @@ export default function Rules() {
           </p>
         </div>
 
+        {/* SCHEMA QUALITY CHARTER BANNER */}
+        <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-accent/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Shield className="h-5 w-5 text-primary" />
+                <div>
+                  <h3 className="font-semibold text-sm">Schema Quality Charter (Global)</h3>
+                  <p className="text-xs text-muted-foreground">Global quality rules that apply to all schema (Corporate, Beers, Pubs)</p>
+                </div>
+              </div>
+              <Link to="/settings#charter">
+                <Button variant="outline" size="sm" className="rounded-full">
+                  <ExternalLink className="h-3 w-3 mr-2" />
+                  View Full Charter
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* RULE SELECTOR */}
         <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-primary/5">
           <CardHeader>
@@ -341,25 +395,72 @@ export default function Rules() {
             <CardDescription>Choose a domain-level rule to view and configure</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-3">
-              {getDomainRules().map((rule) => (
-                <Button
-                  key={rule.id}
-                  variant={selectedRule?.id === rule.id ? "default" : "outline"}
-                  className="justify-start h-auto py-3 px-4 rounded-xl"
-                  onClick={() => setSelectedRule(rule)}
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    <Layers className="h-4 w-4" />
-                    <div className="flex-1 text-left">
-                      <div className="font-semibold">{rule.name}</div>
-                      <div className="text-xs text-muted-foreground">{rule.domain} domain</div>
-                    </div>
-                    {rule.is_active && (
-                      <Badge variant="default" className="rounded-full">Active</Badge>
-                    )}
+            <div className="space-y-6">
+              {Object.entries(getRulesByDomain()).map(([domain, { primary, legacy }]) => (
+                <div key={domain} className="space-y-3">
+                  {/* Primary rules for this domain */}
+                  <div className="grid gap-3">
+                    {primary.map((rule) => (
+                      <Button
+                        key={rule.id}
+                        variant={selectedRule?.id === rule.id ? "default" : "outline"}
+                        className="justify-start h-auto py-3 px-4 rounded-xl"
+                        onClick={() => setSelectedRule(rule)}
+                      >
+                        <div className="flex items-center gap-3 w-full">
+                          <Layers className="h-4 w-4" />
+                          <div className="flex-1 text-left">
+                            <div className="font-semibold">{rule.name}</div>
+                            <div className="text-xs text-muted-foreground">{rule.domain} domain</div>
+                          </div>
+                          {rule.is_active && (
+                            <Badge variant="default" className="rounded-full">Active</Badge>
+                          )}
+                        </div>
+                      </Button>
+                    ))}
                   </div>
-                </Button>
+                  
+                  {/* Legacy rules toggle */}
+                  {legacy.length > 0 && (
+                    <div className="ml-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleLegacyRules(domain)}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {showLegacyRules[domain] ? (
+                          <ChevronDown className="h-3 w-3 mr-1" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3 mr-1" />
+                        )}
+                        {showLegacyRules[domain] ? 'Hide' : 'Show'} {legacy.length} other version{legacy.length !== 1 ? 's' : ''}
+                      </Button>
+                      
+                      {showLegacyRules[domain] && (
+                        <div className="mt-2 ml-4 space-y-2">
+                          {legacy.map((rule) => (
+                            <Button
+                              key={rule.id}
+                              variant={selectedRule?.id === rule.id ? "default" : "outline"}
+                              className="justify-start h-auto py-2 px-3 rounded-lg w-full opacity-75"
+                              onClick={() => setSelectedRule(rule)}
+                            >
+                              <div className="flex items-center gap-2 w-full">
+                                <Layers className="h-3 w-3" />
+                                <div className="flex-1 text-left">
+                                  <div className="text-sm font-medium">{rule.name}</div>
+                                  <div className="text-xs text-muted-foreground">Inactive</div>
+                                </div>
+                              </div>
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </CardContent>
@@ -407,126 +508,152 @@ export default function Rules() {
               </CardHeader>
             </Card>
 
-            {/* SECTION 2: PREVIEW */}
-            <Card className="rounded-2xl">
-              <CardHeader>
-                <CardTitle className="text-lg">Preview Schema</CardTitle>
-                <CardDescription>
-                  Test this rule against a real URL and inspect the generated JSON-LD
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Test Page</Label>
-                  <div className="flex gap-2">
-                    <Select value={selectedTestPageId} onValueChange={setSelectedTestPageId}>
-                      <SelectTrigger className="rounded-xl flex-1">
-                        <SelectValue placeholder="Choose a test page..." />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-2xl max-h-[300px]">
-                        {coveragePages.slice(0, 20).map((page) => (
-                          <SelectItem key={page.id} value={page.id}>
-                            {page.path}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      onClick={handleRunPreview}
-                      disabled={previewLoading || !selectedTestPageId}
-                      className="rounded-full"
-                    >
-                      {previewLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Play className="h-4 w-4 mr-2" />
-                          Run Preview
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {previewJson && (
-                  <div className="space-y-2">
+            {/* SCHEMA DEV/DEBUG TOOLS ACCORDION */}
+            <Card className="rounded-2xl border-muted/50">
+              <Collapsible open={devToolsOpen} onOpenChange={setDevToolsOpen}>
+                <CollapsibleTrigger className="w-full">
+                  <CardHeader className="cursor-pointer hover:bg-muted/10 transition-colors rounded-t-2xl">
                     <div className="flex items-center justify-between">
-                      <Label>Generated JSON-LD</Label>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCopyJson}
-                        className="rounded-full"
-                      >
-                        <Copy className="h-3 w-3 mr-2" />
-                        Copy JSON
-                      </Button>
-                    </div>
-                    <div className="relative">
-                      <pre className="text-xs font-mono bg-muted/50 rounded-xl p-4 overflow-x-auto max-h-[500px] overflow-y-auto border">
-                        {previewJson}
-                      </pre>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* SECTION 3: COVERAGE */}
-            <Card className="rounded-2xl">
-              <CardHeader>
-                <CardTitle className="text-lg">Coverage</CardTitle>
-                <CardDescription>
-                  {coverageLoading ? (
-                    "Loading pages..."
-                  ) : (
-                    `This rule currently applies to ${coveragePages.length} page${coveragePages.length !== 1 ? 's' : ''}`
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {coverageLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                  </div>
-                ) : coveragePages.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <p className="text-sm">No pages using this rule</p>
-                  </div>
-                ) : (
-                  <div className="border rounded-xl overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="font-semibold">Path</TableHead>
-                          <TableHead className="font-semibold">Page Type</TableHead>
-                          <TableHead className="font-semibold">Category</TableHead>
-                          <TableHead className="font-semibold">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {coveragePages.slice(0, 50).map((page) => (
-                          <TableRow key={page.id}>
-                            <TableCell className="font-mono text-sm">{page.path}</TableCell>
-                            <TableCell className="text-sm">{page.page_type || "—"}</TableCell>
-                            <TableCell className="text-sm">{page.category || "—"}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-xs rounded-full">
-                                {page.status}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {coveragePages.length > 50 && (
-                      <div className="p-3 bg-muted/20 text-center text-xs text-muted-foreground">
-                        Showing first 50 of {coveragePages.length} pages
+                      <div className="flex items-center gap-3">
+                        <Wrench className="h-4 w-4 text-muted-foreground" />
+                        <div className="text-left">
+                          <CardTitle className="text-lg">Schema Dev/Debug Tools</CardTitle>
+                          <CardDescription>Test rules and inspect coverage</CardDescription>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
+                      {devToolsOpen ? (
+                        <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                
+                <CollapsibleContent>
+                  <CardContent className="space-y-8 pt-0">
+                    {/* PREVIEW SECTION */}
+                    <div className="space-y-4">
+                      <div className="border-b pb-3">
+                        <h3 className="font-semibold text-sm">Preview Schema</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Test this rule against a real URL and inspect the generated JSON-LD
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label>Test Page</Label>
+                        <div className="flex gap-2">
+                          <Select value={selectedTestPageId} onValueChange={setSelectedTestPageId}>
+                            <SelectTrigger className="rounded-xl flex-1">
+                              <SelectValue placeholder="Choose a test page..." />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl max-h-[300px]">
+                              {coveragePages.slice(0, 20).map((page) => (
+                                <SelectItem key={page.id} value={page.id}>
+                                  {page.path}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            onClick={handleRunPreview}
+                            disabled={previewLoading || !selectedTestPageId}
+                            className="rounded-full"
+                          >
+                            {previewLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Play className="h-4 w-4 mr-2" />
+                                Run Preview
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {previewJson && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label>Generated JSON-LD</Label>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleCopyJson}
+                              className="rounded-full"
+                            >
+                              <Copy className="h-3 w-3 mr-2" />
+                              Copy JSON
+                            </Button>
+                          </div>
+                          <div className="relative">
+                            <pre className="text-xs font-mono bg-muted/50 rounded-xl p-4 overflow-x-auto max-h-[500px] overflow-y-auto border">
+                              {previewJson}
+                            </pre>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* COVERAGE SECTION */}
+                    <div className="space-y-4">
+                      <div className="border-b pb-3">
+                        <h3 className="font-semibold text-sm">Coverage</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {coverageLoading ? (
+                            "Loading pages..."
+                          ) : (
+                            `This rule currently applies to ${coveragePages.length} page${coveragePages.length !== 1 ? 's' : ''}`
+                          )}
+                        </p>
+                      </div>
+                      
+                      {coverageLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                        </div>
+                      ) : coveragePages.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p className="text-sm">No pages using this rule</p>
+                        </div>
+                      ) : (
+                        <div className="border rounded-xl overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/30">
+                                <TableHead className="font-semibold">Path</TableHead>
+                                <TableHead className="font-semibold">Page Type</TableHead>
+                                <TableHead className="font-semibold">Category</TableHead>
+                                <TableHead className="font-semibold">Status</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {coveragePages.slice(0, 50).map((page) => (
+                                <TableRow key={page.id}>
+                                  <TableCell className="font-mono text-sm">{page.path}</TableCell>
+                                  <TableCell className="text-sm">{page.page_type || "—"}</TableCell>
+                                  <TableCell className="text-sm">{page.category || "—"}</TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className="text-xs rounded-full">
+                                      {page.status}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          {coveragePages.length > 50 && (
+                            <div className="p-3 bg-muted/20 text-center text-xs text-muted-foreground">
+                              Showing first 50 of {coveragePages.length} pages
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </CollapsibleContent>
+              </Collapsible>
             </Card>
           </>
         )}
