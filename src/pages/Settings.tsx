@@ -30,6 +30,8 @@ import {
 import { SettingsIssuesLog } from "@/components/SettingsIssuesLog";
 import { Bug } from "lucide-react";
 import { SchemaQualityCharter } from "@/components/SchemaQualityCharter";
+import { CharterPromptPanel } from "@/components/CharterPromptPanel";
+import { DEFAULT_CHARTER_PROMPT } from "@/config/charterPrompt";
 
 interface Settings {
   id: string;
@@ -41,6 +43,7 @@ interface Settings {
   schema_engine_version: string;
   organization_schema_json: string | null;
   organization_schema_backup_json: string | null;
+  schema_quality_charter_prompt: string | null;
 }
 
 export default function Settings() {
@@ -251,6 +254,23 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="space-y-6">
             <SchemaQualityCharter />
+            
+            <CharterPromptPanel
+              prompt={settings?.schema_quality_charter_prompt || DEFAULT_CHARTER_PROMPT}
+              isAdmin={isAdmin}
+              onSave={async (newPrompt: string) => {
+                if (!settings) return;
+                const { error } = await supabase
+                  .from("settings")
+                  .update({ schema_quality_charter_prompt: newPrompt })
+                  .eq("id", settings.id);
+                
+                if (error) throw error;
+                
+                // Refresh settings to show updated value
+                await fetchSettings();
+              }}
+            />
           </CardContent>
         </Card>
 
