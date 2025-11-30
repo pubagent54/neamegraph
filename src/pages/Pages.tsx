@@ -57,6 +57,7 @@ import {
   normalizeStatus,
   statusRequiresSchema,
   statusToDatabase,
+  canUpdateStatus,
   type PageStatus 
 } from "@/config/pageStatus";
 
@@ -568,11 +569,19 @@ export default function Pages() {
         return;
       }
 
-      // Validate status changes
+      // Validate status changes with guard rails
       if (field === "status") {
         const page = pages.find(p => p.id === pageId);
-        if (page && statusRequiresSchema(value as PageStatus) && !page.last_schema_generated_at) {
-          toast.error("Generate schema before setting this status");
+        if (!page) {
+          toast.error("Page not found");
+          return;
+        }
+
+        const hasSchema = !!page.last_schema_generated_at;
+        const validation = canUpdateStatus(page.status, value as PageStatus, hasSchema);
+        
+        if (!validation.allowed) {
+          toast.error(validation.message || "Cannot update status");
           return;
         }
       }
@@ -583,7 +592,7 @@ export default function Pages() {
       const { error } = await supabase
         .from("pages")
         .update({
-          [field]: dbValue,
+          [field]: dbValue as any,
           last_modified_by_user_id: user.id,
         })
         .eq("id", pageId);
@@ -592,7 +601,7 @@ export default function Pages() {
 
       // Update local state with database value
       setPages(pages.map(p => p.id === pageId ? { ...p, [field]: dbValue } : p));
-      toast.success("Page updated");
+      toast.success("Status updated successfully");
     } catch (error: any) {
       console.error("Error updating page:", error);
       toast.error(error.message || "Failed to update page");
@@ -679,14 +688,61 @@ export default function Pages() {
         });
 
         toast.success(`Deleted ${selectedIds.length} pages`);
-      } else {
-        // Convert UI status value to database enum value for bulk updates
-        const dbValue = bulkActionType === "status" ? statusToDatabase(bulkActionValue as PageStatus) : bulkActionValue;
+      } else if (bulkActionType === "status") {
+        // Validate status changes for each selected page
+        const selectedPages = pages.filter(p => selectedPageIds.has(p.id));
+        const newStatus = bulkActionValue as PageStatus;
+        const invalidPages: string[] = [];
+        
+        for (const page of selectedPages) {
+          const hasSchema = !!page.last_schema_generated_at;
+          const validation = canUpdateStatus(page.status, newStatus, hasSchema);
+          if (!validation.allowed) {
+            invalidPages.push(page.path);
+          }
+        }
+        
+        if (invalidPages.length > 0) {
+          toast.error(
+            `Cannot update ${invalidPages.length} page(s) to ${PAGE_STATUS_CONFIG[newStatus].label}. ` +
+            `Some pages don't meet requirements (missing schema or invalid transition).`,
+            { duration: 5000 }
+          );
+          return;
+        }
+        
+        // Convert UI status value to database enum value
+        const dbValue = statusToDatabase(newStatus);
         
         const { error } = await supabase
           .from("pages")
           .update({
-            [bulkActionType]: dbValue,
+            status: dbValue as any,
+            last_modified_by_user_id: user.id,
+          })
+          .in("id", selectedIds);
+
+        if (error) throw error;
+
+        await supabase.from("audit_log").insert({
+          user_id: user.id,
+          entity_type: "page",
+          action: "bulk_update",
+          details: {
+            ids: selectedIds,
+            field: "status",
+            new_value: bulkActionValue,
+            count: selectedIds.length,
+          },
+        });
+
+        toast.success(`Updated ${selectedIds.length} pages to ${PAGE_STATUS_CONFIG[newStatus].label}`);
+      } else {
+        // Non-status bulk updates (section, page_type, etc.)
+        const { error } = await supabase
+          .from("pages")
+          .update({
+            [bulkActionType]: bulkActionValue,
             last_modified_by_user_id: user.id,
           })
           .in("id", selectedIds);
@@ -1305,18 +1361,33 @@ export default function Pages() {
                                   </SelectTrigger>
                                 </TooltipTrigger>
                                 <SelectContent className="rounded-xl">
-                                  {PAGE_STATUS_OPTIONS.map((status) => (
-                                    <SelectItem 
-                                      key={status} 
-                                      value={status}
-                                      disabled={statusRequiresSchema(status) && !page.last_schema_generated_at}
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <span className={`inline-block w-2 h-2 rounded-full ${PAGE_STATUS_CONFIG[status].dotClass}`} />
-                                        <span>{PAGE_STATUS_CONFIG[status].label}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
+                                  {PAGE_STATUS_OPTIONS.map((status) => {
+                                    const hasSchema = !!page.last_schema_generated_at;
+                                    const validation = canUpdateStatus(page.status, status, hasSchema);
+                                    return (
+                                      <SelectItem 
+                                        key={status} 
+                                        value={status}
+                                        disabled={!validation.allowed}
+                                      >
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div className="flex items-center gap-2">
+                                                <span className={`inline-block w-2 h-2 rounded-full ${PAGE_STATUS_CONFIG[status].dotClass}`} />
+                                                <span>{PAGE_STATUS_CONFIG[status].label}</span>
+                                              </div>
+                                            </TooltipTrigger>
+                                            {!validation.allowed && (
+                                              <TooltipContent side="right">
+                                                <p className="text-xs max-w-[200px]">{validation.message}</p>
+                                              </TooltipContent>
+                                            )}
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      </SelectItem>
+                                    );
+                                  })}
                                 </SelectContent>
                               </Select>
                               <TooltipContent>

@@ -100,6 +100,70 @@ export function statusRequiresSchema(status: PageStatus): boolean {
 }
 
 /**
+ * Validation result for status transitions
+ */
+export interface StatusValidationResult {
+  allowed: boolean;
+  message?: string;
+}
+
+/**
+ * Validate if a status change is allowed based on current page state
+ * Returns validation result with helpful error message if not allowed
+ */
+export function canUpdateStatus(
+  currentStatus: string,
+  newStatus: PageStatus,
+  hasSchema: boolean
+): StatusValidationResult {
+  // Normalize current status to UI slug
+  const currentNormalized = normalizeStatus(currentStatus);
+  
+  // Rule 1: Approved requires schema
+  if (newStatus === "approved" && !hasSchema) {
+    return {
+      allowed: false,
+      message: "You can only mark a page as Approved once valid schema exists. Generate schema first.",
+    };
+  }
+  
+  // Rule 2: Upload requires Approved first
+  if (newStatus === "upload") {
+    if (!hasSchema) {
+      return {
+        allowed: false,
+        message: "Upload requires valid schema. Generate and approve schema first.",
+      };
+    }
+    if (!["approved", "upload", "live"].includes(currentNormalized)) {
+      return {
+        allowed: false,
+        message: "Set status to Approved first before moving to Upload.",
+      };
+    }
+  }
+  
+  // Rule 3: Live requires Upload or Approved first
+  if (newStatus === "live") {
+    if (!hasSchema) {
+      return {
+        allowed: false,
+        message: "Live requires valid schema. Generate and approve schema first.",
+      };
+    }
+    if (!["approved", "upload", "live"].includes(currentNormalized)) {
+      return {
+        allowed: false,
+        message: "Set status to Approved or Upload first before moving to Live.",
+      };
+    }
+  }
+  
+  // All checks passed
+  return { allowed: true };
+}
+
+/**
  * Get suggested status based on page state and validation
  */
 export function deriveSuggestedStatus(
