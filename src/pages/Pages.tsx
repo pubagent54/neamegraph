@@ -56,6 +56,7 @@ import {
   PAGE_STATUS_OPTIONS,
   normalizeStatus,
   statusRequiresSchema,
+  statusToDatabase,
   type PageStatus 
 } from "@/config/pageStatus";
 
@@ -576,17 +577,21 @@ export default function Pages() {
         }
       }
 
+      // Convert UI status value to database enum value
+      const dbValue = field === "status" ? statusToDatabase(value as PageStatus) : value;
+
       const { error } = await supabase
         .from("pages")
         .update({
-          [field]: value,
+          [field]: dbValue,
           last_modified_by_user_id: user.id,
         })
         .eq("id", pageId);
 
       if (error) throw error;
 
-      setPages(pages.map(p => p.id === pageId ? { ...p, [field]: value } : p));
+      // Update local state with database value
+      setPages(pages.map(p => p.id === pageId ? { ...p, [field]: dbValue } : p));
       toast.success("Page updated");
     } catch (error: any) {
       console.error("Error updating page:", error);
@@ -675,10 +680,13 @@ export default function Pages() {
 
         toast.success(`Deleted ${selectedIds.length} pages`);
       } else {
+        // Convert UI status value to database enum value for bulk updates
+        const dbValue = bulkActionType === "status" ? statusToDatabase(bulkActionValue as PageStatus) : bulkActionValue;
+        
         const { error } = await supabase
           .from("pages")
           .update({
-            [bulkActionType]: bulkActionValue,
+            [bulkActionType]: dbValue,
             last_modified_by_user_id: user.id,
           })
           .in("id", selectedIds);
@@ -777,7 +785,9 @@ export default function Pages() {
 
   const filteredPages = pages.filter((page) => {
     const matchesSearch = page.path.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || page.status === statusFilter;
+    // Normalize both the page status and filter status for comparison
+    const normalizedPageStatus = normalizeStatus(page.status);
+    const matchesStatus = statusFilter === "all" || normalizedPageStatus === statusFilter;
     const matchesPageType = pageTypeFilter === "all" || page.page_type === pageTypeFilter;
     const matchesDomain = domainFilter === "all" || page.domain === domainFilter;
     return matchesSearch && matchesStatus && matchesPageType && matchesDomain;

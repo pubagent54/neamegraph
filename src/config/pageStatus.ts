@@ -110,3 +110,19 @@ export function deriveSuggestedStatus(
   if (validationPassed === false) return "review";
   return "review"; // Default for schema but unknown validation
 }
+
+/**
+ * Convert UI status to database enum value
+ * Maps new 5-state workflow to existing database enum
+ */
+export function statusToDatabase(uiStatus: PageStatus): string {
+  const dbStatusMap: Record<PageStatus, string> = {
+    naked: "not_started",
+    review: "needs_review",
+    approved: "approved",
+    upload: "approved", // Keep as approved, waiting for manual upload
+    live: "implemented",
+  };
+  
+  return dbStatusMap[uiStatus];
+}
