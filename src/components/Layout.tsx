@@ -66,9 +66,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-12 py-6">
           <div className="flex items-center justify-between">
-          <div className="flex items-center gap-20">
+          <div className="flex items-center gap-16">
               <Link to="/dashboard" className="flex items-center transition-transform hover:scale-105">
-                <img src={neameGraphLogo} alt="NeameGraph powered by PubAgent" className="h-36 w-auto" />
+                <img src={neameGraphLogo} alt="NeameGraph powered by PubAgent" className="h-14 w-auto" />
               </Link>
               <nav className="hidden md:flex items-center gap-1">
                 {navItems.map((item) => {
