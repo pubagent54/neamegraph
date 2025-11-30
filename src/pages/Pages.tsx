@@ -1433,7 +1433,7 @@ export default function Pages() {
                     return (
                     <TableRow 
                       key={page.id}
-                      className={pageIsHomepage ? "bg-yellow-100/60 dark:bg-yellow-900/20" : ""}
+                      className={pageIsHomepage ? "bg-yellow-100/60 dark:bg-yellow-900/20 border-l-4 border-yellow-500 dark:border-yellow-600" : ""}
                     >
                       {canEdit && (
                         <TableCell>
