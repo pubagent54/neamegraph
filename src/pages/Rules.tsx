@@ -205,8 +205,42 @@ export default function Rules() {
       return;
     }
 
-    setPreviewJson(JSON.stringify(data.jsonld ? JSON.parse(data.jsonld) : data, null, 2));
-    toast.success("Preview generated");
+    // Extract and parse the JSON-LD from the response
+    let jsonLdContent = null;
+    
+    // Check if jsonld field exists in response
+    if (data?.jsonld) {
+      try {
+        // If jsonld is a string, parse it to an object
+        if (typeof data.jsonld === 'string') {
+          jsonLdContent = JSON.parse(data.jsonld);
+        } else {
+          // If it's already an object, use it as-is
+          jsonLdContent = data.jsonld;
+        }
+      } catch (parseError) {
+        console.error("Failed to parse JSON-LD:", parseError);
+        // If parsing fails, use the raw string
+        jsonLdContent = data.jsonld;
+      }
+    }
+
+    // If we successfully extracted JSON-LD content, pretty-print it
+    if (jsonLdContent) {
+      if (typeof jsonLdContent === 'string') {
+        // If it's still a string (parsing failed), show as-is
+        setPreviewJson(jsonLdContent);
+      } else {
+        // Pretty-print the object
+        setPreviewJson(JSON.stringify(jsonLdContent, null, 2));
+      }
+      toast.success("Preview generated");
+    } else {
+      // No JSON-LD found in response
+      console.error("No JSON-LD found in response:", data);
+      toast.error("Preview response did not contain JSON-LD");
+      setPreviewJson("");
+    }
   } catch (error: any) {
     console.error("Error generating preview:", error);
     toast.error(error.message || "Failed to generate preview");
