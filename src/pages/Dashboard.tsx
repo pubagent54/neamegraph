@@ -245,7 +245,7 @@ export default function Dashboard() {
           <Card className="rounded-2xl border-0 shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl">Getting Started</CardTitle>
-              <CardDescription>Next steps for your workflow</CardDescription>
+              <CardDescription>Next steps for using NeameGraph v2</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="flex gap-4">
@@ -253,9 +253,9 @@ export default function Dashboard() {
                   1
                 </div>
                 <div>
-                  <p className="font-semibold mb-1">Add Pages</p>
+                  <p className="font-semibold mb-1">Add or update pages</p>
                   <p className="text-sm text-muted-foreground">
-                    Import pages via CSV or sync from your sitemap
+                    Use WIZmode or the Pages view to import your corporate URLs (via CSV) and assign page types and categories.
                   </p>
                 </div>
               </div>
@@ -264,9 +264,9 @@ export default function Dashboard() {
                   2
                 </div>
                 <div>
-                  <p className="font-semibold mb-1">Configure Rules</p>
+                  <p className="font-semibold mb-1">Configure rules & generate schema</p>
                   <p className="text-sm text-muted-foreground">
-                    Set up prompts for schema generation
+                    Set up or refine the Corporate v2 (and Beer) rules, then generate JSON-LD for your pages from the Rules / WIZmode flow.
                   </p>
                 </div>
               </div>
@@ -275,9 +275,9 @@ export default function Dashboard() {
                   3
                 </div>
                 <div>
-                  <p className="font-semibold mb-1">Generate Schema</p>
+                  <p className="font-semibold mb-1">Validate & implement</p>
                   <p className="text-sm text-muted-foreground">
-                    Fetch HTML and create JSON-LD for your pages
+                    Test the generated schema on staging, fix any issues, then mark pages as Tested or Implemented once they're live.
                   </p>
                 </div>
               </div>
