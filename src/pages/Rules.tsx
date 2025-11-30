@@ -26,7 +26,7 @@ import { usePageTypes, useCategories } from "@/hooks/use-taxonomy";
 import { getDomains } from "@/lib/taxonomy";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Link } from "react-router-dom";
+import { SchemaQualityCharter } from "@/components/SchemaQualityCharter";
 
 interface RuleBackup {
   content: string;
@@ -84,6 +84,9 @@ export default function Rules() {
   
   // Dev tools accordion state
   const [devToolsOpen, setDevToolsOpen] = useState(false);
+  
+  // Charter modal state
+  const [charterOpen, setCharterOpen] = useState(false);
   
   const isAdmin = userRole === "admin";
   
@@ -378,12 +381,15 @@ export default function Rules() {
                   <p className="text-xs text-muted-foreground">Global quality rules that apply to all schema (Corporate, Beers, Pubs)</p>
                 </div>
               </div>
-              <Link to="/settings#charter">
-                <Button variant="outline" size="sm" className="rounded-full">
-                  <ExternalLink className="h-3 w-3 mr-2" />
-                  View Full Charter
-                </Button>
-              </Link>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="rounded-full"
+                onClick={() => setCharterOpen(true)}
+              >
+                <ExternalLink className="h-3 w-3 mr-2" />
+                View Full Charter
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -735,6 +741,22 @@ export default function Rules() {
                 Save Changes
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Schema Quality Charter Modal */}
+        <Dialog open={charterOpen} onOpenChange={setCharterOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Schema Quality Charter (Global)
+              </DialogTitle>
+              <DialogDescription>
+                Non-negotiable quality principles that apply to all schema generation across Corporate, Beer, and Pub domains
+              </DialogDescription>
+            </DialogHeader>
+            <SchemaQualityCharter />
           </DialogContent>
         </Dialog>
       </div>
