@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, CheckCircle2, AlertCircle, Clock, Settings as SettingsIcon } from "lucide-react";
+import { Files, User, Loader2, CheckCircle2, AlertCircle, Clock, Settings as SettingsIcon, ChevronRight, Table, FlaskRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -71,30 +71,34 @@ export default function Dashboard() {
     {
       title: "Total Pages",
       value: stats.total,
-      icon: FileText,
+      icon: Files,
       description: "All pages tracked",
-      color: "text-primary",
+      bgClass: "bg-muted",
+      iconClass: "text-muted-foreground",
     },
     {
       title: "Needs Attention",
       value: stats.needs_attention,
-      icon: AlertCircle,
+      icon: User,
       description: "Naked, Draft, or Needs Review",
-      color: "text-amber-600 dark:text-amber-400",
+      bgClass: "bg-rose-500/10 dark:bg-rose-500/20",
+      iconClass: "text-rose-600 dark:text-rose-400",
     },
     {
       title: "In Progress",
       value: stats.in_progress,
-      icon: Clock,
+      icon: Loader2,
       description: "Actively being worked on",
-      color: "text-blue-600 dark:text-blue-400",
+      bgClass: "bg-blue-500/10 dark:bg-blue-500/20",
+      iconClass: "text-blue-600 dark:text-blue-400",
     },
     {
       title: "Implemented",
       value: stats.implemented,
       icon: CheckCircle2,
       description: "Tested or live and verified",
-      color: "text-emerald-600 dark:text-emerald-400",
+      bgClass: "bg-emerald-500/10 dark:bg-emerald-500/20",
+      iconClass: "text-emerald-600 dark:text-emerald-400",
     },
   ];
 
@@ -125,8 +129,8 @@ export default function Dashboard() {
               <Card key={card.title} className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-card to-muted/30 hover:shadow-md transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                   <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
-                  <div className={`h-10 w-10 rounded-full bg-background/50 flex items-center justify-center`}>
-                    <Icon className={`h-5 w-5 ${card.color}`} />
+                  <div className={`h-12 w-12 rounded-full flex items-center justify-center ${card.bgClass}`}>
+                    <Icon className={`h-7 w-7 ${card.iconClass} ${card.title === "In Progress" ? "animate-spin" : ""}`} />
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -157,7 +161,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-4xl font-bold text-amber-700 dark:text-amber-400 mb-1">{domainStats.beer}</div>
-                <p className="text-sm text-muted-foreground">Engine coming soon</p>
+                <p className="text-sm text-muted-foreground">Using v2 Beers engine</p>
               </CardContent>
             </Card>
             <Card className="rounded-2xl border-0 shadow-sm bg-gradient-to-br from-purple-50 to-purple-100/30 dark:from-purple-950/30 dark:to-purple-900/10">
@@ -166,7 +170,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-4xl font-bold text-purple-700 dark:text-purple-400 mb-1">{domainStats.pub}</div>
-                <p className="text-sm text-muted-foreground">Phase 2 - not implemented</p>
+                <p className="text-sm text-muted-foreground">Phase 3 – planned January 2026</p>
               </CardContent>
             </Card>
           </div>
@@ -182,8 +186,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                NeameGraph is using the Corporate v2 schema engine for this app. 
-                This is locked and cannot be changed from here.
+                NeameGraph uses the Corporate v2 schema engine to generate high-quality JSON-LD for your corporate pages. The engine version is locked here to keep your schema consistent and stable.
               </p>
             </CardContent>
           </Card>
@@ -193,24 +196,48 @@ export default function Dashboard() {
               <CardTitle className="text-xl">Quick Actions</CardTitle>
               <CardDescription>Common tasks and views</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <Link to="/pages">
-                <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
-                  <FileText className="mr-2 h-4 w-4" />
-                  View All Pages
-                </Button>
+            <CardContent className="space-y-2">
+              <Link to="/pages" className="block">
+                <div className="flex items-center justify-between rounded-xl border px-4 py-3 hover:bg-muted/50 transition-colors group">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                      <Table className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">View All Pages</p>
+                      <p className="text-xs text-muted-foreground">Browse the complete page inventory</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                </div>
               </Link>
-              <Link to="/pages?status=review">
-                <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
-                  <AlertCircle className="mr-2 h-4 w-4" />
-                  Pages Needing Attention
-                </Button>
+              <Link to="/pages" className="block">
+                <div className="flex items-center justify-between rounded-xl border px-4 py-3 hover:bg-muted/50 transition-colors group">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-rose-500/10 dark:bg-rose-500/20 flex items-center justify-center">
+                      <User className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Fix Naked & Draft Pages</p>
+                      <p className="text-xs text-muted-foreground">Tackle pages with no or early schema first</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                </div>
               </Link>
-              <Link to="/pages?status=upload">
-                <Button variant="outline" className="w-full justify-start rounded-full border-muted hover:bg-muted/50 transition-colors">
-                  <Clock className="mr-2 h-4 w-4" />
-                  Pages In Progress
-                </Button>
+              <Link to="/pages" className="block">
+                <div className="flex items-center justify-between rounded-xl border px-4 py-3 hover:bg-muted/50 transition-colors group">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-purple-500/10 dark:bg-purple-500/20 flex items-center justify-center">
+                      <FlaskRound className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Review Ready for Test</p>
+                      <p className="text-xs text-muted-foreground">Check pages queued for validation</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                </div>
               </Link>
             </CardContent>
           </Card>
