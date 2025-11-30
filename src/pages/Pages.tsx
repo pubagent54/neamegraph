@@ -32,7 +32,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useDomains, usePageTypes, usePageTypesForDomain, useCategoriesForPageType } from "@/hooks/use-taxonomy";
+import { useDomains, usePageTypes, usePageTypesForDomain, useCategoriesForPageType, useCategories } from "@/hooks/use-taxonomy";
 import { PageTypeSelect } from "@/components/PageTypeSelect";
 import { CategorySelect } from "@/components/CategorySelect";
 
@@ -112,6 +112,7 @@ export default function Pages() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [pageTypeFilter, setPageTypeFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [domainFilter, setDomainFilter] = useState<string>("all");
   const [bulkPaths, setBulkPaths] = useState("");
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
@@ -153,6 +154,7 @@ export default function Pages() {
   // Load taxonomy from database
   const { domains, loading: domainsLoading } = useDomains();
   const { pageTypes: allPageTypes, loading: allPageTypesLoading } = usePageTypes();
+  const { categories: allCategories, loading: allCategoriesLoading } = useCategories();
   const { pageTypes: domainPageTypes, loading: domainPageTypesLoading } = usePageTypesForDomain(newPage.domain, true);
   const { categories: pageTypeCategories, loading: categoriesLoading } = useCategoriesForPageType(newPage.page_type, true);
 
@@ -909,8 +911,9 @@ export default function Pages() {
     const normalizedPageStatus = normalizeStatus(page.status);
     const matchesStatus = statusFilter === "all" || normalizedPageStatus === statusFilter;
     const matchesPageType = pageTypeFilter === "all" || page.page_type === pageTypeFilter;
+    const matchesCategory = categoryFilter === "all" || page.category === categoryFilter;
     const matchesDomain = domainFilter === "all" || page.domain === domainFilter;
-    return matchesSearch && matchesStatus && matchesPageType && matchesDomain;
+    return matchesSearch && matchesStatus && matchesPageType && matchesCategory && matchesDomain;
   });
 
   // Separate homepage from other pages and apply sorting
@@ -1222,6 +1225,19 @@ export default function Pages() {
               className="pl-10 rounded-full bg-muted/30 border-0 focus-visible:ring-primary/20"
             />
           </div>
+          <Select value={domainFilter} onValueChange={setDomainFilter} disabled={domainsLoading}>
+            <SelectTrigger className="w-[180px] rounded-full bg-muted/30 border-0">
+              <SelectValue placeholder="Filter by domain" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="all">All Domains</SelectItem>
+              {domains.map((domain) => (
+                <SelectItem key={domain} value={domain}>
+                  {domain}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={pageTypeFilter} onValueChange={setPageTypeFilter} disabled={allPageTypesLoading}>
             <SelectTrigger className="w-[180px] rounded-full bg-muted/30 border-0">
               <SelectValue placeholder="Filter by page type" />
@@ -1229,8 +1245,21 @@ export default function Pages() {
             <SelectContent className="rounded-2xl">
               <SelectItem value="all">All Page Types</SelectItem>
               {allPageTypes.map((type) => (
-                <SelectItem key={type.id} value={type.label}>
+                <SelectItem key={type.id} value={type.id}>
                   {type.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter} disabled={allCategoriesLoading}>
+            <SelectTrigger className="w-[180px] rounded-full bg-muted/30 border-0">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent className="rounded-2xl">
+              <SelectItem value="all">All Categories</SelectItem>
+              {allCategories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1244,19 +1273,6 @@ export default function Pages() {
               {PAGE_STATUS_OPTIONS.map((status) => (
                 <SelectItem key={status} value={status}>
                   {PAGE_STATUS_CONFIG[status].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={domainFilter} onValueChange={setDomainFilter} disabled={domainsLoading}>
-            <SelectTrigger className="w-[180px] rounded-full bg-muted/30 border-0">
-              <SelectValue placeholder="Filter by domain" />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value="all">All Domains</SelectItem>
-              {domains.map((domain) => (
-                <SelectItem key={domain} value={domain}>
-                  {domain}
                 </SelectItem>
               ))}
             </SelectContent>
