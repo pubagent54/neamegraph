@@ -608,6 +608,47 @@ export default function Pages() {
     }
   };
 
+  // Cross-browser clipboard copy with fallback
+  const copyToClipboard = async (text: string): Promise<boolean> => {
+    // Modern Clipboard API (Chrome, Firefox, Safari 13.1+)
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn("Clipboard API failed, trying fallback:", err);
+      }
+    }
+    
+    // Fallback for older browsers and non-secure contexts
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      
+      // Make the textarea invisible but still accessible
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      textArea.style.opacity = "0";
+      
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      // Try the old execCommand method
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        return true;
+      }
+    } catch (err) {
+      console.error("Fallback copy failed:", err);
+    }
+    
+    return false;
+  };
+
   const handleCopyDrupalSchema = async (page: Page) => {
     setCopyingSchemaForPageId(page.id);
     try {
@@ -646,14 +687,13 @@ export default function Pages() {
       // Wrap in script tag
       const scriptTag = `<script type="application/ld+json">\n${prettyJson}\n</script>`;
 
-      // Copy to clipboard
-      try {
-        await navigator.clipboard.writeText(scriptTag);
+      // Copy to clipboard with cross-browser support
+      const success = await copyToClipboard(scriptTag);
+      
+      if (success) {
         toast.success(`Copied Drupal script tag for ${page.path}`);
-      } catch (clipboardError) {
-        console.error("Clipboard error:", clipboardError);
-        toast.error("Failed to copy to clipboard. Check browser permissions.");
-        return;
+      } else {
+        toast.error("Could not copy to clipboard. Please try selecting and copying manually.");
       }
     } catch (error: any) {
       console.error("Unexpected error copying schema:", error);
