@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DomainBadge } from "@/components/DomainBadge";
+import { Badge } from "@/components/ui/badge";
 import { Link, useSearchParams } from "react-router-dom";
 import { Plus, Search, Upload, Trash2, Edit, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -61,7 +62,7 @@ const STATUS_OPTIONS = [
 ];
 
 // Status configuration for labels and dot colors
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { label: string; dotClass: string }> = {
   not_started: { 
     label: "Not Started", 
     dotClass: "bg-muted-foreground"
@@ -86,7 +87,7 @@ const STATUS_CONFIG = {
     label: "Implemented", 
     dotClass: "bg-status-implemented"
   },
-} as const;
+};
 
 // ========================================
 // DOMAIN LANE LOGIC - Corporate, Beer, Pub
@@ -168,6 +169,7 @@ export default function Pages() {
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [searchParams] = useSearchParams();
   const { userRole } = useAuth();
+  const [schemaVersions, setSchemaVersions] = useState<Record<string, { hasV1: boolean; hasV2: boolean }>>({});
 
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
@@ -185,6 +187,54 @@ export default function Pages() {
       setStatusFilter(statusParam);
     }
   }, [searchParams]);
+
+  // Fetch schema versions to determine v1/v2 status
+  useEffect(() => {
+    const fetchSchemaVersions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("schema_versions")
+          .select("page_id");
+        
+        if (error) throw error;
+        
+        const versions: Record<string, { hasV1: boolean; hasV2: boolean }> = {};
+        data?.forEach((sv: any) => {
+          if (!versions[sv.page_id]) {
+            versions[sv.page_id] = { hasV1: false, hasV2: false };
+          }
+          // For now, we'll mark all as v2 since v1 is legacy
+          // This can be enhanced later with actual version detection
+          versions[sv.page_id].hasV2 = true;
+        });
+        
+        setSchemaVersions(versions);
+      } catch (error) {
+        console.error("Error fetching schema versions:", error);
+      }
+    };
+    
+    if (pages.length > 0) {
+      fetchSchemaVersions();
+    }
+  }, [pages]);
+
+  const getSchemaVersionBadge = (pageId: string) => {
+    const versions = schemaVersions[pageId];
+    if (!versions || (!versions.hasV1 && !versions.hasV2)) {
+      return <Badge variant="outline" className="rounded-full text-xs bg-muted/50">None</Badge>;
+    }
+    if (versions.hasV1 && versions.hasV2) {
+      return <Badge variant="outline" className="rounded-full text-xs bg-primary/10 text-primary">Both</Badge>;
+    }
+    if (versions.hasV2) {
+      return <Badge variant="outline" className="rounded-full text-xs bg-green-500/10 text-green-600 dark:text-green-500">v2</Badge>;
+    }
+    if (versions.hasV1) {
+      return <Badge variant="outline" className="rounded-full text-xs bg-orange-500/10 text-orange-600 dark:text-orange-500">v1</Badge>;
+    }
+    return null;
+  };
 
   // Normalize path: trim, ensure leading /, strip trailing / (except root), lowercase
   const normalizePath = (path: string): string => {
@@ -1139,6 +1189,7 @@ export default function Pages() {
                   <TableHead className="font-semibold">Page Type</TableHead>
                   <TableHead className="font-semibold">Category</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead className="font-semibold">Schema Ver</TableHead>
                   <TableHead className="font-semibold">FAQ</TableHead>
                   <TableHead className="font-semibold">Last Schema</TableHead>
                 </TableRow>
@@ -1146,7 +1197,7 @@ export default function Pages() {
               <TableBody>
                 {filteredPages.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 8 : 7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={canEdit ? 9 : 8} className="text-center text-muted-foreground py-8">
                     No pages found
                   </TableCell>
                 </TableRow>
@@ -1250,6 +1301,20 @@ export default function Pages() {
                             </Tooltip>
                           </TooltipProvider>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="cursor-default">
+                                {getSchemaVersionBadge(page.id)}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Schema version indicator</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                       <TableCell>
                         {canEdit ? (

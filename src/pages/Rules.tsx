@@ -1,11 +1,10 @@
 /**
- * Rules Management Screen (Admin Only)
+ * Rules Management Screen (Admin Only) - REFACTORED CONTROL CENTRE
  * 
- * Manages schema generation prompts at the Domain level (Corporate, Beer, Pub).
- * Rules are sent as system prompts to NeameGraph Brain (LLM) when generating JSON-LD.
- * Domain-level rules are the primary/default way to configure schema generation.
- * Page Type and Category are passed as context to the prompt for adaptive behavior.
- * Advanced users can optionally create page_type/category-specific overrides.
+ * Three-section layout for clean control centre experience:
+ * 1. Rule Header/Meta (top) - Key meta about selected rule
+ * 2. Preview (middle) - Test rule against real URLs and inspect JSON-LD
+ * 3. Coverage (bottom) - Pages using this rule
  */
 
 import { useEffect, useState } from "react";
@@ -14,32 +13,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Edit2, Plus, Trash2, FileText, ExternalLink, Layers } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { CheckCircle, Edit2, Plus, Trash2, FileText, ExternalLink, Layers, Play, Copy, Loader2 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { SCHEMA_QUALITY_RULES, SCHEMA_QUALITY_RULE_DESCRIPTIONS } from "@/config/schemaQualityRules";
-import { ORG_DESCRIPTION } from "@/config/organization";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePageTypes, useCategories } from "@/hooks/use-taxonomy";
 import { getDomains } from "@/lib/taxonomy";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface RuleBackup {
   content: string;
@@ -59,12 +44,21 @@ interface Rule {
   domain: string | null;
 }
 
+interface Page {
+  id: string;
+  path: string;
+  page_type: string | null;
+  category: string | null;
+  status: string;
+  domain: string;
+}
+
 export default function Rules() {
   const { userRole } = useAuth();
   const [rules, setRules] = useState<Rule[]>([]);
+  const [selectedRule, setSelectedRule] = useState<Rule | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState<Rule | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [formData, setFormData] = useState({ 
     name: "", 
     body: "", 
@@ -73,8 +67,16 @@ export default function Rules() {
     domain: "",
     is_active: true
   });
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [ruleToDelete, setRuleToDelete] = useState<Rule | null>(null);
+  
+  // Preview state
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [selectedTestPageId, setSelectedTestPageId] = useState<string>("");
+  const [previewJson, setPreviewJson] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  
+  // Coverage state
+  const [coveragePages, setCoveragePages] = useState<Page[]>([]);
+  const [coverageLoading, setCoverageLoading] = useState(false);
   
   const isAdmin = userRole === "admin";
   
@@ -82,12 +84,17 @@ export default function Rules() {
   const { pageTypes } = usePageTypes();
   const { categories } = useCategories();
   const [domains, setDomains] = useState<string[]>([]);
-  const [showAdvancedOverrides, setShowAdvancedOverrides] = useState(false);
 
   useEffect(() => {
     fetchRules();
     loadDomains();
   }, []);
+
+  useEffect(() => {
+    if (selectedRule) {
+      fetchCoverage();
+    }
+  }, [selectedRule]);
 
   const loadDomains = async () => {
     const domainList = await getDomains();
@@ -102,12 +109,19 @@ export default function Rules() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      // Cast rules_backup from Json to RuleBackup[]
       const rulesWithTypedBackups = (data || []).map(rule => ({
         ...rule,
         rules_backup: (rule.rules_backup as unknown as RuleBackup[]) || null
       }));
       setRules(rulesWithTypedBackups);
+      
+      // Auto-select first domain-level active rule
+      const firstDomainRule = rulesWithTypedBackups.find(r => 
+        r.is_active && r.domain && !r.page_type && !r.category
+      );
+      if (firstDomainRule) {
+        setSelectedRule(firstDomainRule);
+      }
     } catch (error) {
       console.error("Error fetching rules:", error);
       toast.error("Failed to fetch rules");
@@ -116,19 +130,102 @@ export default function Rules() {
     }
   };
 
-  const handleSave = async () => {
+  const fetchCoverage = async () => {
+    if (!selectedRule) return;
+    
+    setCoverageLoading(true);
+    try {
+      let query = supabase.from("pages").select("id, path, page_type, category, status, domain");
+      
+      // Match based on rule specificity
+      if (selectedRule.page_type && selectedRule.category) {
+        // Category-specific override
+        query = query
+          .eq("page_type", selectedRule.page_type)
+          .eq("category", selectedRule.category);
+      } else if (selectedRule.page_type) {
+        // Page type override
+        query = query.eq("page_type", selectedRule.page_type);
+      } else if (selectedRule.domain) {
+        // Domain-level default
+        query = query.eq("domain", selectedRule.domain);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      setCoveragePages(data || []);
+    } catch (error) {
+      console.error("Error fetching coverage:", error);
+      toast.error("Failed to fetch coverage");
+    } finally {
+      setCoverageLoading(false);
+    }
+  };
+
+  const handleRunPreview = async () => {
+    if (!selectedRule) {
+      toast.error("Please select a rule first");
+      return;
+    }
+    
+    setPreviewLoading(true);
+    try {
+      // Use selected test page if available
+      let targetPath = previewUrl;
+      if (selectedTestPageId) {
+        const testPage = coveragePages.find(p => p.id === selectedTestPageId);
+        if (testPage) {
+          targetPath = testPage.path;
+        }
+      }
+      
+      if (!targetPath) {
+        toast.error("Please enter a URL or select a test page");
+        setPreviewLoading(false);
+        return;
+      }
+
+      // Call generate-schema edge function
+      const { data, error } = await supabase.functions.invoke('generate-schema', {
+        body: {
+          pageId: selectedTestPageId || undefined,
+          testPath: targetPath
+        }
+      });
+
+      if (error) throw error;
+
+      setPreviewJson(JSON.stringify(data.jsonld ? JSON.parse(data.jsonld) : data, null, 2));
+      toast.success("Preview generated");
+    } catch (error: any) {
+      console.error("Error generating preview:", error);
+      toast.error(error.message || "Failed to generate preview");
+      setPreviewJson("");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleCopyJson = () => {
+    if (previewJson) {
+      navigator.clipboard.writeText(previewJson);
+      toast.success("JSON-LD copied to clipboard");
+    }
+  };
+
+  const handleSaveRule = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      if (editingRule) {
+      if (selectedRule) {
         // Rotate backups: keep last 3 versions
-        const existingBackups = editingRule.rules_backup || [];
+        const existingBackups = selectedRule.rules_backup || [];
         const newBackup: RuleBackup = {
-          content: editingRule.body,
+          content: selectedRule.body,
           timestamp: new Date().toISOString()
         };
         
-        // Add current content as newest backup and keep only last 3
         const updatedBackups = [newBackup, ...existingBackups].slice(0, 3);
 
         const { error } = await supabase
@@ -140,32 +237,15 @@ export default function Rules() {
             category: formData.category || null,
             domain: formData.domain || null,
             is_active: formData.is_active,
-            rules_backup: updatedBackups as any // Cast to any for Supabase Json type
+            rules_backup: updatedBackups as any
           })
-          .eq("id", editingRule.id);
+          .eq("id", selectedRule.id);
 
         if (error) throw error;
         toast.success("Rule updated");
-      } else {
-        const { error } = await supabase
-          .from("rules")
-          .insert({
-            name: formData.name,
-            body: formData.body,
-            page_type: formData.page_type || null,
-            category: formData.category || null,
-            domain: formData.domain || null,
-            created_by_user_id: user?.id,
-            is_active: true,
-          });
-
-        if (error) throw error;
-        toast.success("Rule created");
       }
 
-      setDialogOpen(false);
-      setEditingRule(null);
-      setFormData({ name: "", body: "", page_type: "", category: "", domain: "", is_active: true });
+      setEditDialogOpen(false);
       fetchRules();
     } catch (error) {
       console.error("Error saving rule:", error);
@@ -173,28 +253,7 @@ export default function Rules() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!ruleToDelete) return;
-
-    try {
-      const { error } = await supabase
-        .from("rules")
-        .delete()
-        .eq("id", ruleToDelete.id);
-
-      if (error) throw error;
-
-      toast.success("Rule deleted");
-      setDeleteDialogOpen(false);
-      setRuleToDelete(null);
-      fetchRules();
-    } catch (error) {
-      console.error("Error deleting rule:", error);
-      toast.error("Failed to delete rule");
-    }
-  };
-
-  const handleEdit = (rule: Rule) => {
+  const handleEditRule = (rule: Rule) => {
     setFormData({
       name: rule.name,
       body: rule.body,
@@ -203,534 +262,321 @@ export default function Rules() {
       domain: rule.domain || "",
       is_active: rule.is_active,
     });
-    setEditingRule(rule);
-    setDialogOpen(true);
+    setEditDialogOpen(true);
   };
 
-  const openDeleteDialog = (rule: Rule) => {
-    setRuleToDelete(rule);
-    setDeleteDialogOpen(true);
+  const getDomainRules = () => {
+    return rules.filter(r => r.domain && !r.page_type && !r.category);
   };
 
-  // ========================================
-  // RULES MATCHING ALGORITHM (PRIORITY ORDER)
-  // ----------------------------------------
-  // Rules are matched with the following priority:
-  // 1. Category-specific override: rules.page_type == page.page_type AND rules.category == page.category
-  // 2. Page Type override: rules.page_type == page.page_type AND rules.category IS NULL
-  // 3. Domain default: rules.page_type IS NULL AND rules.category IS NULL (matched by domain in app logic)
-  // 
-  // Domain context (domain, pageType, category) is always passed to the prompt for adaptive behavior.
-  // Database enforces unique constraint on active rules per (page_type, category) combination.
-  // ----------------------------------------
-
-  // Get domain-level rule for a given domain
-  const getDomainRule = (domain: string) => {
-    // Domain rules have domain set and page_type/category null
-    return rules.find(r => r.is_active && r.domain === domain && r.page_type === null && r.category === null);
-  };
-
-  // Get domain status
-  const getDomainStatus = (domain: string) => {
-    const domainRule = getDomainRule(domain);
-    if (!domainRule) return { status: "not_configured", label: "Not configured", variant: "outline" as const };
-    if (domainRule.is_active) return { status: "active", label: "Active", variant: "default" as const };
-    return { status: "draft", label: "Draft", variant: "secondary" as const };
-  };
-
-  // Get page type/category overrides for display in advanced section
-  const getOverrideRules = () => {
-    return rules.filter(r => r.page_type !== null || r.category !== null);
-  };
-
-  // Domain rules for display
-  const domainRules = domains.map(domain => ({
-    domain,
-    rule: getDomainRule(domain),
-    status: getDomainStatus(domain)
-  }));
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div>
           <h1 className="text-4xl font-bold tracking-tight mb-2">NeameGraph Brain Rules</h1>
           <p className="text-lg text-muted-foreground">
-            Domain-level schema generation prompts. Each domain has a primary rule that defines how the NeameGraph Brain generates JSON-LD schema. Page Type and Category are passed as context to enable adaptive behavior.
+            Control centre for domain-level schema generation rules
           </p>
         </div>
 
-        {/* DOMAIN-LEVEL RULES */}
+        {/* RULE SELECTOR */}
         <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-primary/5">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Layers className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-2xl">Domain Rules</CardTitle>
-                </div>
-                <CardDescription>
-                  Primary schema generation rules organized by domain. Domain rules are the default way to configure schema generation. {domainRules.filter(d => d.status.status === 'active').length} of {domains.length} domains configured.
-                </CardDescription>
-              </div>
-            </div>
+            <CardTitle className="text-lg">Select Rule</CardTitle>
+            <CardDescription>Choose a domain-level rule to view and configure</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {domainRules.map(({ domain, rule, status }) => (
-                <div 
-                  key={domain}
-                  className="rounded-xl border bg-card p-4 hover:border-primary/40 transition-colors cursor-pointer"
-                  onClick={() => {
-                    if (rule) {
-                      handleEdit(rule);
-                    } else {
-                      // Create new rule for this domain
-                      setFormData({ 
-                        name: `${domain} Schema Rule`, 
-                        body: `# ${domain} Schema Generation Prompt\n\nYou will generate JSON-LD schema for ${domain} pages.\n\nContext provided:\n- domain: ${domain}\n- pageType: (will be provided)\n- category: (will be provided)\n\nUse this context to adapt schema generation behavior. Follow the Schema Quality Charter principles.\n\n## Instructions\n\nTODO: Add specific instructions for ${domain} schema generation.`, 
-                        page_type: "",
-                        category: "",
-                        domain: domain,
-                        is_active: true
-                      });
-                      setEditingRule(null);
-                      setDialogOpen(true);
-                    }
-                  }}
+            <div className="grid gap-3">
+              {getDomainRules().map((rule) => (
+                <Button
+                  key={rule.id}
+                  variant={selectedRule?.id === rule.id ? "default" : "outline"}
+                  className="justify-start h-auto py-3 px-4 rounded-xl"
+                  onClick={() => setSelectedRule(rule)}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-semibold">{domain}</h3>
-                        <Badge variant={status.variant} className="rounded-full text-xs">
-                          {status.label}
-                        </Badge>
-                      </div>
-                      {rule ? (
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground">{rule.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Updated {new Date(rule.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground italic">
-                          No rule configured. Click to create.
-                        </p>
-                      )}
+                  <div className="flex items-center gap-3 w-full">
+                    <Layers className="h-4 w-4" />
+                    <div className="flex-1 text-left">
+                      <div className="font-semibold">{rule.name}</div>
+                      <div className="text-xs text-muted-foreground">{rule.domain} domain</div>
                     </div>
-                    {rule && isAdmin && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEdit(rule);
-                          }}
-                          className="rounded-full"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                    {rule.is_active && (
+                      <Badge variant="default" className="rounded-full">Active</Badge>
                     )}
                   </div>
-                </div>
+                </Button>
               ))}
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Advanced Overrides Section */}
-            <div className="mt-6 pt-6 border-t">
-              <Collapsible open={showAdvancedOverrides} onOpenChange={setShowAdvancedOverrides}>
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" className="w-full justify-between rounded-xl">
-                    <span className="text-sm font-medium">Advanced overrides (optional)</span>
-                    <Badge variant="outline" className="rounded-full">
-                      {getOverrideRules().length} override{getOverrideRules().length !== 1 ? 's' : ''}
-                    </Badge>
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="mt-3">
-                  <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
-                    <p className="text-xs text-muted-foreground">
-                      Advanced: Create page type or category-specific rule overrides. These are rarely needed—most schema generation should use the domain-level rule. Overrides take precedence over domain rules when matched.
+        {selectedRule && (
+          <>
+            {/* SECTION 1: RULE HEADER / META */}
+            <Card className="rounded-2xl">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center gap-3">
+                      <CardTitle className="text-2xl">{selectedRule.name}</CardTitle>
+                      <Badge variant="outline" className="rounded-full">
+                        v2
+                      </Badge>
+                      {selectedRule.is_active && (
+                        <Badge variant="default" className="rounded-full">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Active
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Entity type: {selectedRule.domain} · {selectedRule.page_type || "Domain-level"} 
+                      {selectedRule.category ? ` · ${selectedRule.category}` : ""}
                     </p>
-                    {getOverrideRules().length === 0 ? (
-                      <div className="text-center py-6 text-muted-foreground">
-                        <p className="text-sm">No overrides configured.</p>
-                        <p className="text-xs mt-1">Domain-level rules handle all pages by default.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {getOverrideRules().map(rule => (
-                          <div 
-                            key={rule.id}
-                            className="rounded-lg border bg-card p-3 text-sm space-y-1"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1">
-                                <p className="font-medium">{rule.name}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  {rule.page_type && (
-                                    <Badge variant="outline" className="text-xs rounded-full">
-                                      Page Type: {pageTypes.find(pt => pt.id === rule.page_type)?.label || rule.page_type}
-                                    </Badge>
-                                  )}
-                                  {rule.category && (
-                                    <Badge variant="outline" className="text-xs rounded-full">
-                                      Category: {categories.find(c => c.id === rule.category)?.label || rule.category}
-                                    </Badge>
-                                  )}
-                                  {rule.is_active && (
-                                    <Badge className="text-xs rounded-full">Active</Badge>
-                                  )}
-                                </div>
-                              </div>
-                              {isAdmin && (
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleEdit(rule)}
-                                    className="h-8 w-8 p-0 rounded-full"
-                                  >
-                                    <Edit2 className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => openDeleteDialog(rule)}
-                                    className="h-8 w-8 p-0 rounded-full text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                    <p className="text-xs text-muted-foreground">
+                      Last updated: {new Date(selectedRule.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() => handleEditRule(selectedRule)}
+                    >
+                      <Edit2 className="h-4 w-4 mr-2" />
+                      Edit Rule
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+            </Card>
+
+            {/* SECTION 2: PREVIEW */}
+            <Card className="rounded-2xl">
+              <CardHeader>
+                <CardTitle className="text-lg">Preview Schema</CardTitle>
+                <CardDescription>
+                  Test this rule against a real URL and inspect the generated JSON-LD
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label>Test Page</Label>
+                    <Select value={selectedTestPageId} onValueChange={setSelectedTestPageId}>
+                      <SelectTrigger className="rounded-xl">
+                        <SelectValue placeholder="Choose a test page..." />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl max-h-[300px]">
+                        {coveragePages.slice(0, 20).map((page) => (
+                          <SelectItem key={page.id} value={page.id}>
+                            {page.path}
+                          </SelectItem>
                         ))}
-                      </div>
-                    )}
-                    {isAdmin && (
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Or enter URL manually</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="/beers/spitfire"
+                        value={previewUrl}
+                        onChange={(e) => setPreviewUrl(e.target.value)}
+                        className="rounded-xl"
+                      />
+                      <Button
+                        onClick={handleRunPreview}
+                        disabled={previewLoading || (!selectedTestPageId && !previewUrl)}
+                        className="rounded-full"
+                      >
+                        {previewLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Play className="h-4 w-4 mr-2" />
+                            Run Preview
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {previewJson && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Generated JSON-LD</Label>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          setFormData({ name: "", body: "", page_type: "", category: "", domain: "", is_active: true });
-                          setEditingRule(null);
-                          setDialogOpen(true);
-                        }}
-                        className="w-full rounded-full mt-3"
+                        onClick={handleCopyJson}
+                        className="rounded-full"
                       >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Override Rule
+                        <Copy className="h-3 w-3 mr-2" />
+                        Copy JSON
                       </Button>
+                    </div>
+                    <div className="relative">
+                      <pre className="text-xs font-mono bg-muted/50 rounded-xl p-4 overflow-x-auto max-h-[500px] overflow-y-auto border">
+                        {previewJson}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* SECTION 3: COVERAGE */}
+            <Card className="rounded-2xl">
+              <CardHeader>
+                <CardTitle className="text-lg">Coverage</CardTitle>
+                <CardDescription>
+                  {coverageLoading ? (
+                    "Loading pages..."
+                  ) : (
+                    `This rule currently applies to ${coveragePages.length} page${coveragePages.length !== 1 ? 's' : ''}`
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {coverageLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                  </div>
+                ) : coveragePages.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p className="text-sm">No pages using this rule</p>
+                  </div>
+                ) : (
+                  <div className="border rounded-xl overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/30">
+                          <TableHead className="font-semibold">Path</TableHead>
+                          <TableHead className="font-semibold">Page Type</TableHead>
+                          <TableHead className="font-semibold">Category</TableHead>
+                          <TableHead className="font-semibold">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {coveragePages.slice(0, 50).map((page) => (
+                          <TableRow key={page.id}>
+                            <TableCell className="font-mono text-sm">{page.path}</TableCell>
+                            <TableCell className="text-sm">{page.page_type || "—"}</TableCell>
+                            <TableCell className="text-sm">{page.category || "—"}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs rounded-full">
+                                {page.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {coveragePages.length > 50 && (
+                      <div className="p-3 bg-muted/20 text-center text-xs text-muted-foreground">
+                        Showing first 50 of {coveragePages.length} pages
+                      </div>
                     )}
                   </div>
-                </CollapsibleContent>
-              </Collapsible>
-            </div>
-          </CardContent>
-        </Card>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
 
-        {/* SCHEMA QUALITY CHARTER (GLOBAL) */}
-        <Card className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-primary/5">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-2xl">Schema Quality Charter (Global)</CardTitle>
-                </div>
-                <CardDescription>
-                  Global quality standards that apply to all domain rules. Domain-level prompts receive domain, pageType, and category as context to enable adaptive schema generation behavior.
-                </CardDescription>
+        {/* EDIT DIALOG */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="rounded-2xl max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Rule</DialogTitle>
+              <DialogDescription>
+                Update the schema generation prompt for this rule
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Rule Name</Label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="rounded-xl"
+                />
               </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => window.open('/docs/schema-quality-charter.md', '_blank')}
-                className="rounded-full"
-              >
-                <ExternalLink className="mr-2 h-4 w-4" />
-                View Full Charter
+              <div className="space-y-2">
+                <Label>Schema Generation Prompt</Label>
+                <Textarea
+                  value={formData.body}
+                  onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+                  className="min-h-[300px] font-mono text-sm rounded-xl"
+                />
+              </div>
+
+              {/* Backup history */}
+              {selectedRule && Array.isArray(selectedRule.rules_backup) && selectedRule.rules_backup.length > 0 && (
+                <div className="pt-4 border-t space-y-3">
+                  <p className="text-sm font-medium">Previous versions ({selectedRule.rules_backup.length})</p>
+                  <Accordion type="single" collapsible className="space-y-2">
+                    {selectedRule.rules_backup.map((backup, index) => (
+                      <AccordionItem 
+                        key={index} 
+                        value={`version-${index}`}
+                        className="rounded-xl border bg-muted/30 px-4"
+                      >
+                        <AccordionTrigger className="hover:no-underline py-3">
+                          <div className="flex items-center justify-between w-full pr-2">
+                            <p className="text-xs font-medium text-muted-foreground text-left">
+                              Version from {new Date(backup.timestamp).toLocaleString()}
+                            </p>
+                            {isAdmin && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Restore this version from ${new Date(backup.timestamp).toLocaleString()}?`)) {
+                                    setFormData({ ...formData, body: backup.content });
+                                    toast.success("Version restored to editor");
+                                  }
+                                }}
+                                className="rounded-full h-7 text-xs"
+                              >
+                                Restore
+                              </Button>
+                            )}
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-3">
+                          <pre className="text-xs font-mono bg-background/50 rounded-lg p-3 overflow-x-auto max-h-[200px] overflow-y-auto">
+                            {backup.content}
+                          </pre>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </div>
+              )}
+
+              <Button onClick={handleSaveRule} className="w-full rounded-full">
+                Save Changes
               </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Organization Strap Display */}
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <p className="text-sm text-muted-foreground mb-1">
-                  <span className="font-semibold">Shepherd Neame Organisation strap (ORG_DESCRIPTION):</span>
-                </p>
-                <p className="text-sm leading-relaxed">
-                  {ORG_DESCRIPTION}
-                </p>
-              </div>
-              
-              <div className="rounded-lg border bg-primary/5 p-4">
-                <p className="text-sm font-medium mb-2">Taxonomy Context Passed to Prompts:</p>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <p>• <span className="font-mono">domain</span> – The domain scope (Corporate, Beer, Pub)</p>
-                  <p>• <span className="font-mono">pageType</span> – The page type ID from taxonomy</p>
-                  <p>• <span className="font-mono">category</span> – The category ID from taxonomy</p>
-                  <p className="mt-2 italic">Use these values in your domain rule prompts to adapt schema generation behavior (e.g., treat FAQ categories as FAQPage, careers pages as JobPosting, etc.).</p>
-                </div>
-              </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[250px]">Rule</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-center w-[100px]">Enabled</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.entries(SCHEMA_QUALITY_RULES).map(([key, enabled]) => (
-                    <TableRow key={key}>
-                      <TableCell className="font-mono text-sm">
-                        {key}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {SCHEMA_QUALITY_RULE_DESCRIPTIONS[key as keyof typeof SCHEMA_QUALITY_RULES]}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {enabled ? (
-                          <Badge className="bg-primary rounded-full">
-                            <CheckCircle className="mr-1 h-3 w-3" />
-                            Yes
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="rounded-full">
-                            No
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <p className="text-xs text-muted-foreground italic">
-                These rules are currently non-configurable and apply to all domains. Changes to schema quality philosophy should be reflected in both the Charter document and the schema engine validation logic.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
       </div>
-
-      {/* RULE EDITOR DIALOG */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingRule ? "Edit Rule" : "Create New Rule"}
-            </DialogTitle>
-            <DialogDescription>
-              Define the NeameGraph Brain prompt for schema generation
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                placeholder="e.g., Corporate Schema Prompt v1.1"
-                className="rounded-xl"
-              />
-            </div>
-            
-            <div className="flex items-center justify-between p-4 rounded-xl border bg-muted/20">
-              <div className="space-y-0.5">
-                <Label htmlFor="is_active" className="text-base font-medium">
-                  Active Rule
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Enable this rule for schema generation. Disabled rules are ignored.
-                </p>
-              </div>
-              <Switch
-                id="is_active"
-                checked={formData.is_active}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, is_active: checked })
-                }
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="page_type">Page Type (Optional)</Label>
-                {formData.page_type && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setFormData({ ...formData, page_type: "" })}
-                    className="h-auto py-1 px-2 text-xs"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <Select
-                value={formData.page_type}
-                onValueChange={(value) => {
-                  setFormData({ ...formData, page_type: value, category: "" });
-                }}
-              >
-                <SelectTrigger id="page_type" className="rounded-xl">
-                  <SelectValue placeholder="Default (all page types)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {pageTypes.filter(pt => pt.active).map((pt) => (
-                    <SelectItem key={pt.id} value={pt.id}>
-                      {pt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Leave blank for a default rule that applies to all page types. Set to create a specific rule for that page type.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="category">Category (Optional)</Label>
-                {formData.category && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setFormData({ ...formData, category: "" })}
-                    className="h-auto py-1 px-2 text-xs"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <Select
-                value={formData.category}
-                onValueChange={(value) => {
-                  setFormData({ ...formData, category: value });
-                }}
-                disabled={!formData.page_type}
-              >
-                <SelectTrigger id="category" className="rounded-xl">
-                  <SelectValue placeholder={formData.page_type ? "Select category" : "Select page type first"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {formData.page_type && categories
-                    .filter(cat => cat.page_type_id === formData.page_type && cat.active)
-                    .map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.label}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Optional category for this rule. Combine with Page Type for fine-grained rule matching.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="body">Prompt Body</Label>
-                <span className="text-xs text-muted-foreground">
-                  {formData.body.length} characters
-                  {formData.body.length > 0 && ` • ${formData.body.split('\n').length} lines`}
-                </span>
-              </div>
-              <Textarea
-                id="body"
-                value={formData.body}
-                onChange={(e) =>
-                  setFormData({ ...formData, body: e.target.value })
-                }
-                placeholder="Enter the system prompt for NeameGraph Brain schema generation..."
-                className="min-h-[400px] font-mono text-sm rounded-xl leading-relaxed"
-              />
-              <p className="text-xs text-muted-foreground">
-                This prompt will be used by NeameGraph Brain to generate JSON-LD schema for matching pages.
-              </p>
-            </div>
-            <Button onClick={handleSave} className="w-full rounded-full">
-              Save Rule
-            </Button>
-
-            {/* Backup history - show last 3 versions */}
-            {editingRule && Array.isArray(editingRule.rules_backup) && editingRule.rules_backup.length > 0 && (
-              <div className="pt-4 border-t space-y-3">
-                <p className="text-sm font-medium">Previous versions ({editingRule.rules_backup.length})</p>
-                <Accordion type="single" collapsible className="space-y-2">
-                  {editingRule.rules_backup.map((backup, index) => (
-                    <AccordionItem 
-                      key={index} 
-                      value={`version-${index}`}
-                      className="rounded-xl border bg-muted/30 px-4"
-                    >
-                      <AccordionTrigger className="hover:no-underline py-3">
-                        <div className="flex items-center justify-between w-full pr-2">
-                          <p className="text-xs font-medium text-muted-foreground text-left">
-                            Version from {new Date(backup.timestamp).toLocaleString()}
-                          </p>
-                          {isAdmin && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`Restore this version from ${new Date(backup.timestamp).toLocaleString()}?`)) {
-                                  setFormData({ ...formData, body: backup.content });
-                                  toast.success("Version restored to editor");
-                                }
-                              }}
-                              className="rounded-full h-7 text-xs"
-                            >
-                              Restore
-                            </Button>
-                          )}
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="pb-3">
-                        <pre className="text-xs font-mono bg-background/50 rounded-lg p-3 overflow-x-auto max-h-[200px] overflow-y-auto">
-                          {backup.content}
-                        </pre>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete rule?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to permanently delete "{ruleToDelete?.name}"? This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete rule
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Layout>
   );
 }
