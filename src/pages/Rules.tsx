@@ -208,20 +208,22 @@ export default function Rules() {
     // Extract and parse the JSON-LD from the response
     let jsonLdContent = null;
     
-    // Check if jsonld field exists in response
-    if (data?.jsonld) {
+    // Check if jsonld field exists in response (nested under schema_version)
+    const jsonldSource = data?.schema_version?.jsonld || data?.jsonld;
+    
+    if (jsonldSource) {
       try {
         // If jsonld is a string, parse it to an object
-        if (typeof data.jsonld === 'string') {
-          jsonLdContent = JSON.parse(data.jsonld);
+        if (typeof jsonldSource === 'string') {
+          jsonLdContent = JSON.parse(jsonldSource);
         } else {
           // If it's already an object, use it as-is
-          jsonLdContent = data.jsonld;
+          jsonLdContent = jsonldSource;
         }
       } catch (parseError) {
         console.error("Failed to parse JSON-LD:", parseError);
         // If parsing fails, use the raw string
-        jsonLdContent = data.jsonld;
+        jsonLdContent = jsonldSource;
       }
     }
 
