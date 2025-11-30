@@ -619,10 +619,14 @@ export default function Pages() {
         .order("version_number", { ascending: false })
         .limit(1);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error fetching schema:", error);
+        toast.error("Database error: " + error.message);
+        return;
+      }
 
       if (!schemaVersions || schemaVersions.length === 0) {
-        toast.error("No schema found for this page");
+        toast.error("No schema found for this page. Generate schema first.");
         return;
       }
 
@@ -633,21 +637,27 @@ export default function Pages() {
       try {
         const parsed = JSON.parse(jsonldString);
         prettyJson = JSON.stringify(parsed, null, 2);
-      } catch {
-        // If it's already a string or parsing fails, use as-is
-        prettyJson = jsonldString;
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        toast.error("Schema JSON is malformed and cannot be copied");
+        return;
       }
 
       // Wrap in script tag
       const scriptTag = `<script type="application/ld+json">\n${prettyJson}\n</script>`;
 
       // Copy to clipboard
-      await navigator.clipboard.writeText(scriptTag);
-      
-      toast.success(`Copied Drupal script tag for ${page.path}`);
+      try {
+        await navigator.clipboard.writeText(scriptTag);
+        toast.success(`Copied Drupal script tag for ${page.path}`);
+      } catch (clipboardError) {
+        console.error("Clipboard error:", clipboardError);
+        toast.error("Failed to copy to clipboard. Check browser permissions.");
+        return;
+      }
     } catch (error: any) {
-      console.error("Error copying schema:", error);
-      toast.error("Could not fetch schema for this page");
+      console.error("Unexpected error copying schema:", error);
+      toast.error("Unexpected error: " + (error.message || "Unknown error"));
     } finally {
       setCopyingSchemaForPageId(null);
     }
