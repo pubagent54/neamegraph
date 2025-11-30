@@ -25,7 +25,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { DomainBadge } from "@/components/DomainBadge";
 import { Badge } from "@/components/ui/badge";
 import { Link, useSearchParams } from "react-router-dom";
-import { Plus, Search, Upload, Trash2, Edit, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { Plus, Search, Upload, Trash2, Edit, CheckCircle2, Circle, Loader2, ArrowUp } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -143,6 +143,7 @@ export default function Pages() {
 
   const canEdit = userRole === "admin" || userRole === "editor";
   const isAdmin = userRole === "admin";
+  const [copyingSchemaForPageId, setCopyingSchemaForPageId] = useState<string | null>(null);
 
   // Load taxonomy from database
   const { domains, loading: domainsLoading } = useDomains();
@@ -590,6 +591,51 @@ export default function Pages() {
     } catch (error: any) {
       console.error("Error updating page:", error);
       toast.error(error.message || "Failed to update page");
+    }
+  };
+
+  const handleCopyDrupalSchema = async (page: Page) => {
+    setCopyingSchemaForPageId(page.id);
+    try {
+      // Fetch the latest schema version for this page
+      const { data: schemaVersions, error } = await supabase
+        .from("schema_versions")
+        .select("jsonld")
+        .eq("page_id", page.id)
+        .order("version_number", { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      if (!schemaVersions || schemaVersions.length === 0) {
+        toast.error("No schema found for this page");
+        return;
+      }
+
+      const jsonldString = schemaVersions[0].jsonld;
+      
+      // Parse and pretty-print the JSON
+      let prettyJson: string;
+      try {
+        const parsed = JSON.parse(jsonldString);
+        prettyJson = JSON.stringify(parsed, null, 2);
+      } catch {
+        // If it's already a string or parsing fails, use as-is
+        prettyJson = jsonldString;
+      }
+
+      // Wrap in script tag
+      const scriptTag = `<script type="application/ld+json">\n${prettyJson}\n</script>`;
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(scriptTag);
+      
+      toast.success(`Copied Drupal script tag for ${page.path}`);
+    } catch (error: any) {
+      console.error("Error copying schema:", error);
+      toast.error("Could not fetch schema for this page");
+    } finally {
+      setCopyingSchemaForPageId(null);
     }
   };
 
@@ -1167,6 +1213,7 @@ export default function Pages() {
                   <TableHead className="font-semibold">Page Type</TableHead>
                   <TableHead className="font-semibold">Category</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead className="font-semibold w-12"></TableHead>
                   <TableHead className="font-semibold">Schema Ver</TableHead>
                   <TableHead className="font-semibold">FAQ</TableHead>
                   <TableHead className="font-semibold">Last Schema</TableHead>
@@ -1175,7 +1222,7 @@ export default function Pages() {
               <TableBody>
                 {filteredPages.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 9 : 8} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={canEdit ? 10 : 9} className="text-center text-muted-foreground py-8">
                     No pages found
                   </TableCell>
                 </TableRow>
@@ -1288,6 +1335,35 @@ export default function Pages() {
                             </Tooltip>
                           </TooltipProvider>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full"
+                                disabled={
+                                  normalizeStatus(page.status) === 'naked' || 
+                                  !page.last_schema_generated_at ||
+                                  copyingSchemaForPageId === page.id
+                                }
+                                onClick={() => handleCopyDrupalSchema(page)}
+                                aria-label="Copy Drupal script schema"
+                              >
+                                {copyingSchemaForPageId === page.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <ArrowUp className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Copy Drupal &lt;script&gt; schema</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                       <TableCell>
                         <TooltipProvider>
