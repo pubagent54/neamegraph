@@ -9,7 +9,7 @@
  * 5. Live - Pasted into Drupal and spot-checked live
  */
 
-import { User, Eye, CheckCircle2, Upload as UploadIcon, Sparkles, LucideIcon } from "lucide-react";
+import { User, Eye, CheckCircle2, Upload as UploadIcon, Star, LucideIcon } from "lucide-react";
 
 export interface StatusConfig {
   label: string;
@@ -68,9 +68,9 @@ export const PAGE_STATUS_CONFIG: Record<string, StatusConfig> = {
     order: 5,
     dotClass: "bg-status-implemented",
     tooltip: "Schema pasted into Drupal and spot-checked on the live site.",
-    icon: Sparkles,
-    bgClass: "bg-green-500/10 dark:bg-green-500/20",
-    textClass: "text-green-600 dark:text-green-400",
+    icon: Star,
+    bgClass: "bg-yellow-400/20 dark:bg-yellow-400/30",
+    textClass: "text-yellow-600 dark:text-yellow-400",
     description: "Live on site",
   },
 } as const;
