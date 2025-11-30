@@ -73,6 +73,7 @@ export function normalizeStatus(status: string | null | undefined): PageStatus {
     "in_progress": "review",
     
     // Approved equivalents
+    "approved": "approved",
     "ok": "approved",
     "ready": "approved",
     
