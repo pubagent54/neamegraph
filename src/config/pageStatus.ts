@@ -67,7 +67,6 @@ export function normalizeStatus(status: string | null | undefined): PageStatus {
     
     // Review equivalents
     "draft": "review",
-    "ai_draft": "review",
     "needs_review": "review",
     "needs_rework": "review",
     "in_progress": "review",
@@ -77,7 +76,8 @@ export function normalizeStatus(status: string | null | undefined): PageStatus {
     "ok": "approved",
     "ready": "approved",
     
-    // Upload equivalents (keep as upload)
+    // Upload equivalents
+    "ai_draft": "upload", // Map ai_draft to upload state
     "upload": "upload",
     "queued": "upload",
     
@@ -121,7 +121,7 @@ export function statusToDatabase(uiStatus: PageStatus): string {
     naked: "not_started",
     review: "needs_review",
     approved: "approved",
-    upload: "approved", // Keep as approved, waiting for manual upload
+    upload: "ai_draft", // Use ai_draft to distinguish from approved
     live: "implemented",
   };
   
