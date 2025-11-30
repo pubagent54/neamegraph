@@ -1361,9 +1361,14 @@ export default function Pages() {
                                     className="w-8 h-8 rounded-full p-0 border-0 hover:bg-accent"
                                     aria-label={PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label}
                                   >
-                                    <span
-                                      className={`inline-block w-3 h-3 rounded-full ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].dotClass}`}
-                                    />
+                                    <div 
+                                      className={`inline-flex items-center justify-center w-7 h-7 rounded-full ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].bgClass}`}
+                                    >
+                                      {(() => {
+                                        const StatusIcon = PAGE_STATUS_CONFIG[normalizeStatus(page.status)].icon;
+                                        return <StatusIcon className={`h-3.5 w-3.5 ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].textClass}`} />;
+                                      })()}
+                                    </div>
                                   </SelectTrigger>
                                 </TooltipTrigger>
                                 <SelectContent className="rounded-xl">
@@ -1380,7 +1385,12 @@ export default function Pages() {
                                           <Tooltip>
                                             <TooltipTrigger asChild>
                                               <div className="flex items-center gap-2">
-                                                <span className={`inline-block w-2 h-2 rounded-full ${PAGE_STATUS_CONFIG[status].dotClass}`} />
+                                                <div className={`inline-flex items-center justify-center w-5 h-5 rounded-full ${PAGE_STATUS_CONFIG[status].bgClass}`}>
+                                                  {(() => {
+                                                    const StatusIcon = PAGE_STATUS_CONFIG[status].icon;
+                                                    return <StatusIcon className={`h-3 w-3 ${PAGE_STATUS_CONFIG[status].textClass}`} />;
+                                                  })()}
+                                                </div>
                                                 <span>{PAGE_STATUS_CONFIG[status].label}</span>
                                               </div>
                                             </TooltipTrigger>
@@ -1398,7 +1408,7 @@ export default function Pages() {
                               </Select>
                               <TooltipContent>
                                 <p className="font-medium">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label}</p>
-                                <p className="text-xs text-muted-foreground mt-1">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].tooltip}</p>
+                                <p className="text-xs text-muted-foreground mt-1">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].description}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -1407,17 +1417,19 @@ export default function Pages() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-full"
-                                  aria-label={PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label}
+                                  className={`inline-flex items-center justify-center w-7 h-7 rounded-full ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].bgClass}`}
+                                  aria-label={`${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label} - ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].description}`}
+                                  title={`${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label} - ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].description}`}
                                 >
-                                  <span
-                                    className={`inline-block w-3 h-3 rounded-full ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].dotClass}`}
-                                  />
+                                  {(() => {
+                                    const StatusIcon = PAGE_STATUS_CONFIG[normalizeStatus(page.status)].icon;
+                                    return <StatusIcon className={`h-3.5 w-3.5 ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].textClass}`} />;
+                                  })()}
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p className="font-medium">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label}</p>
-                                <p className="text-xs text-muted-foreground mt-1">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].tooltip}</p>
+                                <p className="text-xs text-muted-foreground mt-1">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].description}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

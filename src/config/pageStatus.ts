@@ -9,36 +9,69 @@
  * 5. Live - Pasted into Drupal and spot-checked live
  */
 
-export const PAGE_STATUS_CONFIG = {
+import { User, Eye, CheckCircle2, Upload as UploadIcon, Sparkles, LucideIcon } from "lucide-react";
+
+export interface StatusConfig {
+  label: string;
+  order: number;
+  dotClass: string;
+  tooltip: string;
+  icon: LucideIcon;
+  bgClass: string;
+  textClass: string;
+  description: string;
+}
+
+export const PAGE_STATUS_CONFIG: Record<string, StatusConfig> = {
   naked: {
     label: "Naked",
     order: 1,
     dotClass: "bg-muted-foreground",
     tooltip: "No schema captured for this page yet.",
+    icon: User,
+    bgClass: "bg-rose-500/10 dark:bg-rose-500/20",
+    textClass: "text-rose-600 dark:text-rose-400",
+    description: "No schema yet",
   },
   review: {
     label: "Review",
     order: 2,
     dotClass: "bg-status-review",
     tooltip: "Schema exists but needs fixes (validation or content issues).",
+    icon: Eye,
+    bgClass: "bg-amber-500/10 dark:bg-amber-500/20",
+    textClass: "text-amber-600 dark:text-amber-400",
+    description: "Needs fixes",
   },
   approved: {
     label: "Approved",
     order: 3,
     dotClass: "bg-status-approved",
     tooltip: "Schema passes checks and is ready to upload.",
+    icon: CheckCircle2,
+    bgClass: "bg-emerald-500/10 dark:bg-emerald-500/20",
+    textClass: "text-emerald-600 dark:text-emerald-400",
+    description: "Ready to upload",
   },
   upload: {
     label: "Upload",
     order: 4,
     dotClass: "bg-primary",
     tooltip: "Ready for manual paste into Drupal.",
+    icon: UploadIcon,
+    bgClass: "bg-blue-500/10 dark:bg-blue-500/20",
+    textClass: "text-blue-600 dark:text-blue-400",
+    description: "Ready for Drupal",
   },
   live: {
     label: "Live",
     order: 5,
     dotClass: "bg-status-implemented",
     tooltip: "Schema pasted into Drupal and spot-checked on the live site.",
+    icon: Sparkles,
+    bgClass: "bg-green-500/10 dark:bg-green-500/20",
+    textClass: "text-green-600 dark:text-green-400",
+    description: "Live on site",
   },
 } as const;
 
