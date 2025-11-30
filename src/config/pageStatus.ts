@@ -59,8 +59,8 @@ export const PAGE_STATUS_CONFIG: Record<string, StatusConfig> = {
     dotClass: "bg-primary",
     tooltip: "Ready for manual paste into Drupal.",
     icon: UploadIcon,
-    bgClass: "bg-blue-500/10 dark:bg-blue-500/20",
-    textClass: "text-blue-600 dark:text-blue-400",
+    bgClass: "bg-red-500/10 dark:bg-red-500/20",
+    textClass: "text-red-600 dark:text-red-400",
     description: "Ready for Drupal",
   },
   live: {
