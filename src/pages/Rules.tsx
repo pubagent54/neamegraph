@@ -19,8 +19,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Edit2, Plus, Trash2, FileText, ExternalLink, Layers, Play, Copy, Loader2, Wrench, ChevronDown, ChevronRight, Shield } from "lucide-react";
+import { RuleCard } from "@/components/RuleCard";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePageTypes, useCategories } from "@/hooks/use-taxonomy";
 import { getDomains } from "@/lib/taxonomy";
@@ -343,6 +346,17 @@ export default function Rules() {
       }
     });
     
+    // Ensure Pub domain always has at least one primary rule
+    // If no active Pub rules exist, promote the newest inactive one to primary
+    if (domainGroups['Pub'] && domainGroups['Pub'].primary.length === 0 && domainGroups['Pub'].legacy.length > 0) {
+      const newestPubRule = domainGroups['Pub'].legacy.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )[0];
+      
+      domainGroups['Pub'].primary.push(newestPubRule);
+      domainGroups['Pub'].legacy = domainGroups['Pub'].legacy.filter(r => r.id !== newestPubRule.id);
+    }
+    
     return domainGroups;
   };
 
@@ -402,72 +416,67 @@ export default function Rules() {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {Object.entries(getRulesByDomain()).map(([domain, { primary, legacy }]) => (
-                <div key={domain} className="space-y-3">
-                  {/* Primary rules for this domain */}
-                  <div className="grid gap-3">
-                    {primary.map((rule) => (
-                      <Button
-                        key={rule.id}
-                        variant={selectedRule?.id === rule.id ? "default" : "outline"}
-                        className="justify-start h-auto py-3 px-4 rounded-xl"
-                        onClick={() => setSelectedRule(rule)}
-                      >
-                        <div className="flex items-center gap-3 w-full">
-                          <Layers className="h-4 w-4" />
-                          <div className="flex-1 text-left">
-                            <div className="font-semibold">{rule.name}</div>
-                            <div className="text-xs text-muted-foreground">{rule.domain} domain</div>
-                          </div>
-                          {rule.is_active && (
-                            <Badge variant="default" className="rounded-full">Active</Badge>
-                          )}
-                        </div>
-                      </Button>
-                    ))}
-                  </div>
-                  
-                  {/* Legacy rules toggle */}
-                  {legacy.length > 0 && (
-                    <div className="ml-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleLegacyRules(domain)}
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        {showLegacyRules[domain] ? (
-                          <ChevronDown className="h-3 w-3 mr-1" />
-                        ) : (
-                          <ChevronRight className="h-3 w-3 mr-1" />
-                        )}
-                        {showLegacyRules[domain] ? 'Hide' : 'Show'} {legacy.length} other version{legacy.length !== 1 ? 's' : ''}
-                      </Button>
-                      
-                      {showLegacyRules[domain] && (
-                        <div className="mt-2 ml-4 space-y-2">
-                          {legacy.map((rule) => (
-                            <Button
-                              key={rule.id}
-                              variant={selectedRule?.id === rule.id ? "default" : "outline"}
-                              className="justify-start h-auto py-2 px-3 rounded-lg w-full opacity-75"
-                              onClick={() => setSelectedRule(rule)}
-                            >
-                              <div className="flex items-center gap-2 w-full">
-                                <Layers className="h-3 w-3" />
-                                <div className="flex-1 text-left">
-                                  <div className="text-sm font-medium">{rule.name}</div>
-                                  <div className="text-xs text-muted-foreground">Inactive</div>
-                                </div>
-                              </div>
-                            </Button>
-                          ))}
-                        </div>
-                      )}
+              {Object.entries(getRulesByDomain()).map(([domain, { primary, legacy }]) => {
+                // Count total rules in this domain for deletion safety check
+                const totalRulesInDomain = primary.length + legacy.length;
+                
+                return (
+                  <div key={domain} className="space-y-3">
+                    {/* Primary rules for this domain */}
+                    <div className="space-y-2">
+                      {primary.map((rule) => (
+                        <RuleCard
+                          key={rule.id}
+                          rule={rule}
+                          isSelected={selectedRule?.id === rule.id}
+                          isAdmin={isAdmin}
+                          onSelect={() => setSelectedRule(rule)}
+                          onActiveToggle={fetchRules}
+                          onRuleUpdated={fetchRules}
+                          canDelete={totalRulesInDomain > 1}
+                        />
+                      ))}
                     </div>
-                  )}
-                </div>
-              ))}
+                    
+                    {/* Legacy rules toggle */}
+                    {legacy.length > 0 && (
+                      <div className="ml-4">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleLegacyRules(domain)}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          {showLegacyRules[domain] ? (
+                            <ChevronDown className="h-3 w-3 mr-1" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3 mr-1" />
+                          )}
+                          {showLegacyRules[domain] ? 'Hide' : 'Show'} {legacy.length} other version{legacy.length !== 1 ? 's' : ''}
+                        </Button>
+                        
+                        {showLegacyRules[domain] && (
+                          <div className="mt-2 ml-4 space-y-2">
+                            {legacy.map((rule) => (
+                              <RuleCard
+                                key={rule.id}
+                                rule={rule}
+                                isSelected={selectedRule?.id === rule.id}
+                                isLegacy={true}
+                                isAdmin={isAdmin}
+                                onSelect={() => setSelectedRule(rule)}
+                                onActiveToggle={fetchRules}
+                                onRuleUpdated={fetchRules}
+                                canDelete={totalRulesInDomain > 1}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
