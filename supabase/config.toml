@@ -14,7 +14,16 @@ static_files = [
 ]
 
 [functions.generate-schema-story]
-verify_jwt = false
+verify_jwt = true
+
+[functions.export-wikidata-beers]
+verify_jwt = true
+
+[functions.graph-beers]
+verify_jwt = true
+
+[functions.wizmode-process]
+verify_jwt = true
 
 [functions.graph-pages]
 verify_jwt = true
