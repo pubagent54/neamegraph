@@ -69,7 +69,6 @@ export default function Rules() {
   });
   
   // Preview state
-  const [previewUrl, setPreviewUrl] = useState("");
   const [selectedTestPageId, setSelectedTestPageId] = useState<string>("");
   const [previewJson, setPreviewJson] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -169,42 +168,48 @@ export default function Rules() {
       return;
     }
     
+    if (!selectedTestPageId) {
+      toast.error("Please select a test page");
+      return;
+    }
+    
     setPreviewLoading(true);
     try {
-      // Use selected test page if available
-      let targetPath = previewUrl;
-      if (selectedTestPageId) {
-        const testPage = coveragePages.find(p => p.id === selectedTestPageId);
-        if (testPage) {
-          targetPath = testPage.path;
-        }
+
+    // Call generate-schema edge function
+    const { data, error } = await supabase.functions.invoke('generate-schema', {
+      body: {
+        page_id: selectedTestPageId || undefined
       }
-      
-      if (!targetPath) {
-        toast.error("Please enter a URL or select a test page");
-        setPreviewLoading(false);
-        return;
-      }
+    });
 
-      // Call generate-schema edge function
-      const { data, error } = await supabase.functions.invoke('generate-schema', {
-        body: {
-          pageId: selectedTestPageId || undefined,
-          testPath: targetPath
-        }
-      });
-
-      if (error) throw error;
-
-      setPreviewJson(JSON.stringify(data.jsonld ? JSON.parse(data.jsonld) : data, null, 2));
-      toast.success("Preview generated");
-    } catch (error: any) {
-      console.error("Error generating preview:", error);
-      toast.error(error.message || "Failed to generate preview");
+    if (error) {
+      console.error("Edge function error:", error);
+      const errorMsg = error.message || "Failed to generate preview";
+      toast.error(errorMsg);
       setPreviewJson("");
-    } finally {
       setPreviewLoading(false);
+      return;
     }
+
+    // Handle error in response data
+    if (data?.error) {
+      console.error("Schema generation error:", data.error);
+      toast.error(data.error);
+      setPreviewJson("");
+      setPreviewLoading(false);
+      return;
+    }
+
+    setPreviewJson(JSON.stringify(data.jsonld ? JSON.parse(data.jsonld) : data, null, 2));
+    toast.success("Preview generated");
+  } catch (error: any) {
+    console.error("Error generating preview:", error);
+    toast.error(error.message || "Failed to generate preview");
+    setPreviewJson("");
+  } finally {
+    setPreviewLoading(false);
+  }
   };
 
   const handleCopyJson = () => {
@@ -371,11 +376,11 @@ export default function Rules() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="space-y-2">
-                    <Label>Test Page</Label>
+                <div className="space-y-2">
+                  <Label>Test Page</Label>
+                  <div className="flex gap-2">
                     <Select value={selectedTestPageId} onValueChange={setSelectedTestPageId}>
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger className="rounded-xl flex-1">
                         <SelectValue placeholder="Choose a test page..." />
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl max-h-[300px]">
@@ -386,31 +391,20 @@ export default function Rules() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Or enter URL manually</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="/beers/spitfire"
-                        value={previewUrl}
-                        onChange={(e) => setPreviewUrl(e.target.value)}
-                        className="rounded-xl"
-                      />
-                      <Button
-                        onClick={handleRunPreview}
-                        disabled={previewLoading || (!selectedTestPageId && !previewUrl)}
-                        className="rounded-full"
-                      >
-                        {previewLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Play className="h-4 w-4 mr-2" />
-                            Run Preview
-                          </>
-                        )}
-                      </Button>
-                    </div>
+                    <Button
+                      onClick={handleRunPreview}
+                      disabled={previewLoading || !selectedTestPageId}
+                      className="rounded-full"
+                    >
+                      {previewLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4 mr-2" />
+                          Run Preview
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
 
