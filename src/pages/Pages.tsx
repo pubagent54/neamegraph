@@ -51,43 +51,13 @@ const PAGE_TYPES = [
 
 const FAQ_MODES = ["auto", "ignore"];
 
-// Status options in fixed order: Implemented always last
-const STATUS_OPTIONS = [
-  "not_started",    // Not Started
-  "ai_draft",       // Brain Draft
-  "needs_review",   // Needs Review
-  "needs_rework",   // Needs Rework
-  "approved",       // Approved
-  "implemented"     // Implemented (always last)
-];
-
-// Status configuration for labels and dot colors
-const STATUS_CONFIG: Record<string, { label: string; dotClass: string }> = {
-  not_started: { 
-    label: "Not Started", 
-    dotClass: "bg-muted-foreground"
-  },
-  ai_draft: { 
-    label: "Brain Draft", 
-    dotClass: "bg-status-draft"
-  },
-  needs_review: { 
-    label: "Needs Review", 
-    dotClass: "bg-status-review"
-  },
-  needs_rework: { 
-    label: "Needs Rework", 
-    dotClass: "bg-status-error"
-  },
-  approved: { 
-    label: "Approved", 
-    dotClass: "bg-status-approved"
-  },
-  implemented: { 
-    label: "Implemented", 
-    dotClass: "bg-status-implemented"
-  },
-};
+import { 
+  PAGE_STATUS_CONFIG, 
+  PAGE_STATUS_OPTIONS,
+  normalizeStatus,
+  statusRequiresSchema,
+  type PageStatus 
+} from "@/config/pageStatus";
 
 // ========================================
 // DOMAIN LANE LOGIC - Corporate, Beer, Pub
@@ -521,7 +491,7 @@ export default function Pages() {
           section: null,
           page_type: null,
           category: null,
-          status: "not_started" as const,
+          status: "not_started" as any, // Will be normalized to "naked" in UI
           has_faq: false,
           created_by_user_id: user.id,
           last_modified_by_user_id: user.id,
@@ -594,6 +564,15 @@ export default function Pages() {
       if (!user) {
         toast.error("You must be logged in");
         return;
+      }
+
+      // Validate status changes
+      if (field === "status") {
+        const page = pages.find(p => p.id === pageId);
+        if (page && statusRequiresSchema(value as PageStatus) && !page.last_schema_generated_at) {
+          toast.error("Generate schema before setting this status");
+          return;
+        }
       }
 
       const { error } = await supabase
@@ -1082,12 +1061,11 @@ export default function Pages() {
             </SelectTrigger>
             <SelectContent className="rounded-2xl">
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="not_started">Not Started</SelectItem>
-              <SelectItem value="ai_draft">Brain Draft</SelectItem>
-              <SelectItem value="needs_review">Needs Review</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="implemented">Implemented</SelectItem>
-              <SelectItem value="needs_rework">Needs Rework</SelectItem>
+              {PAGE_STATUS_OPTIONS.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {PAGE_STATUS_CONFIG[status].label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={domainFilter} onValueChange={setDomainFilter} disabled={domainsLoading}>
@@ -1138,7 +1116,7 @@ export default function Pages() {
               className="rounded-full"
               onClick={() => {
                 setBulkActionType("status");
-                setBulkActionValue(STATUS_OPTIONS[0]);
+                setBulkActionValue(PAGE_STATUS_OPTIONS[0]);
                 setBulkActionDialogOpen(true);
               }}
             >
@@ -1256,29 +1234,37 @@ export default function Pages() {
                           <TooltipProvider>
                             <Tooltip>
                               <Select
-                                value={page.status}
+                                value={normalizeStatus(page.status)}
                                 onValueChange={(value) => handleInlineUpdate(page.id, "status", value)}
                               >
                                 <TooltipTrigger asChild>
                                   <SelectTrigger 
                                     className="w-8 h-8 rounded-full p-0 border-0 hover:bg-accent"
-                                    aria-label={STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.label || page.status}
+                                    aria-label={PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label}
                                   >
                                     <span
-                                      className={`inline-block w-3 h-3 rounded-full ${STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.dotClass || "bg-muted-foreground"}`}
+                                      className={`inline-block w-3 h-3 rounded-full ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].dotClass}`}
                                     />
                                   </SelectTrigger>
                                 </TooltipTrigger>
                                 <SelectContent className="rounded-xl">
-                                  {STATUS_OPTIONS.map((status) => (
-                                    <SelectItem key={status} value={status}>
-                                      <StatusBadge status={status as any} />
+                                  {PAGE_STATUS_OPTIONS.map((status) => (
+                                    <SelectItem 
+                                      key={status} 
+                                      value={status}
+                                      disabled={statusRequiresSchema(status) && !page.last_schema_generated_at}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span className={`inline-block w-2 h-2 rounded-full ${PAGE_STATUS_CONFIG[status].dotClass}`} />
+                                        <span>{PAGE_STATUS_CONFIG[status].label}</span>
+                                      </div>
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                               <TooltipContent>
-                                <p>{STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.label || page.status}</p>
+                                <p className="font-medium">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label}</p>
+                                <p className="text-xs text-muted-foreground mt-1">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].tooltip}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -1288,15 +1274,16 @@ export default function Pages() {
                               <TooltipTrigger asChild>
                                 <button
                                   className="inline-flex items-center justify-center w-8 h-8 rounded-full"
-                                  aria-label={STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.label || page.status}
+                                  aria-label={PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label}
                                 >
                                   <span
-                                    className={`inline-block w-3 h-3 rounded-full ${STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.dotClass || "bg-muted-foreground"}`}
+                                    className={`inline-block w-3 h-3 rounded-full ${PAGE_STATUS_CONFIG[normalizeStatus(page.status)].dotClass}`}
                                   />
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>{STATUS_CONFIG[page.status as keyof typeof STATUS_CONFIG]?.label || page.status}</p>
+                                <p className="font-medium">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].label}</p>
+                                <p className="text-xs text-muted-foreground mt-1">{PAGE_STATUS_CONFIG[normalizeStatus(page.status)].tooltip}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -1411,8 +1398,10 @@ export default function Pages() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="rounded-2xl">
-                            {STATUS_OPTIONS.map((status) => (
-                              <SelectItem key={status} value={status}>{status}</SelectItem>
+                            {PAGE_STATUS_OPTIONS.map((status) => (
+                              <SelectItem key={status} value={status}>
+                                {PAGE_STATUS_CONFIG[status].label}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
