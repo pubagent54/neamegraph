@@ -24,7 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DomainBadge } from "@/components/DomainBadge";
 import { Badge } from "@/components/ui/badge";
 import { Link, useSearchParams } from "react-router-dom";
-import { Plus, Search, Upload, Trash2, Edit, CheckCircle2, Circle, Loader2, ArrowUp } from "lucide-react";
+import { Plus, Search, Upload, Trash2, Edit, CheckCircle2, Circle, Loader2, ArrowUp, ArrowUpDown, ArrowUp as ArrowUpIcon, ArrowDown, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -147,6 +147,8 @@ export default function Pages() {
   const [copyingSchemaForPageId, setCopyingSchemaForPageId] = useState<string | null>(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [modalCopyContent, setModalCopyContent] = useState("");
+  const [sortColumn, setSortColumn] = useState<string>("last_schema_generated_at");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   // Load taxonomy from database
   const { domains, loading: domainsLoading } = useDomains();
@@ -844,6 +846,63 @@ export default function Pages() {
     setSelectedPageIds(newSelected);
   };
 
+  // Check if a page is the homepage
+  const isHomepage = (page: Page) => {
+    return page.is_home_page || page.path === "/" || page.path === "";
+  };
+
+  // Handle column header click for sorting
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Toggle direction
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // New column, default to desc for dates, asc for text
+      setSortColumn(column);
+      setSortDirection(column === "last_schema_generated_at" ? "desc" : "asc");
+    }
+  };
+
+  // Sort comparator
+  const sortPages = (a: Page, b: Page) => {
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortColumn) {
+      case "path":
+        aValue = a.path.toLowerCase();
+        bValue = b.path.toLowerCase();
+        break;
+      case "domain":
+        aValue = a.domain?.toLowerCase() || "";
+        bValue = b.domain?.toLowerCase() || "";
+        break;
+      case "page_type":
+        aValue = a.page_type?.toLowerCase() || "";
+        bValue = b.page_type?.toLowerCase() || "";
+        break;
+      case "category":
+        aValue = a.category?.toLowerCase() || "";
+        bValue = b.category?.toLowerCase() || "";
+        break;
+      case "status":
+        aValue = normalizeStatus(a.status);
+        bValue = normalizeStatus(b.status);
+        break;
+      case "last_schema_generated_at":
+        // Sort null dates to end
+        aValue = a.last_schema_generated_at ? new Date(a.last_schema_generated_at).getTime() : 0;
+        bValue = b.last_schema_generated_at ? new Date(b.last_schema_generated_at).getTime() : 0;
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  };
+
   const filteredPages = pages.filter((page) => {
     const matchesSearch = page.path.toLowerCase().includes(searchQuery.toLowerCase());
     // Normalize both the page status and filter status for comparison
@@ -853,6 +912,10 @@ export default function Pages() {
     const matchesDomain = domainFilter === "all" || page.domain === domainFilter;
     return matchesSearch && matchesStatus && matchesPageType && matchesDomain;
   });
+
+  // Separate homepage from other pages and apply sorting
+  const homepageRows = filteredPages.filter(isHomepage);
+  const otherRows = filteredPages.filter(page => !isHomepage(page)).sort(sortPages);
 
   const getPathDisplay = (path: string) => {
     return path === "/" ? "Homepage (root)" : path;
@@ -1279,15 +1342,81 @@ export default function Pages() {
                       />
                     </TableHead>
                   )}
-                  <TableHead className="font-semibold">Path (view)</TableHead>
-                  <TableHead className="font-semibold">Domain</TableHead>
-                  <TableHead className="font-semibold">Page Type</TableHead>
-                  <TableHead className="font-semibold">Category</TableHead>
-                  <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-muted/50 transition-colors select-none"
+                    onClick={() => handleSort("path")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Path (view)
+                      {sortColumn === "path" && (
+                        sortDirection === "asc" ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      )}
+                      {sortColumn !== "path" && <ArrowUpDown className="h-4 w-4 opacity-30" />}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-muted/50 transition-colors select-none"
+                    onClick={() => handleSort("domain")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Domain
+                      {sortColumn === "domain" && (
+                        sortDirection === "asc" ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      )}
+                      {sortColumn !== "domain" && <ArrowUpDown className="h-4 w-4 opacity-30" />}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-muted/50 transition-colors select-none"
+                    onClick={() => handleSort("page_type")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Page Type
+                      {sortColumn === "page_type" && (
+                        sortDirection === "asc" ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      )}
+                      {sortColumn !== "page_type" && <ArrowUpDown className="h-4 w-4 opacity-30" />}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-muted/50 transition-colors select-none"
+                    onClick={() => handleSort("category")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Category
+                      {sortColumn === "category" && (
+                        sortDirection === "asc" ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      )}
+                      {sortColumn !== "category" && <ArrowUpDown className="h-4 w-4 opacity-30" />}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-muted/50 transition-colors select-none"
+                    onClick={() => handleSort("status")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Status
+                      {sortColumn === "status" && (
+                        sortDirection === "asc" ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      )}
+                      {sortColumn !== "status" && <ArrowUpDown className="h-4 w-4 opacity-30" />}
+                    </div>
+                  </TableHead>
                   <TableHead className="font-semibold w-12"></TableHead>
                   <TableHead className="font-semibold">Schema Ver</TableHead>
                   <TableHead className="font-semibold">FAQ</TableHead>
-                  <TableHead className="font-semibold">Last Schema</TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-muted/50 transition-colors select-none"
+                    onClick={() => handleSort("last_schema_generated_at")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Last Schema
+                      {sortColumn === "last_schema_generated_at" && (
+                        sortDirection === "asc" ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      )}
+                      {sortColumn !== "last_schema_generated_at" && <ArrowUpDown className="h-4 w-4 opacity-30" />}
+                    </div>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1298,8 +1427,14 @@ export default function Pages() {
                   </TableCell>
                 </TableRow>
                 ) : (
-                  filteredPages.map((page) => (
-                    <TableRow key={page.id}>
+                  // Render homepage rows first, then other sorted rows
+                  [...homepageRows, ...otherRows].map((page) => {
+                    const pageIsHomepage = isHomepage(page);
+                    return (
+                    <TableRow 
+                      key={page.id}
+                      className={pageIsHomepage ? "bg-muted/20" : ""}
+                    >
                       {canEdit && (
                         <TableCell>
                           <Checkbox
@@ -1309,15 +1444,37 @@ export default function Pages() {
                         </TableCell>
                       )}
                       <TableCell className="font-mono text-sm">
-                        <Link 
-                          to={`/pages/${page.id}`} 
-                          className="text-primary hover:text-primary/80 hover:underline transition-all cursor-pointer font-medium"
-                        >
-                          {getPathDisplay(page.path)}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          {pageIsHomepage && (
+                            <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          )}
+                          <Link 
+                            to={`/pages/${page.id}`} 
+                            className="text-primary hover:text-primary/80 hover:underline transition-all cursor-pointer font-medium"
+                          >
+                            {getPathDisplay(page.path)}
+                          </Link>
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <DomainBadge domain={page.domain || 'Corporate'} />
+                        {pageIsHomepage && !canEdit ? (
+                          <DomainBadge domain={page.domain || 'Corporate'} />
+                        ) : pageIsHomepage && canEdit ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div>
+                                  <DomainBadge domain={page.domain || 'Corporate'} />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Homepage domain is protected</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <DomainBadge domain={page.domain || 'Corporate'} />
+                        )}
                       </TableCell>
                       <TableCell>
                         {canEdit ? (
@@ -1500,7 +1657,8 @@ export default function Pages() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
+                  );
+                  })
                 )}
               </TableBody>
             </Table>
