@@ -1447,7 +1447,7 @@ export default function Pages() {
                         <div className="flex items-center gap-2">
                           {pageIsHomepage && (
                             <>
-                              <Crown className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
+                              <Crown className="h-4 w-4 text-yellow-600 dark:text-yellow-500 flex-shrink-0 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]" />
                               <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                             </>
                           )}
