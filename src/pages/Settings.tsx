@@ -244,6 +244,26 @@ export default function Settings() {
           </p>
         </div>
 
+        {/* Quick Links */}
+        <Card className="rounded-2xl border-0 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl">Quick Links</CardTitle>
+            <CardDescription>
+              Navigate to specialized settings pages
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link to="/settings/taxonomy">
+              <Button variant="outline" className="w-full rounded-xl justify-start">
+                <span className="font-semibold">Page Types & Categories</span>
+                <span className="ml-auto text-muted-foreground text-sm">
+                  Manage taxonomy →
+                </span>
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
         {/* Schema Quality Charter */}
         <Card id="charter" className="rounded-2xl border-primary/20 bg-gradient-to-br from-card to-accent/5 scroll-mt-6">
           <CardHeader>
@@ -296,25 +316,6 @@ export default function Settings() {
             <Button onClick={() => setIssuesLogOpen(true)} className="rounded-full">
               Open issues log
             </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl border-0 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-xl">Quick Links</CardTitle>
-            <CardDescription>
-              Navigate to specialized settings pages
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link to="/settings/taxonomy">
-              <Button variant="outline" className="w-full rounded-xl justify-start">
-                <span className="font-semibold">Page Types & Categories</span>
-                <span className="ml-auto text-muted-foreground text-sm">
-                  Manage taxonomy →
-                </span>
-              </Button>
-            </Link>
           </CardContent>
         </Card>
 
