@@ -537,6 +537,7 @@ export type Database = {
           id: string
           organization_schema_backup_json: string | null
           organization_schema_json: string | null
+          preview_auth_enabled: boolean
           preview_auth_password: string | null
           preview_auth_user: string | null
           schema_engine_version: string
@@ -551,6 +552,7 @@ export type Database = {
           id?: string
           organization_schema_backup_json?: string | null
           organization_schema_json?: string | null
+          preview_auth_enabled?: boolean
           preview_auth_password?: string | null
           preview_auth_user?: string | null
           schema_engine_version?: string
@@ -565,6 +567,7 @@ export type Database = {
           id?: string
           organization_schema_backup_json?: string | null
           organization_schema_json?: string | null
+          preview_auth_enabled?: boolean
           preview_auth_password?: string | null
           preview_auth_user?: string | null
           schema_engine_version?: string

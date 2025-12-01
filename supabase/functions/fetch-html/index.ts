@@ -83,11 +83,13 @@ serve(async (req) => {
       "User-Agent": "NeameGraph-HTMLFetcher/1.0",
     };
 
-    // Add HTTP Basic Auth if configured
-    if (settings.preview_auth_user && settings.preview_auth_password) {
+    // Add HTTP Basic Auth if enabled and configured
+    if (settings.preview_auth_enabled && settings.preview_auth_user && settings.preview_auth_password) {
       const credentials = btoa(`${settings.preview_auth_user}:${settings.preview_auth_password}`);
       fetchHeaders["Authorization"] = `Basic ${credentials}`;
       console.log("Using HTTP Basic Auth");
+    } else {
+      console.log("Fetching without authentication");
     }
 
     // Fetch the HTML
