@@ -373,6 +373,17 @@ export default function Settings() {
                 Used for automatic page discovery
               </p>
             </div>
+
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={handleSave}
+                disabled={saving || !isAdmin}
+                className="rounded-full"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {saving ? "Saving..." : "Save URLs"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -448,6 +459,17 @@ export default function Settings() {
                 </div>
               </>
             )}
+
+            <div className="flex justify-end pt-4">
+              <Button
+                onClick={handleSave}
+                disabled={saving || !isAdmin}
+                className="rounded-full"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {saving ? "Saving..." : "Save Authentication"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
