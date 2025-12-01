@@ -13,6 +13,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface CharterPromptPanelProps {
   prompt: string | null;
@@ -73,79 +79,85 @@ export function CharterPromptPanel({ prompt, isAdmin, onSave }: CharterPromptPan
 
   return (
     <>
-      <div className="space-y-4 p-4 bg-muted/30 rounded-xl border">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-semibold mb-1">Charter Prompt (advanced)</h3>
-            <p className="text-xs text-muted-foreground">
-              Underlying instructions used by the schema engine when enforcing the Schema Quality Charter. 
-              Editing this is an advanced operation.
-            </p>
-          </div>
-          <div className="flex gap-2 flex-shrink-0">
-            {!isEditing && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCopyPrompt}
-                  className="rounded-full"
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy prompt
-                </Button>
-                {isAdmin && (
+      <Accordion type="single" collapsible className="w-full">
+        <AccordionItem value="charter-prompt" className="border rounded-xl px-4 bg-muted/30">
+          <AccordionTrigger className="hover:no-underline py-4">
+            <div className="flex items-start justify-between gap-4 w-full pr-4">
+              <div className="text-left">
+                <h3 className="text-sm font-semibold mb-1">Charter Prompt (advanced)</h3>
+                <p className="text-xs text-muted-foreground font-normal">
+                  Underlying instructions used by the schema engine when enforcing the Schema Quality Charter. 
+                  Editing this is an advanced operation.
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4 pt-4 pb-4">
+            <div className="flex gap-2 justify-end">
+              {!isEditing && (
+                <>
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={handleEditClick}
+                    onClick={handleCopyPrompt}
                     className="rounded-full"
                   >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit prompt
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy prompt
                   </Button>
-                )}
-              </>
-            )}
-            {isEditing && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCancelEdit}
-                  className="rounded-full"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSaveClick}
-                  disabled={isSaving}
-                  className="rounded-full"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {isSaving ? "Saving..." : "Save changes"}
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
+                  {isAdmin && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleEditClick}
+                      className="rounded-full"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit prompt
+                    </Button>
+                  )}
+                </>
+              )}
+              {isEditing && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCancelEdit}
+                    className="rounded-full"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveClick}
+                    disabled={isSaving}
+                    className="rounded-full"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSaving ? "Saving..." : "Save changes"}
+                  </Button>
+                </>
+              )}
+            </div>
 
-        <Textarea
-          value={isEditing ? editedPrompt : displayPrompt}
-          onChange={(e) => setEditedPrompt(e.target.value)}
-          disabled={!isEditing}
-          className="font-mono text-xs min-h-[400px] leading-relaxed"
-          placeholder="Charter prompt will appear here..."
-        />
+            <Textarea
+              value={isEditing ? editedPrompt : displayPrompt}
+              onChange={(e) => setEditedPrompt(e.target.value)}
+              disabled={!isEditing}
+              className="font-mono text-xs min-h-[400px] leading-relaxed"
+              placeholder="Charter prompt will appear here..."
+            />
 
-        {!isAdmin && (
-          <p className="text-xs text-muted-foreground italic">
-            Only administrators can edit the Charter prompt.
-          </p>
-        )}
-      </div>
+            {!isAdmin && (
+              <p className="text-xs text-muted-foreground italic">
+                Only administrators can edit the Charter prompt.
+              </p>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
