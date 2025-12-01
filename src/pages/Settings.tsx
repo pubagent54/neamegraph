@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Save, RefreshCw, Copy, RotateCcw, Shield, CheckCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertDialog,
@@ -38,6 +39,7 @@ interface Settings {
   canonical_base_url: string;
   fetch_base_url: string;
   sitemap_url: string | null;
+  preview_auth_enabled: boolean;
   preview_auth_user: string | null;
   preview_auth_password: string | null;
   schema_engine_version: string;
@@ -92,6 +94,7 @@ export default function Settings() {
           canonical_base_url: settings.canonical_base_url,
           fetch_base_url: settings.fetch_base_url,
           sitemap_url: settings.sitemap_url,
+          preview_auth_enabled: settings.preview_auth_enabled,
           preview_auth_user: settings.preview_auth_user,
           preview_auth_password: settings.preview_auth_password,
           schema_engine_version: 'v2', // Always use v2 Corporate engine
@@ -393,36 +396,58 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="text-xl">Preview Authentication</CardTitle>
             <CardDescription>
-              Optional HTTP Basic Auth credentials for preview site
+              Configure HTTP Basic Auth for fetching HTML from preview sites
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="auth-user">Username</Label>
-              <Input
-                id="auth-user"
-                value={settings.preview_auth_user || ""}
-                onChange={(e) =>
-                  setSettings({ ...settings, preview_auth_user: e.target.value })
+            <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border">
+              <div className="space-y-1">
+                <Label htmlFor="auth-enabled" className="text-base font-medium cursor-pointer">
+                  Enable authentication
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  When disabled, HTML is fetched without credentials
+                </p>
+              </div>
+              <Switch
+                id="auth-enabled"
+                checked={settings.preview_auth_enabled}
+                onCheckedChange={(checked) =>
+                  setSettings({ ...settings, preview_auth_enabled: checked })
                 }
-                placeholder="Optional"
-                className="rounded-xl"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="auth-password">Password</Label>
-              <Input
-                id="auth-password"
-                type="password"
-                value={settings.preview_auth_password || ""}
-                onChange={(e) =>
-                  setSettings({ ...settings, preview_auth_password: e.target.value })
-                }
-                placeholder="Optional"
-                className="rounded-xl"
-              />
-            </div>
+            {settings.preview_auth_enabled && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="auth-user">Username</Label>
+                  <Input
+                    id="auth-user"
+                    value={settings.preview_auth_user || ""}
+                    onChange={(e) =>
+                      setSettings({ ...settings, preview_auth_user: e.target.value })
+                    }
+                    placeholder="Enter username"
+                    className="rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="auth-password">Password</Label>
+                  <Input
+                    id="auth-password"
+                    type="password"
+                    value={settings.preview_auth_password || ""}
+                    onChange={(e) =>
+                      setSettings({ ...settings, preview_auth_password: e.target.value })
+                    }
+                    placeholder="Enter password"
+                    className="rounded-xl"
+                  />
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
