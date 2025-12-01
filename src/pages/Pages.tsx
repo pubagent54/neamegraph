@@ -1476,9 +1476,33 @@ export default function Pages() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {pageIsHomepage && !canEdit ? (
-                          <DomainBadge domain={page.domain || 'Corporate'} />
-                        ) : pageIsHomepage && canEdit ? (
+                        {canEdit && !pageIsHomepage ? (
+                          <Select
+                            value={page.domain || 'Corporate'}
+                            onValueChange={(value) => {
+                              handleInlineUpdate(page.id, "domain", value);
+                              // Clear page_type and category when domain changes
+                              if (page.page_type) {
+                                handleInlineUpdate(page.id, "page_type", null);
+                              }
+                              if (page.category) {
+                                handleInlineUpdate(page.id, "category", null);
+                              }
+                            }}
+                            disabled={domainsLoading}
+                          >
+                            <SelectTrigger className="h-7 w-[110px] text-xs rounded-full border-0 bg-transparent hover:bg-accent">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl">
+                              {domains.map((domain) => (
+                                <SelectItem key={domain} value={domain}>
+                                  {domain}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : pageIsHomepage ? (
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
