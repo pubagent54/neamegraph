@@ -11,24 +11,43 @@ export function SchemaImagePreview({ label, url, objectFit = "cover" }: SchemaIm
   const [hasError, setHasError] = useState(false);
 
   // Extract filename or truncated URL for display
+  // Handles Next.js _next/image URLs by extracting the inner filename
   const getDisplayUrl = (fullUrl: string): string => {
     try {
       const urlObj = new URL(fullUrl);
-      // For Next.js image URLs, try to extract the inner filename
+      
+      // For Next.js image URLs, extract and display the inner filename
       if (urlObj.pathname === "/_next/image") {
         const innerUrl = urlObj.searchParams.get("url");
         if (innerUrl) {
           const decoded = decodeURIComponent(innerUrl);
+          // Get just the filename from the decoded inner URL
           const parts = decoded.split("/");
-          const filename = parts[parts.length - 1]?.split("?")[0];
-          if (filename) {
-            return filename.length > 40 ? `...${filename.slice(-40)}` : filename;
-          }
+          const rawFilename = parts[parts.length - 1]?.split("?")[0] || "";
+          
+          // Clean up common filename patterns
+          const cleanFilename = rawFilename
+            .replace(/^RS\d+_/, "") // Remove RS12345_ prefix
+            .replace(/_mpr.*$/, "") // Remove _mpr suffix
+            .replace(/%20/g, " ")   // Replace URL-encoded spaces
+            .replace(/\(\d+\)/g, ""); // Remove (1), (2) etc.
+          
+          const display = cleanFilename.length > 45 
+            ? `...${cleanFilename.slice(-45)}` 
+            : cleanFilename;
+          
+          return `📦 ${display}`; // Indicate this is a Next.js optimized image
         }
       }
-      // For regular URLs, show the path
+      
+      // For regular URLs, show the path with filename
       const path = urlObj.pathname;
-      return path.length > 50 ? `...${path.slice(-50)}` : path;
+      const filename = path.split("/").pop() || path;
+      
+      if (filename.length > 50) {
+        return `...${filename.slice(-50)}`;
+      }
+      return filename.length > 45 ? `...${path.slice(-45)}` : path;
     } catch {
       return fullUrl.length > 50 ? `...${fullUrl.slice(-50)}` : fullUrl;
     }
