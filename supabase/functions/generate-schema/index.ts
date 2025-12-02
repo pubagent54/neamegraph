@@ -213,11 +213,43 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
     });
     
     console.log(`[Beer Image Extraction] Found ${candidates.length} total image candidates`);
-    
+
     // Filter out known-bad patterns
-    const validCandidates = candidates.filter(c => !isKnownBadPattern(c.innerUrl, c.isNextJs));
-    console.log(`[Beer Image Extraction] After filtering bad patterns: ${validCandidates.length} valid candidates`);
-    
+    const validCandidates = candidates.filter((c) => !isKnownBadPattern(c.innerUrl, c.isNextJs));
+    console.log(
+      `[Beer Image Extraction] After filtering bad patterns: ${validCandidates.length} valid candidates`,
+    );
+
+    // =====================
+    // CANDIDATE POOL SELECTION (snsites first)
+    // =====================
+    // Prefer canonical Drupal/CDN assets on snsites.co.uk. These are the real
+    // images we want in schema. If we find any candidates whose innerUrl
+    // points at snsites, we do *all* hero/logo selection only from that pool.
+    //
+    // If there are no snsites assets on the page, we fall back to the
+    // existing sortedCandidates behaviour so other beers still get images.
+
+    const snsitesCandidates = validCandidates.filter((c) => {
+      const u = (c.innerUrl || c.fullUrl || '').toLowerCase();
+      return u.includes('snsites.co.uk/sites/default/files/');
+    });
+
+    // Sort candidates to prefer Next.js URLs and og:image, as before
+    const sortedCandidates = [...validCandidates].sort((a, b) => {
+      if (a.isNextJs && !b.isNextJs) return -1;
+      if (!a.isNextJs && b.isNextJs) return 1;
+      if (a.source === 'og' && b.source !== 'og') return -1;
+      if (a.source !== 'og' && b.source === 'og') return 1;
+      return 0;
+    });
+
+    const candidatePool = snsitesCandidates.length > 0 ? snsitesCandidates : sortedCandidates;
+
+    console.log(
+      `[Beer Image Extraction] Using ${snsitesCandidates.length > 0 ? 'snsites-only' : 'all'} candidate pool for hero/logo selection (snsites=${snsitesCandidates.length})`,
+    );
+
     // =====================
     // HERO IMAGE SELECTION
     // =====================
@@ -226,59 +258,55 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
     // 2. Any Next.js URL where inner URL includes page_hero
     // 3. Any candidate where inner URL includes page_hero
     // 4. Next.js URL with beer name match
-    // 5. Any URL with beer name match  
+    // 5. Any URL with beer name match
     // 6. Bottle/pack shot with beer name
-    // 7. Fallback: og:image even without page_hero
-    
-    // Sort candidates to prefer Next.js URLs within each category
-    const sortedCandidates = [...validCandidates].sort((a, b) => {
-      // Prefer Next.js URLs
-      if (a.isNextJs && !b.isNextJs) return -1;
-      if (!a.isNextJs && b.isNextJs) return 1;
-      // Then prefer og:image source
-      if (a.source === "og" && b.source !== "og") return -1;
-      if (a.source !== "og" && b.source === "og") return 1;
-      return 0;
-    });
-    
-    // Try each priority level
-    let heroCandidate = sortedCandidates.find(c => c.source === "og" && isHeroCandidate(c.innerUrl));
-    
+    // 7. Fallback: any og:image
+
+    let heroCandidate = candidatePool.find(
+      (c) => c.source === 'og' && isHeroCandidate(c.innerUrl),
+    );
+
     if (!heroCandidate) {
-      heroCandidate = sortedCandidates.find(c => c.isNextJs && isHeroCandidate(c.innerUrl));
+      heroCandidate = candidatePool.find((c) => c.isNextJs && isHeroCandidate(c.innerUrl));
     }
-    
+
     if (!heroCandidate) {
-      heroCandidate = sortedCandidates.find(c => isHeroCandidate(c.innerUrl));
+      heroCandidate = candidatePool.find((c) => isHeroCandidate(c.innerUrl));
     }
-    
+
     if (!heroCandidate) {
-      heroCandidate = sortedCandidates.find(c => c.isNextJs && containsBeerName(c.innerUrl));
+      heroCandidate = candidatePool.find((c) => c.isNextJs && containsBeerName(c.innerUrl));
     }
-    
+
     if (!heroCandidate) {
-      heroCandidate = sortedCandidates.find(c => containsBeerName(c.innerUrl));
+      heroCandidate = candidatePool.find((c) => containsBeerName(c.innerUrl));
     }
-    
+
     if (!heroCandidate) {
-      heroCandidate = sortedCandidates.find(c => isBottleCandidate(c.innerUrl));
+      heroCandidate = candidatePool.find((c) => isBottleCandidate(c.innerUrl));
     }
-    
+
     if (!heroCandidate) {
-      // Final fallback: any og:image, preferring Next.js
-      heroCandidate = sortedCandidates.find(c => c.source === "og");
+      // Final fallback: any og:image from the current pool
+      heroCandidate = candidatePool.find((c) => c.source === 'og');
     }
-    
+
     if (heroCandidate) {
       const schemaUrl = getSchemaImageUrl(heroCandidate);
       result.heroImageUrl = schemaUrl;
-      console.log(`[Beer Image Extraction] ✓ Selected hero: source=${heroCandidate.source}, isNextJs=${heroCandidate.isNextJs}`);
-      console.log(`[Beer Image Extraction]   innerUrl: ${heroCandidate.innerUrl.substring(0, 120)}...`);
-      console.log(`[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`);
+      console.log(
+        `[Beer Image Extraction] ✓ Selected hero: source=${heroCandidate.source}, isNextJs=${heroCandidate.isNextJs}`,
+      );
+      console.log(
+        `[Beer Image Extraction]   innerUrl: ${heroCandidate.innerUrl.substring(0, 120)}...`,
+      );
+      console.log(
+        `[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`,
+      );
     } else {
-      console.log("[Beer Image Extraction] ✗ No hero image found");
+      console.log('[Beer Image Extraction] ✗ No hero image found');
     }
-    
+
     // =====================
     // LOGO IMAGE SELECTION
     // =====================
@@ -287,33 +315,41 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
     // 2. Any URL where filename contains both beer name AND logo/lockup pattern
     // 3. Next.js URL with just logo/lockup pattern
     // 4. Any URL with logo/lockup pattern
-    
-    let logoCandidate = sortedCandidates.find(
-      c => c.isNextJs && containsBeerName(c.innerUrl) && isLogoCandidate(c.innerUrl)
+
+    let logoCandidate = candidatePool.find(
+      (c) => c.isNextJs && containsBeerName(c.innerUrl) && isLogoCandidate(c.innerUrl),
     );
-    
+
     if (!logoCandidate) {
-      logoCandidate = sortedCandidates.find(
-        c => containsBeerName(c.innerUrl) && isLogoCandidate(c.innerUrl)
+      logoCandidate = candidatePool.find(
+        (c) => containsBeerName(c.innerUrl) && isLogoCandidate(c.innerUrl),
       );
     }
-    
+
     if (!logoCandidate) {
-      logoCandidate = sortedCandidates.find(c => c.isNextJs && isLogoCandidate(c.innerUrl));
+      logoCandidate = candidatePool.find((c) => c.isNextJs && isLogoCandidate(c.innerUrl));
     }
-    
+
     if (!logoCandidate) {
-      logoCandidate = sortedCandidates.find(c => isLogoCandidate(c.innerUrl));
+      logoCandidate = candidatePool.find((c) => isLogoCandidate(c.innerUrl));
     }
-    
+
     if (logoCandidate) {
       const schemaUrl = getSchemaImageUrl(logoCandidate);
       result.logoImageUrl = schemaUrl;
-      console.log(`[Beer Image Extraction] ✓ Selected logo: source=${logoCandidate.source}, isNextJs=${logoCandidate.isNextJs}`);
-      console.log(`[Beer Image Extraction]   innerUrl: ${logoCandidate.innerUrl.substring(0, 120)}...`);
-      console.log(`[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`);
+      console.log(
+        `[Beer Image Extraction] ✓ Selected logo: source=${logoCandidate.source}, isNextJs=${logoCandidate.isNextJs}`,
+      );
+      console.log(
+        `[Beer Image Extraction]   innerUrl: ${logoCandidate.innerUrl.substring(0, 120)}...`,
+      );
+      console.log(
+        `[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`,
+      );
     } else {
-      console.log("[Beer Image Extraction] ✗ No logo image found (this is OK - not all beers have logos in page)");
+      console.log(
+        '[Beer Image Extraction] ✗ No logo image found (this is OK - not all beers have logos in page)',
+      );
     }
     
     console.log(`[Beer Image Extraction] Complete for "${beerName}": hero=${result.heroImageUrl ? "✓" : "✗"}, logo=${result.logoImageUrl ? "✓" : "✗"}`);
