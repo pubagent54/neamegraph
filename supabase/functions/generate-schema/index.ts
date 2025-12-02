@@ -1246,6 +1246,16 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             caption: `${beerName} hero image`
           };
           
+          // Apply logo to Product node if found
+          if (chosenLogoUrl) {
+            productNode.logo = {
+              "@type": "ImageObject",
+              url: chosenLogoUrl,
+              contentUrl: chosenLogoUrl,
+              caption: `${beerName} logo`
+            };
+          }
+          
           // Apply hero image to WebPage node as well
           pageWebPageNode.image = {
             "@type": "ImageObject",
