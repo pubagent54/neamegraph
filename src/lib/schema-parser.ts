@@ -225,15 +225,25 @@ export function parseSchemaForSummary(
 
     // --- Extract image URLs ----------------------------------------------------
     // Helper to extract and normalise image URLs from schema fields
-    // Handles both string and array formats, and ensures absolute URLs are preserved unchanged
+    // Handles string, ImageObject, and array formats
+    // Supports both `url` and `contentUrl` properties on ImageObjects
     const extractImageUrl = (imageField: any): string | undefined => {
       if (!imageField) return undefined;
       
       let rawUrl: string | undefined;
+      
       if (typeof imageField === 'string') {
         rawUrl = imageField;
+      } else if (typeof imageField === 'object' && !Array.isArray(imageField)) {
+        // ImageObject: prefer url, fallback to contentUrl
+        rawUrl = imageField.url || imageField.contentUrl;
       } else if (Array.isArray(imageField) && imageField.length > 0) {
-        rawUrl = typeof imageField[0] === 'string' ? imageField[0] : undefined;
+        const first = imageField[0];
+        if (typeof first === 'string') {
+          rawUrl = first;
+        } else if (typeof first === 'object') {
+          rawUrl = first.url || first.contentUrl;
+        }
       }
       
       if (!rawUrl) return undefined;
