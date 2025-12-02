@@ -1065,6 +1065,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           const beerName = deriveBeerName();
           
           const productId = `${canonicalUrl}#product`;
+          const brandId = `${canonicalUrl}#brand`;
           let productNode = graph.find((node: any) => node["@id"] === productId);
           
           if (!productNode) {
@@ -1074,11 +1075,15 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
               "@id": productId,
               name: beerName,
               url: canonicalUrl,
-              brand: { "@id": ORG_ID },
+              brand: { "@id": brandId },
               manufacturer: { "@id": ORG_ID }
             };
             graph.push(productNode);
             console.log("✓ Created Product node for beer");
+          } else {
+            // Ensure existing Product node has correct brand/manufacturer references
+            productNode.brand = { "@id": brandId };
+            productNode.manufacturer = { "@id": ORG_ID };
           }
           
           // Apply clean beer name to Product
