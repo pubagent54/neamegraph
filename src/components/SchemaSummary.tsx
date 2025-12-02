@@ -1,5 +1,6 @@
 import { CheckCircle, Circle, ExternalLink } from "lucide-react";
 import { parseSchemaForSummary } from "@/lib/schema-parser";
+import { SchemaImagePreview } from "./SchemaImagePreview";
 
 interface SchemaSummaryProps {
   jsonld: string;
@@ -211,123 +212,25 @@ export function SchemaSummary({ jsonld, section, createdAt, status }: SchemaSumm
       {/* Images this schema is using */}
       <div>
         <h4 className="text-sm font-semibold text-muted-foreground mb-2">Images this schema is using</h4>
-        {!summary.images.webPageImage && !summary.images.brandImage && !summary.images.brandLogo ? (
-          <div className="bg-muted/30 rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">No image or logo properties found in this schema.</p>
+        <div className="bg-muted/30 rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <SchemaImagePreview
+              label={summary.keyFacts.type === "beer" ? "Beer hero image (page)" : "WebPage image"}
+              url={summary.images.webPageImage}
+              objectFit="cover"
+            />
+            <SchemaImagePreview
+              label={summary.keyFacts.type === "beer" ? "Beer hero image (brand)" : "Main entity image"}
+              url={summary.images.brandImage}
+              objectFit="cover"
+            />
+            <SchemaImagePreview
+              label={summary.keyFacts.type === "beer" ? "Beer brand logo" : "Main entity logo"}
+              url={summary.images.brandLogo}
+              objectFit="contain"
+            />
           </div>
-        ) : (
-          <div className="bg-muted/30 rounded-lg p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* WebPage image */}
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {summary.keyFacts.type === "beer" ? "Beer hero image (page)" : "WebPage image"}
-                </p>
-                {summary.images.webPageImage ? (
-                  <div className="space-y-2">
-                    <div className="bg-background rounded border overflow-hidden relative">
-                      <img 
-                        src={summary.images.webPageImage} 
-                        alt="WebPage hero"
-                        className="w-full h-32 object-cover"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.style.display = 'none';
-                          const parent = target.parentElement;
-                          if (parent && !parent.querySelector('.error-overlay')) {
-                            const errorDiv = document.createElement('div');
-                            errorDiv.className = 'error-overlay absolute inset-0 flex items-center justify-center bg-muted/50';
-                            errorDiv.innerHTML = '<span class="text-xs text-muted-foreground">Image failed to load</span>';
-                            parent.appendChild(errorDiv);
-                          }
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground break-all font-mono" title={summary.images.webPageImage}>
-                      {summary.images.webPageImage}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-muted rounded border p-4 h-32 flex items-center justify-center">
-                    <p className="text-xs text-muted-foreground">Not set in schema</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Brand image */}
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {summary.keyFacts.type === "beer" ? "Beer hero image (brand)" : "Main entity image"}
-                </p>
-                {summary.images.brandImage ? (
-                  <div className="space-y-2">
-                    <div className="bg-background rounded border overflow-hidden relative">
-                      <img 
-                        src={summary.images.brandImage} 
-                        alt="Brand hero"
-                        className="w-full h-32 object-cover"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.style.display = 'none';
-                          const parent = target.parentElement;
-                          if (parent && !parent.querySelector('.error-overlay')) {
-                            const errorDiv = document.createElement('div');
-                            errorDiv.className = 'error-overlay absolute inset-0 flex items-center justify-center bg-muted/50';
-                            errorDiv.innerHTML = '<span class="text-xs text-muted-foreground">Image failed to load</span>';
-                            parent.appendChild(errorDiv);
-                          }
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground break-all font-mono" title={summary.images.brandImage}>
-                      {summary.images.brandImage}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-muted rounded border p-4 h-32 flex items-center justify-center">
-                    <p className="text-xs text-muted-foreground">Not set in schema</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Brand logo */}
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {summary.keyFacts.type === "beer" ? "Beer brand logo" : "Main entity logo"}
-                </p>
-                {summary.images.brandLogo ? (
-                  <div className="space-y-2">
-                    <div className="bg-background rounded border overflow-hidden relative">
-                      <img 
-                        src={summary.images.brandLogo} 
-                        alt="Brand logo"
-                        className="w-full h-32 object-contain p-4"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.style.display = 'none';
-                          const parent = target.parentElement;
-                          if (parent && !parent.querySelector('.error-overlay')) {
-                            const errorDiv = document.createElement('div');
-                            errorDiv.className = 'error-overlay absolute inset-0 flex items-center justify-center bg-muted/50';
-                            errorDiv.innerHTML = '<span class="text-xs text-muted-foreground">Image failed to load</span>';
-                            parent.appendChild(errorDiv);
-                          }
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground break-all font-mono" title={summary.images.brandLogo}>
-                      {summary.images.brandLogo}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-muted rounded border p-4 h-32 flex items-center justify-center">
-                    <p className="text-xs text-muted-foreground">Not set in schema</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Validation */}
