@@ -85,9 +85,25 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
   }
   
   // Helper: Check if this is a known-bad pattern to exclude
-  // CRITICAL: Direct Drupal file URLs that are NOT wrapped in _next/image are usually dead
+  // CRITICAL: These are zombie URLs that 404 on the live site
   function isKnownBadPattern(innerUrl: string, isNextJs: boolean): boolean {
     const lower = innerUrl.toLowerCase();
+    
+    // HARD BAN: Legacy theme-based beer images - these ALL 404
+    if (lower.includes("/themes/custom/shepherdneame/images/beers/")) {
+      console.log(`[Beer Image Extraction] ZOMBIE: Legacy theme path excluded: ${lower.substring(0, 80)}...`);
+      return true;
+    }
+    
+    // HARD BAN: Old d8-era zombie paths known to 404 (like 1698_Bottle_0.png, 1698_Lockup_0.png)
+    if (lower.includes("/sites/default/files/styles/d8/public/image/")) {
+      console.log(`[Beer Image Extraction] ZOMBIE: d8 style image path excluded: ${lower.substring(0, 80)}...`);
+      return true;
+    }
+    if (lower.includes("/sites/default/files/image/2023-03/")) {
+      console.log(`[Beer Image Extraction] ZOMBIE: Old 2023-03 image path excluded: ${lower.substring(0, 80)}...`);
+      return true;
+    }
     
     // Old wysiwyg paths that are always dead
     if (lower.includes("/styles/sn_wysiwyg_full_width/") ||
@@ -104,15 +120,12 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
       return true;
     }
     
-    // CRITICAL: Direct /sites/default/files/ paths that are NOT wrapped in _next/image
+    // CRITICAL: Direct shepherdneame.co.uk /sites/default/files/ paths that are NOT wrapped in _next/image
     // These old Drupal paths often 404 now that the site uses Next.js image optimization
-    // Only flag as bad if it's NOT a Next.js wrapped URL
-    if (!isNextJs && lower.includes("/sites/default/files/")) {
-      // Specifically target old image/ paths and styles/d8/ paths that are known to 404
-      if (lower.includes("/image/") || lower.includes("/styles/d8/")) {
-        console.log(`[Beer Image Extraction] Excluding non-Next.js Drupal path: ${lower.substring(0, 80)}...`);
-        return true;
-      }
+    // Only flag as bad if it's NOT a Next.js wrapped URL AND it's on shepherdneame.co.uk (not snsites.co.uk)
+    if (!isNextJs && lower.includes("shepherdneame.co.uk/sites/default/files/")) {
+      console.log(`[Beer Image Extraction] ZOMBIE: Direct SN Drupal path (not via Next.js): ${lower.substring(0, 80)}...`);
+      return true;
     }
     
     return false;
@@ -142,6 +155,29 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
       isNextJs: boolean;
       source: "og" | "twitter" | "img" | "link";
     }
+    
+    // Helper: Determine the schema-safe URL for a beer image candidate
+    // Rule: If it's a Next.js URL with an inner snsites.co.uk CMS asset, use the inner URL
+    // This gives us canonical, CDN-served URLs that don't 404
+    const getSchemaImageUrl = (candidate: ImageCandidate): string => {
+      const inner = candidate.innerUrl || "";
+      
+      // Prefer canonical CMS URLs on snsites.co.uk - these are the real CDN-served assets
+      if (candidate.isNextJs && inner.startsWith("https://snsites.co.uk/sites/default/files/")) {
+        console.log(`[Beer Image Extraction] → Using canonical snsites.co.uk URL: ${inner.substring(0, 100)}...`);
+        return inner;
+      }
+      
+      // Also accept direct snsites.co.uk URLs (not wrapped in Next.js)
+      if (inner.startsWith("https://snsites.co.uk/sites/default/files/")) {
+        console.log(`[Beer Image Extraction] → Using direct snsites.co.uk URL: ${inner.substring(0, 100)}...`);
+        return inner;
+      }
+      
+      // Fallback: whatever the browser actually uses (but this may be a wrapper URL)
+      console.log(`[Beer Image Extraction] → Fallback to fullUrl: ${candidate.fullUrl.substring(0, 100)}...`);
+      return candidate.fullUrl;
+    };
     
     const candidates: ImageCandidate[] = [];
     
@@ -234,8 +270,11 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
     }
     
     if (heroCandidate) {
-      result.heroImageUrl = heroCandidate.fullUrl;
-      console.log(`[Beer Image Extraction] ✓ Selected hero image: ${result.heroImageUrl.substring(0, 100)}...`);
+      const schemaUrl = getSchemaImageUrl(heroCandidate);
+      result.heroImageUrl = schemaUrl;
+      console.log(`[Beer Image Extraction] ✓ Selected hero: source=${heroCandidate.source}, isNextJs=${heroCandidate.isNextJs}`);
+      console.log(`[Beer Image Extraction]   innerUrl: ${heroCandidate.innerUrl.substring(0, 120)}...`);
+      console.log(`[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`);
     } else {
       console.log("[Beer Image Extraction] ✗ No hero image found");
     }
@@ -268,8 +307,11 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
     }
     
     if (logoCandidate) {
-      result.logoImageUrl = logoCandidate.fullUrl;
-      console.log(`[Beer Image Extraction] ✓ Selected logo image: ${result.logoImageUrl.substring(0, 100)}...`);
+      const schemaUrl = getSchemaImageUrl(logoCandidate);
+      result.logoImageUrl = schemaUrl;
+      console.log(`[Beer Image Extraction] ✓ Selected logo: source=${logoCandidate.source}, isNextJs=${logoCandidate.isNextJs}`);
+      console.log(`[Beer Image Extraction]   innerUrl: ${logoCandidate.innerUrl.substring(0, 120)}...`);
+      console.log(`[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`);
     } else {
       console.log("[Beer Image Extraction] ✗ No logo image found (this is OK - not all beers have logos in page)");
     }
