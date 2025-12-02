@@ -45,13 +45,16 @@ export interface Permissions {
   description: string;
 }
 
-export function usePermissions(): Permissions {
-  const { userRole } = useAuth();
+export function usePermissions(): Permissions & { loading: boolean } {
+  const { userRole, loading: authLoading } = useAuth();
+  
+  // While auth is loading or role hasn't been fetched yet, we're still loading
+  const loading = authLoading || (userRole === null && !authLoading);
   
   // Map database role to display role
   const displayRole: DisplayRole | null = userRole ? (ROLE_MAP[userRole] || "viewer") : null;
   
-  // Derive permissions from role
+  // Derive permissions from role - only grant permissions when we KNOW the role
   const canManageUsers = displayRole === "god";
   const canEditRules = displayRole === "god";
   const canEditSettings = displayRole === "god";
@@ -61,6 +64,7 @@ export function usePermissions(): Permissions {
   const isReadOnly = displayRole === "viewer";
   
   return {
+    loading,
     canManageUsers,
     canEditRules,
     canEditSettings,

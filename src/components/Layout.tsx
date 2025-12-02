@@ -8,6 +8,7 @@
 
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions, ROLE_DISPLAY_NAMES } from "@/hooks/use-permissions";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,7 +25,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { LogOut, User, LayoutDashboard, FileText, Settings, GitBranch, Activity, Shield, Zap, Menu } from "lucide-react";
+import { LogOut, User, Users, LayoutDashboard, FileText, Settings, GitBranch, Activity, Shield, Zap, Menu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import neameGraphLogo from "@/assets/neamegraph-logo.png";
@@ -32,6 +33,7 @@ import { useState } from "react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, userRole, signOut } = useAuth();
+  const { canManageUsers, canEditRules, canEditSettings, role, displayName } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -46,18 +48,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { path: "/pages", label: "Pages", icon: FileText, color: "text-green-500" },
     { path: "/graph", label: "Graph", icon: GitBranch, color: "text-purple-500" },
     { path: "/audit", label: "Audit Log", icon: Activity, color: "text-orange-500" },
-    ...(userRole === "admin"
+    // Admin-only nav items
+    ...(canEditRules
       ? [
           { path: "/wizmode", label: "WIZmode", icon: Zap, color: "text-yellow-500" },
           { path: "/rules", label: "Rules", icon: Shield, color: "text-red-500" },
-          { path: "/settings", label: "Settings", icon: Settings, color: "text-gray-500" },
         ]
+      : []),
+    ...(canEditSettings
+      ? [{ path: "/settings", label: "Settings", icon: Settings, color: "text-gray-500" }]
+      : []),
+    ...(canManageUsers
+      ? [{ path: "/users", label: "Users", icon: Users, color: "text-pink-500" }]
       : []),
   ];
 
   const roleColors = {
-    admin: "bg-primary text-primary-foreground",
-    editor: "bg-status-review text-white",
+    god: "bg-primary text-primary-foreground",
+    creator: "bg-status-review text-white",
     viewer: "bg-muted text-muted-foreground",
   };
 
@@ -123,9 +131,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         <User className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm truncate">{user?.email}</span>
                       </div>
-                      {userRole && (
-                        <Badge className={`${roleColors[userRole as keyof typeof roleColors]} w-fit rounded-full`}>
-                          {userRole}
+                      {role && (
+                        <Badge className={`${roleColors[role as keyof typeof roleColors]} w-fit rounded-full`}>
+                          {displayName}
                         </Badge>
                       )}
                       <Button
@@ -149,9 +157,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Button variant="ghost" className="gap-2 rounded-full">
                   <User className="h-4 w-4" />
                   <span className="hidden sm:inline">{user?.email}</span>
-                  {userRole && (
-                    <Badge className={`${roleColors[userRole as keyof typeof roleColors]} rounded-full`}>
-                      {userRole}
+                  {role && (
+                    <Badge className={`${roleColors[role as keyof typeof roleColors]} rounded-full`}>
+                      {displayName}
                     </Badge>
                   )}
                 </Button>

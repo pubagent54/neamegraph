@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Save, RefreshCw, Copy, RotateCcw, Shield, CheckCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,7 +49,7 @@ interface Settings {
 }
 
 export default function Settings() {
-  const { userRole } = useAuth();
+  const { canEditSettings } = usePermissions();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,7 +60,8 @@ export default function Settings() {
   const [unlockError, setUnlockError] = useState("");
   const [issuesLogOpen, setIssuesLogOpen] = useState(false);
   
-  const isAdmin = userRole === 'admin';
+  // Use canEditSettings for admin-like behavior
+  const isAdmin = canEditSettings;
 
   useEffect(() => {
     fetchSettings();
