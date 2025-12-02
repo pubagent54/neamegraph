@@ -583,6 +583,7 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          invited_by: string | null
           last_login_at: string | null
           name: string | null
           role: Database["public"]["Enums"]["app_role"]
@@ -592,6 +593,7 @@ export type Database = {
           created_at?: string
           email: string
           id: string
+          invited_by?: string | null
           last_login_at?: string | null
           name?: string | null
           role?: Database["public"]["Enums"]["app_role"]
@@ -601,11 +603,20 @@ export type Database = {
           created_at?: string
           email?: string
           id?: string
+          invited_by?: string | null
           last_login_at?: string | null
           name?: string | null
           role?: Database["public"]["Enums"]["app_role"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "users_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wizmode_run_items: {
         Row: {

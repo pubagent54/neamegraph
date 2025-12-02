@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Pages from "./pages/Pages";
 import PageDetail from "./pages/PageDetail";
@@ -16,6 +17,7 @@ import SettingsTaxonomy from "./pages/SettingsTaxonomy";
 import Graph from "./pages/Graph";
 import AuditLog from "./pages/AuditLog";
 import WIZmode from "./pages/WIZmode";
+import UsersPage from "./pages/Users";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +32,7 @@ const App = () => (
           <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               path="/"
               element={
@@ -107,6 +110,14 @@ const App = () => (
               element={
                 <ProtectedRoute requiredRole="admin">
                   <WIZmode />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <UsersPage />
                 </ProtectedRoute>
               }
             />
