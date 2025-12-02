@@ -1,5 +1,188 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.84.0";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
+
+/**
+ * Beer Image Extraction Utility
+ * 
+ * Extracts hero images and logos from beer page HTML, handling Next.js image URLs.
+ * Priority logic:
+ * - Hero: og:image with /styles/page_hero/, then any img with page_hero, then beer name match
+ * - Logo: filename contains both beer name and "logo", then just "logo" or "pumpclip"
+ */
+interface BeerImages {
+  heroImageUrl?: string;
+  logoImageUrl?: string;
+}
+
+function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
+  const canonicalBase = "https://www.shepherdneame.co.uk";
+  const result: BeerImages = {};
+  
+  // Normalize beer name for matching (e.g., "1698" or "Spitfire")
+  const beerNameLower = beerName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  
+  // Helper: Normalize a URL and extract the inner URL if it's a Next.js image wrapper
+  function normaliseUrl(raw: string): { fullUrl: string; innerUrl: string } {
+    try {
+      const url = new URL(raw, canonicalBase);
+      
+      if (url.pathname === "/_next/image") {
+        const inner = url.searchParams.get("url");
+        if (inner) {
+          return {
+            fullUrl: url.toString(),
+            innerUrl: decodeURIComponent(inner)
+          };
+        }
+      }
+      
+      return { fullUrl: url.toString(), innerUrl: url.toString() };
+    } catch {
+      return { fullUrl: raw, innerUrl: raw };
+    }
+  }
+  
+  // Helper: Check if URL matches hero patterns
+  function isHeroCandidate(innerUrl: string): boolean {
+    const lower = innerUrl.toLowerCase();
+    return lower.includes("/styles/page_hero/") || 
+           lower.includes("page_hero") ||
+           lower.includes("hero");
+  }
+  
+  // Helper: Check if URL matches logo patterns
+  function isLogoCandidate(innerUrl: string): boolean {
+    const lower = innerUrl.toLowerCase();
+    // Extract filename
+    const filename = lower.split("/").pop() || "";
+    return filename.includes("logo") || filename.includes("pumpclip");
+  }
+  
+  // Helper: Check if URL contains beer name
+  function containsBeerName(innerUrl: string): boolean {
+    if (!beerNameLower) return false;
+    const lower = innerUrl.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return lower.includes(beerNameLower);
+  }
+  
+  // Helper: Check if this is a known-bad pattern to exclude
+  function isKnownBadPattern(innerUrl: string): boolean {
+    const lower = innerUrl.toLowerCase();
+    // Old wysiwyg paths that may be dead
+    return lower.includes("/styles/sn_wysiwyg_full_width/") ||
+           lower.includes("/styles/sn_wysiwyg_") ||
+           lower.includes("bottle.png");
+  }
+  
+  try {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    if (!doc) return result;
+    
+    // Collect all candidate images
+    interface ImageCandidate {
+      fullUrl: string;
+      innerUrl: string;
+      source: "og" | "twitter" | "img";
+    }
+    
+    const candidates: ImageCandidate[] = [];
+    
+    // 1. og:image meta tag
+    const ogImage = doc.querySelector('meta[property="og:image"]');
+    if (ogImage) {
+      const content = ogImage.getAttribute("content");
+      if (content) {
+        const normalized = normaliseUrl(content);
+        candidates.push({ ...normalized, source: "og" });
+      }
+    }
+    
+    // 2. twitter:image meta tag
+    const twitterImage = doc.querySelector('meta[name="twitter:image"]');
+    if (twitterImage) {
+      const content = twitterImage.getAttribute("content");
+      if (content) {
+        const normalized = normaliseUrl(content);
+        candidates.push({ ...normalized, source: "twitter" });
+      }
+    }
+    
+    // 3. img tags in main content
+    const imgTags = doc.querySelectorAll("img");
+    imgTags.forEach((img: any) => {
+      const src = img.getAttribute("src") || img.getAttribute("data-src");
+      if (src && !src.startsWith("data:")) {
+        const normalized = normaliseUrl(src);
+        candidates.push({ ...normalized, source: "img" });
+      }
+    });
+    
+    // Filter out known-bad patterns
+    const validCandidates = candidates.filter(c => !isKnownBadPattern(c.innerUrl));
+    
+    // =====================
+    // HERO IMAGE SELECTION
+    // =====================
+    // Priority:
+    // 1. og:image where inner URL includes page_hero
+    // 2. Any candidate where inner URL includes page_hero
+    // 3. Any candidate where filename contains beer name
+    // 4. Fallback: og:image even without page_hero
+    
+    const ogHeroWithPageHero = validCandidates.find(
+      c => c.source === "og" && isHeroCandidate(c.innerUrl)
+    );
+    
+    if (ogHeroWithPageHero) {
+      result.heroImageUrl = ogHeroWithPageHero.fullUrl;
+    } else {
+      const anyHeroWithPageHero = validCandidates.find(c => isHeroCandidate(c.innerUrl));
+      if (anyHeroWithPageHero) {
+        result.heroImageUrl = anyHeroWithPageHero.fullUrl;
+      } else {
+        const beerNameMatch = validCandidates.find(c => containsBeerName(c.innerUrl));
+        if (beerNameMatch) {
+          result.heroImageUrl = beerNameMatch.fullUrl;
+        } else {
+          // Fallback: og:image even without hero pattern
+          const ogFallback = validCandidates.find(c => c.source === "og");
+          if (ogFallback) {
+            result.heroImageUrl = ogFallback.fullUrl;
+          }
+        }
+      }
+    }
+    
+    // =====================
+    // LOGO IMAGE SELECTION
+    // =====================
+    // Priority:
+    // 1. Candidates where filename contains both beer name AND "logo"
+    // 2. Candidates where filename contains "logo" or "pumpclip"
+    
+    const beerNameAndLogo = validCandidates.find(
+      c => containsBeerName(c.innerUrl) && isLogoCandidate(c.innerUrl)
+    );
+    
+    if (beerNameAndLogo) {
+      result.logoImageUrl = beerNameAndLogo.fullUrl;
+    } else {
+      const anyLogo = validCandidates.find(c => isLogoCandidate(c.innerUrl));
+      if (anyLogo) {
+        result.logoImageUrl = anyLogo.fullUrl;
+      }
+      // If no logo candidate found, omit rather than guessing
+    }
+    
+    console.log(`Beer image extraction for "${beerName}": hero=${result.heroImageUrl ? "found" : "none"}, logo=${result.logoImageUrl ? "found" : "none"}`);
+    
+  } catch (err) {
+    console.error("Error extracting beer images from HTML:", err);
+  }
+  
+  return result;
+}
 
 /**
  * Canonical Shepherd Neame Organization configuration
@@ -802,44 +985,83 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             productNode.description = pageWebPageNode.description;
           }
           
-          // Prefer hero image for Product (beer photo over generic logo)
-          // Preferred image sources (in order):
-          // 1) page.hero_image_url
-          // 2) Brand image/logo
-          // 3) existing Product.image
-          // 4) final fallback: ORG_LOGO_URL
-          let chosenImageUrl: string | undefined = undefined;
+          // ========================================
+          // BEER IMAGE EXTRACTION (Next.js-aware)
+          // ========================================
+          // Extract hero image and logo from HTML using Next.js image URL patterns
+          // Priority: og:image with page_hero > any page_hero img > beer name match > fallback
+          const extractedImages = extractBeerImagesFromHtml(html, beerName);
           
-          if (page.hero_image_url) {
-            chosenImageUrl = page.hero_image_url;
+          let chosenHeroUrl: string | undefined = undefined;
+          let chosenLogoUrl: string | undefined = undefined;
+          
+          // Hero image priority:
+          // 1) Extracted from HTML (Next.js image URLs with page_hero pattern)
+          // 2) page.hero_image_url from metadata
+          // 3) Brand image/logo
+          // 4) existing Product.image
+          // 5) final fallback: ORG_LOGO_URL
+          
+          if (extractedImages.heroImageUrl) {
+            chosenHeroUrl = extractedImages.heroImageUrl;
+            console.log(`✓ Using extracted hero image: ${chosenHeroUrl.substring(0, 100)}...`);
+          } else if (page.hero_image_url) {
+            chosenHeroUrl = page.hero_image_url;
           } else if (brandNode) {
             if (typeof brandNode.image === "string") {
-              chosenImageUrl = brandNode.image;
+              chosenHeroUrl = brandNode.image;
             } else if (brandNode.image?.url) {
-              chosenImageUrl = brandNode.image.url;
+              chosenHeroUrl = brandNode.image.url;
             } else if (typeof brandNode.logo === "string") {
-              chosenImageUrl = brandNode.logo;
+              chosenHeroUrl = brandNode.logo;
             }
           }
           
-          if (!chosenImageUrl && productNode.image) {
-            chosenImageUrl = typeof productNode.image === "string"
+          if (!chosenHeroUrl && productNode.image) {
+            chosenHeroUrl = typeof productNode.image === "string"
               ? productNode.image
               : productNode.image.url;
           }
           
-          if (!chosenImageUrl) {
-            chosenImageUrl = ORG_LOGO_URL; // final fallback only
+          if (!chosenHeroUrl) {
+            chosenHeroUrl = ORG_LOGO_URL; // final fallback only
           }
           
+          // Logo image priority:
+          // 1) Extracted from HTML (filename contains "logo" or "pumpclip")
+          // 2) page.logo_url from metadata
+          // 3) Brand logo if present
+          
+          if (extractedImages.logoImageUrl) {
+            chosenLogoUrl = extractedImages.logoImageUrl;
+            console.log(`✓ Using extracted logo image: ${chosenLogoUrl.substring(0, 100)}...`);
+          } else if (page.logo_url) {
+            chosenLogoUrl = page.logo_url;
+          } else if (brandNode?.logo) {
+            chosenLogoUrl = typeof brandNode.logo === "string" 
+              ? brandNode.logo 
+              : brandNode.logo?.url;
+          }
+          
+          // Apply hero image to Product node
           productNode.image = {
             "@type": "ImageObject",
-            url: chosenImageUrl
+            url: chosenHeroUrl,
+            contentUrl: chosenHeroUrl,
+            caption: `${beerName} hero image`
+          };
+          
+          // Apply hero image to WebPage node as well
+          pageWebPageNode.image = {
+            "@type": "ImageObject",
+            url: chosenHeroUrl,
+            contentUrl: chosenHeroUrl,
+            caption: `${beerName} hero image`
           };
           
           console.log("✓ Enriched Product with page-backed descriptive properties");
           
-          // Slim the Brand node so it is secondary
+          // Slim the Brand node so it is secondary, but preserve/add images
           if (brandNode) {
             const leanBrand: any = {
               "@type": brandNode["@type"] || "Brand",
@@ -849,14 +1071,29 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
               brand: brandNode.brand || { "@id": ORG_ID }
             };
             
-            if (brandNode.image) leanBrand.image = brandNode.image;
-            if (brandNode.logo) leanBrand.logo = brandNode.logo;
+            // Apply hero image to Brand
+            leanBrand.image = {
+              "@type": "ImageObject",
+              url: chosenHeroUrl,
+              contentUrl: chosenHeroUrl,
+              caption: `${beerName} hero image`
+            };
+            
+            // Apply logo to Brand if found
+            if (chosenLogoUrl) {
+              leanBrand.logo = {
+                "@type": "ImageObject",
+                url: chosenLogoUrl,
+                contentUrl: chosenLogoUrl,
+                caption: `${beerName} logo`
+              };
+            }
             
             // Replace the existing Brand node with the lean version
             const index = graph.indexOf(brandNode);
             if (index !== -1) graph[index] = leanBrand;
             
-            console.log("✓ Slimmed Brand node for beer detail page");
+            console.log("✓ Slimmed Brand node with extracted images for beer detail page");
           }
           
           // Ensure WebPage mainEntity/about point ONLY to Product
