@@ -69,14 +69,25 @@ export default function UsersPage() {
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const { loading: permissionsLoading } = usePermissions();
+  const { loading: authLoading } = useAuth();
+
   useEffect(() => {
-    if (!canManageUsers) {
+    // Wait for auth and permissions to fully load before deciding
+    if (authLoading || permissionsLoading) return;
+    
+    // User is authenticated but doesn't have permission
+    if (user && !canManageUsers) {
       toast.error("Access denied");
       navigate("/dashboard");
       return;
     }
-    fetchUsers();
-  }, [canManageUsers, navigate]);
+    
+    // User has permission, fetch users
+    if (canManageUsers) {
+      fetchUsers();
+    }
+  }, [authLoading, permissionsLoading, user, canManageUsers, navigate]);
 
   const fetchUsers = async () => {
     try {
@@ -245,6 +256,18 @@ export default function UsersPage() {
     }
   };
 
+  // Show loading state while auth/permissions are resolving
+  if (authLoading || permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // After loading, if user doesn't have permission, show access denied
   if (!canManageUsers) {
     return (
       <Layout>

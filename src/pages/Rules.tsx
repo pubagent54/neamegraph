@@ -10,7 +10,7 @@
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -59,7 +59,7 @@ interface Page {
 }
 
 export default function Rules() {
-  const { userRole } = useAuth();
+  const { canEditRules } = usePermissions();
   const [rules, setRules] = useState<Rule[]>([]);
   const [selectedRule, setSelectedRule] = useState<Rule | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,7 +91,8 @@ export default function Rules() {
   // Charter modal state
   const [charterOpen, setCharterOpen] = useState(false);
   
-  const isAdmin = userRole === "admin";
+  // Use canEditRules for admin-like behavior
+  const isAdmin = canEditRules;
   
   // Taxonomy-aware state
   const { pageTypes } = usePageTypes();
