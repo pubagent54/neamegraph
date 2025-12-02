@@ -1019,9 +1019,22 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // Charter rule: Individual beer pages should model the beer as a Product with rich data
       // Supporting Brand node is allowed but must be lean and secondary
       // Collection pages (like /Beers) remain as ItemList/CollectionPage
-      const BEERS_COLLECTION_URL = "https://www.shepherdneame.co.uk/Beers";
-      const isBeerDetailPage = page.page_type === "Beers" && page.category === "Drink Brands";
-      const isBeersCollectionPage = canonicalUrl.toLowerCase() === BEERS_COLLECTION_URL.toLowerCase();
+      // Canonical Beers collection URL (lowercase path)
+      const BEERS_COLLECTION_URL = "https://www.shepherdneame.co.uk/beers";
+
+      // A page is the Beers collection page if its canonical URL matches the
+      // collection URL (case-insensitive).
+      const isBeersCollectionPage =
+        canonicalUrl.toLowerCase() === BEERS_COLLECTION_URL.toLowerCase();
+
+      // A page is a beer detail page if:
+      // - It sits in the Beer domain (page.domain === "Beer"), AND
+      // - It is NOT the Beers collection URL.
+      const isBeerDetailPage = pageDomain === "Beer" && !isBeersCollectionPage;
+
+      console.log(
+        `Beer page detection → domain=${pageDomain}, isBeerDetailPage=${isBeerDetailPage}, isBeersCollectionPage=${isBeersCollectionPage}, canonicalUrl=${canonicalUrl}`,
+      );
       
       if (isBeerDetailPage) {
         console.log("Beer detail page detected - applying Product/Brand canonicalisation");
