@@ -15,14 +15,18 @@ interface BeerImages {
   logoImageUrl?: string;
 }
 
-function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
+function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: string): BeerImages {
   const canonicalBase = "https://www.shepherdneame.co.uk";
   const result: BeerImages = {};
   
   // Normalize beer name for matching (e.g., "1698" or "Spitfire")
   const beerNameLower = beerName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  // Beer slug is the URL-friendly version (e.g., "double-stout", "1698")
+  const beerSlugLower = (beerSlug || beerName).toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  // Also create underscore version for filename matching
+  const beerSlugUnderscore = beerSlugLower.replace(/-/g, "_");
   
-  console.log(`[Beer Image Extraction] Starting extraction for beer: "${beerName}" (normalized: "${beerNameLower}")`);
+  console.log(`[Beer Image Extraction] Starting extraction for beer: "${beerName}" (normalized: "${beerNameLower}", slug: "${beerSlugLower}")`);
   
   // Helper: Normalize a URL and extract the inner URL if it's a Next.js image wrapper
   // Returns isNextJs flag to help prioritize these URLs
@@ -77,11 +81,73 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
            filename.includes("roundel");
   }
   
-  // Helper: Check if URL contains beer name
-  function containsBeerName(innerUrl: string): boolean {
-    if (!beerNameLower) return false;
-    const lower = innerUrl.toLowerCase().replace(/[^a-z0-9]/g, "");
-    return lower.includes(beerNameLower);
+  // Helper: Check if URL or alt text contains the CURRENT beer's name/slug
+  function containsBeerName(innerUrl: string, alt?: string): boolean {
+    if (!beerNameLower && !beerSlugLower) return false;
+    const urlLower = innerUrl.toLowerCase();
+    const altLower = (alt || "").toLowerCase();
+    
+    // Check URL for beer name/slug matches
+    const urlNormalized = urlLower.replace(/[^a-z0-9]/g, "");
+    if (urlNormalized.includes(beerNameLower)) return true;
+    if (urlLower.includes(beerSlugLower)) return true;
+    if (urlLower.includes(beerSlugUnderscore)) return true;
+    
+    // Check alt text for beer name match
+    const altNormalized = altLower.replace(/[^a-z0-9]/g, "");
+    if (altNormalized.includes(beerNameLower)) return true;
+    if (altLower.includes(beerSlugLower)) return true;
+    
+    return false;
+  }
+  
+  // Helper: Check if image is inside a "related beers" section
+  // These sections show other beers (e.g., "The Classic collection" strip)
+  function isInRelatedBeersSection(imgElement: any): boolean {
+    // Walk up the DOM tree looking for container sections that indicate "other beers"
+    let parent = imgElement.parentElement;
+    let depth = 0;
+    const maxDepth = 10; // Don't walk too far up
+    
+    while (parent && depth < maxDepth) {
+      const tagName = parent.tagName?.toLowerCase() || "";
+      const className = (parent.getAttribute?.("class") || "").toLowerCase();
+      const id = (parent.getAttribute?.("id") || "").toLowerCase();
+      
+      // Look for headings within this section that indicate related beers
+      const headings = parent.querySelectorAll?.("h2, h3, h4");
+      if (headings) {
+        for (const h of headings) {
+          const headingText = (h.textContent || "").toLowerCase();
+          // Patterns for related beers sections
+          if (headingText.includes("collection") ||
+              headingText.includes("you might also like") ||
+              headingText.includes("other beers") ||
+              headingText.includes("related beers") ||
+              headingText.includes("more beers") ||
+              headingText.includes("discover more")) {
+            return true;
+          }
+        }
+      }
+      
+      // Check class/id for carousel, slider, related section patterns
+      if (className.includes("carousel") ||
+          className.includes("slider") ||
+          className.includes("related") ||
+          className.includes("collection-strip") ||
+          className.includes("beer-grid") ||
+          className.includes("other-beers") ||
+          id.includes("related") ||
+          id.includes("collection")) {
+        return true;
+      }
+      
+      parent = parent.parentElement;
+      depth++;
+    }
+    
+    return false;
   }
   
   // Helper: Check if this is a known-bad pattern to exclude
@@ -154,6 +220,8 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
       innerUrl: string;
       isNextJs: boolean;
       source: "og" | "twitter" | "img" | "link";
+      alt?: string; // alt text for img tags
+      isInRelatedSection?: boolean; // true if from a "related beers" section
     }
     
     // Helper: Determine the schema-safe URL for a beer image candidate
@@ -202,13 +270,25 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
       }
     }
     
-    // 3. img tags in main content
+    // 3. img tags in main content (filter out related beers sections)
     const imgTags = doc.querySelectorAll("img");
     imgTags.forEach((img: any) => {
       const src = img.getAttribute("src") || img.getAttribute("data-src");
       if (src && !src.startsWith("data:")) {
         const normalized = normaliseUrl(src);
-        candidates.push({ ...normalized, source: "img" });
+        const alt = img.getAttribute("alt") || "";
+        const isRelated = isInRelatedBeersSection(img);
+        
+        candidates.push({
+          ...normalized,
+          source: "img",
+          alt,
+          isInRelatedSection: isRelated
+        });
+        
+        if (isRelated && isLogoCandidate(normalized.innerUrl)) {
+          console.log(`[Beer Image Extraction] Skipping logo from related section: ${normalized.innerUrl.substring(0, 60)}...`);
+        }
       }
     });
     
@@ -308,37 +388,53 @@ function extractBeerImagesFromHtml(html: string, beerName: string): BeerImages {
     }
 
     // =====================
-    // LOGO IMAGE SELECTION
+    // LOGO IMAGE SELECTION (REFINED)
     // =====================
+    // CRITICAL: Only select logos that belong to THIS beer, not "related beers"
     // Priority (within each level, prefer Next.js URLs):
-    // 1. Next.js URL where filename contains both beer name AND logo/lockup pattern
-    // 2. Any URL where filename contains both beer name AND logo/lockup pattern
-    // 3. Next.js URL with just logo/lockup pattern
-    // 4. Any URL with logo/lockup pattern
-
-    let logoCandidate = candidatePool.find(
-      (c) => c.isNextJs && containsBeerName(c.innerUrl) && isLogoCandidate(c.innerUrl),
+    // 1. Logo with beer name in URL/alt AND NOT in related section
+    // 2. Logo with beer name in URL/alt (any location)
+    // 3. Logo pattern NOT in related section
+    // 4. Fallback: any logo pattern (last resort)
+    
+    // Filter candidates for logo selection - exclude related beers section for primary picks
+    const mainContentLogoCandidates = candidatePool.filter((c) => !c.isInRelatedSection);
+    
+    // 1. Best: Logo with beer name match, in main content area
+    let logoCandidate = mainContentLogoCandidates.find(
+      (c) => c.isNextJs && containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
     );
-
+    
     if (!logoCandidate) {
-      logoCandidate = candidatePool.find(
-        (c) => containsBeerName(c.innerUrl) && isLogoCandidate(c.innerUrl),
+      logoCandidate = mainContentLogoCandidates.find(
+        (c) => containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
       );
     }
 
+    // 2. Logo pattern in main content (no beer name match, but at least not from related section)
     if (!logoCandidate) {
-      logoCandidate = candidatePool.find((c) => c.isNextJs && isLogoCandidate(c.innerUrl));
+      logoCandidate = mainContentLogoCandidates.find((c) => c.isNextJs && isLogoCandidate(c.innerUrl));
     }
 
     if (!logoCandidate) {
-      logoCandidate = candidatePool.find((c) => isLogoCandidate(c.innerUrl));
+      logoCandidate = mainContentLogoCandidates.find((c) => isLogoCandidate(c.innerUrl));
+    }
+    
+    // 3. Final fallback: any logo with beer name match (even from related section, if it matches our beer)
+    if (!logoCandidate) {
+      logoCandidate = candidatePool.find(
+        (c) => containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
+      );
     }
 
     if (logoCandidate) {
       const schemaUrl = getSchemaImageUrl(logoCandidate);
       result.logoImageUrl = schemaUrl;
       console.log(
-        `[Beer Image Extraction] ✓ Selected logo: source=${logoCandidate.source}, isNextJs=${logoCandidate.isNextJs}`,
+        `[Beer Logo Selection] ✓ Selected logo: source=${logoCandidate.source}, isNextJs=${logoCandidate.isNextJs}, inRelated=${logoCandidate.isInRelatedSection || false}`,
+      );
+      console.log(
+        `[Beer Logo Selection]   path=${beerSlugLower}, beerSlug=${beerSlugLower}, logoSrc=${schemaUrl.substring(0, 100)}`,
       );
       console.log(
         `[Beer Image Extraction]   innerUrl: ${logoCandidate.innerUrl.substring(0, 120)}...`,
@@ -1185,7 +1281,9 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           // ========================================
           // Extract hero image and logo from HTML using Next.js image URL patterns
           // Priority: og:image with page_hero > any page_hero img > beer name match > fallback
-          const extractedImages = extractBeerImagesFromHtml(html, beerName);
+          // Derive beer slug from path for matching (e.g., "/beers/double-stout" → "double-stout")
+          const beerSlug = page.path?.split("/").pop() || "";
+          const extractedImages = extractBeerImagesFromHtml(html, beerName, beerSlug);
           
           let chosenHeroUrl: string | undefined = undefined;
           let chosenLogoUrl: string | undefined = undefined;
