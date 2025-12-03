@@ -502,6 +502,168 @@ const ORG_ADDRESS = {
   addressCountry: "United Kingdom",
 };
 
+/**
+ * Build default Organization node from hardcoded config
+ * Used as fallback when homepage schema is unavailable
+ */
+function buildDefaultOrgNode(): any {
+  return {
+    "@type": ["Organization", "Corporation"],
+    "@id": ORG_ID,
+    name: ORG_NAME,
+    url: ORG_URL,
+    description: ORG_DESCRIPTION,
+    logo: {
+      "@type": "ImageObject",
+      url: ORG_LOGO_URL,
+    },
+    sameAs: ORG_SAME_AS,
+    foundingDate: ORG_FOUNDING_DATE,
+    founder: { "@type": "Person", name: ORG_FOUNDER_NAME },
+    address: {
+      "@type": "PostalAddress",
+      ...ORG_ADDRESS,
+    },
+  };
+}
+
+/**
+ * Build default WebSite node from hardcoded config
+ * Used as fallback when homepage schema is unavailable
+ */
+function buildDefaultWebsiteNode(): any {
+  return {
+    "@type": "WebSite",
+    "@id": "https://www.shepherdneame.co.uk/#website",
+    url: "https://www.shepherdneame.co.uk",
+    name: "Shepherd Neame",
+    publisher: { "@id": ORG_ID },
+  };
+}
+
+/**
+ * Load canonical Organization and WebSite nodes from the stored homepage schema.
+ * Falls back to hardcoded defaults if homepage schema is unavailable.
+ * 
+ * This ensures a single source of truth for Org/WebSite across ALL pages.
+ */
+async function getCanonicalOrgAndWebsite(
+  supabaseClient: any
+): Promise<{ orgNode: any; websiteNode: any; fromHomepage: boolean }> {
+  const orgId = "https://www.shepherdneame.co.uk/#organization";
+  const websiteId = "https://www.shepherdneame.co.uk/#website";
+
+  try {
+    // Find the homepage page record
+    const { data: homePage, error: homePageError } = await supabaseClient
+      .from("pages")
+      .select("id")
+      .eq("is_home_page", true)
+      .single();
+
+    if (homePageError || !homePage) {
+      console.log("[Canonical Org/WebSite] Homepage not found, using defaults");
+      return {
+        orgNode: buildDefaultOrgNode(),
+        websiteNode: buildDefaultWebsiteNode(),
+        fromHomepage: false,
+      };
+    }
+
+    // Get the latest approved schema version for homepage (prefer approved, fall back to any)
+    const { data: schemaVersion, error: schemaError } = await supabaseClient
+      .from("schema_versions")
+      .select("jsonld")
+      .eq("page_id", homePage.id)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (schemaError || !schemaVersion || !schemaVersion.jsonld) {
+      console.log("[Canonical Org/WebSite] No homepage schema found, using defaults");
+      return {
+        orgNode: buildDefaultOrgNode(),
+        websiteNode: buildDefaultWebsiteNode(),
+        fromHomepage: false,
+      };
+    }
+
+    // Parse the homepage JSON-LD
+    let homeJsonld: any;
+    try {
+      homeJsonld = typeof schemaVersion.jsonld === "string"
+        ? JSON.parse(schemaVersion.jsonld)
+        : schemaVersion.jsonld;
+    } catch (parseErr) {
+      console.log("[Canonical Org/WebSite] Failed to parse homepage schema, using defaults");
+      return {
+        orgNode: buildDefaultOrgNode(),
+        websiteNode: buildDefaultWebsiteNode(),
+        fromHomepage: false,
+      };
+    }
+
+    const graph = homeJsonld["@graph"];
+    if (!Array.isArray(graph)) {
+      console.log("[Canonical Org/WebSite] Homepage schema has no @graph, using defaults");
+      return {
+        orgNode: buildDefaultOrgNode(),
+        websiteNode: buildDefaultWebsiteNode(),
+        fromHomepage: false,
+      };
+    }
+
+    // Extract Organization node
+    let foundOrg = graph.find((node: any) => node["@id"] === orgId);
+    if (!foundOrg) {
+      // Try finding by type if @id doesn't match exactly
+      foundOrg = graph.find((node: any) => {
+        const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+        return types.includes("Organization") || types.includes("Corporation");
+      });
+    }
+
+    // Extract WebSite node
+    let foundWebsite = graph.find((node: any) => node["@id"] === websiteId);
+    if (!foundWebsite) {
+      // Try finding by type if @id doesn't match exactly
+      foundWebsite = graph.find((node: any) => {
+        const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+        return types.includes("WebSite");
+      });
+    }
+
+    // Build final nodes, ensuring canonical @id values
+    const orgNode = foundOrg
+      ? { ...foundOrg, "@id": orgId, url: ORG_URL }
+      : buildDefaultOrgNode();
+
+    const websiteNode = foundWebsite
+      ? {
+          ...foundWebsite,
+          "@id": websiteId,
+          url: "https://www.shepherdneame.co.uk",
+          publisher: { "@id": orgId },
+        }
+      : buildDefaultWebsiteNode();
+
+    console.log(`[Canonical Org/WebSite] Loaded from homepage schema (org: ${foundOrg ? "found" : "default"}, website: ${foundWebsite ? "found" : "default"})`);
+
+    return {
+      orgNode,
+      websiteNode,
+      fromHomepage: foundOrg !== undefined || foundWebsite !== undefined,
+    };
+  } catch (err) {
+    console.error("[Canonical Org/WebSite] Error loading from homepage:", err);
+    return {
+      orgNode: buildDefaultOrgNode(),
+      websiteNode: buildDefaultWebsiteNode(),
+      fromHomepage: false,
+    };
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -949,71 +1111,65 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // SCHEMA QUALITY CHARTER ENFORCEMENT
       // ----------------------------------------
       // Post-process the AI-generated JSON-LD to enforce Charter rules:
-      // 1. Always emit a proper WebSite node
-      // 2. Make all WebPage nodes point to WebSite via isPartOf (not Organization)
-      // 3. Ensure publisher correctly links back to canonical Organization
-      // 4. Only emit FAQ schema when there is real on-page FAQ content
+      // 1. Load canonical Organization and WebSite from homepage schema
+      // 2. Strip any LLM-emitted Organization/WebSite nodes
+      // 3. Inject canonical nodes (single source of truth)
+      // 4. Make all WebPage nodes point to WebSite via isPartOf
+      // 5. Ensure publisher correctly links back to canonical Organization
+      // 6. Only emit FAQ schema when there is real on-page FAQ content
       // See docs/schema-quality-charter.md for quality standards
       // ========================================
       const graph = v2Jsonld["@graph"] || [];
       let charterWarnings: string[] = [];
 
-      // STEP 1: Ensure canonical WebSite node exists
-      // Required by Charter: single WebSite node that all WebPage nodes link to
       const websiteId = "https://www.shepherdneame.co.uk/#website";
       const orgId = "https://www.shepherdneame.co.uk/#organization";
 
-      let websiteNode = graph.find((node: any) => node["@id"] === websiteId);
+      // STEP 1: Load canonical Organization and WebSite from homepage schema
+      // This ensures a single source of truth for Org/WebSite across ALL pages
+      const { orgNode: canonicalOrg, websiteNode: canonicalWebsite, fromHomepage } = 
+        await getCanonicalOrgAndWebsite(supabase);
 
-      if (!websiteNode) {
-        // Create the canonical WebSite node
-        websiteNode = {
-          "@type": "WebSite",
-          "@id": websiteId,
-          url: "https://www.shepherdneame.co.uk",
-          name: "Shepherd Neame",
-          publisher: { "@id": orgId },
-        };
-        graph.push(websiteNode);
-        console.log("✓ Added canonical WebSite node");
-      } else {
-        // Ensure existing WebSite has correct publisher
-        websiteNode.publisher = { "@id": orgId };
-        console.log("✓ Updated existing WebSite node");
+      console.log(`[Canonical Nodes] Source: ${fromHomepage ? "homepage schema" : "hardcoded defaults"}`);
+
+      // STEP 1a: Strip ALL Organization and WebSite nodes emitted by LLM
+      // We will inject our single canonical versions instead
+      for (let i = graph.length - 1; i >= 0; i--) {
+        const node = graph[i];
+        const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+        const nodeId = node["@id"] || "";
+
+        // Remove if @type includes Organization or WebSite
+        const isOrgType = types.includes("Organization") || types.includes("Corporation");
+        const isWebsiteType = types.includes("WebSite");
+        
+        // Also remove if @id matches canonical IDs (regardless of type)
+        const isCanonicalOrgId = nodeId === orgId;
+        const isCanonicalWebsiteId = nodeId === websiteId;
+
+        if (isOrgType || isWebsiteType || isCanonicalOrgId || isCanonicalWebsiteId) {
+          graph.splice(i, 1);
+        }
       }
 
-      // STEP 1a: Ensure canonical Organization node is rich and config-driven
-      // Charter requirement: Organization must be consistent, canonical, and complete
-      let orgNode = graph.find((node: any) => node["@id"] === orgId);
+      console.log("✓ Stripped LLM-emitted Organization/WebSite nodes");
 
-      if (!orgNode) {
-        // Create Organization node if missing (should be generated by AI)
-        orgNode = {
-          "@type": ["Organization", "Corporation"],
-          "@id": orgId,
-        };
-        graph.push(orgNode);
-        console.log("✓ Added canonical Organization node");
-      }
+      // STEP 1b: Inject the canonical Organization and WebSite nodes
+      // These come from homepage schema (preferred) or hardcoded defaults (fallback)
+      let orgNode = { ...canonicalOrg };
+      let websiteNode = { ...canonicalWebsite };
 
-      // Enrich with canonical Organization data from config
-      orgNode["@type"] = ["Organization", "Corporation"];
-      orgNode.name = ORG_NAME;
+      // Ensure canonical @id and url values are always correct
+      orgNode["@id"] = orgId;
       orgNode.url = ORG_URL;
-      orgNode.description = ORG_DESCRIPTION;
-      orgNode.logo = {
-        "@type": "ImageObject",
-        url: ORG_LOGO_URL,
-      };
-      orgNode.sameAs = ORG_SAME_AS;
-      orgNode.foundingDate = ORG_FOUNDING_DATE;
-      orgNode.founder = { "@type": "Person", name: ORG_FOUNDER_NAME };
-      orgNode.address = {
-        "@type": "PostalAddress",
-        ...ORG_ADDRESS,
-      };
+      websiteNode["@id"] = websiteId;
+      websiteNode.url = "https://www.shepherdneame.co.uk";
+      websiteNode.publisher = { "@id": orgId };
 
-      console.log("✓ Enriched Organization node with canonical config data");
+      graph.push(orgNode);
+      graph.push(websiteNode);
+
+      console.log("✓ Injected canonical Organization and WebSite nodes");
 
       // STEP 2: Fix isPartOf on all WebPage nodes
       // Charter rule: WebPage nodes must link to WebSite via isPartOf, not Organization
@@ -1920,6 +2076,31 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         charterWarnings.push(
           "CHARTER WARNING: Multiple WebPage nodes with mainEntity/about detected - page may have competing primary entities",
         );
+      }
+
+      // ========================================
+      // FINAL ORG/WEBSITE CONSISTENCY VALIDATION
+      // ----------------------------------------
+      // Ensure exactly one Organization and one WebSite node exist
+      // This is critical for graph consistency across all pages
+      // ========================================
+      const orgCount = graph.filter((node: any) => {
+        const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+        return types.includes("Organization") || types.includes("Corporation");
+      }).length;
+
+      const websiteCount = graph.filter((node: any) => {
+        const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+        return types.includes("WebSite");
+      }).length;
+
+      if (orgCount !== 1 || websiteCount !== 1) {
+        console.error(`[Org/WebSite Validation] ERROR: Expected exactly 1 Organization and 1 WebSite, found Org=${orgCount}, WebSite=${websiteCount}`);
+        charterWarnings.push(
+          `ORG CONSISTENCY VIOLATION: Expected exactly one Organization and one WebSite node, found Org=${orgCount}, WebSite=${websiteCount}.`
+        );
+      } else {
+        console.log("✓ Org/WebSite validation passed: Exactly 1 Organization and 1 WebSite node");
       }
 
       // Log all Charter warnings
