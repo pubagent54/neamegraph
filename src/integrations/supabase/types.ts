@@ -52,6 +52,51 @@ export type Database = {
           },
         ]
       }
+      documents: {
+        Row: {
+          body: string
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          title: string
+          updated_at: string
+          updated_by_user_id: string | null
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          title: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          title?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_updated_by_user_id_fkey"
+            columns: ["updated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       graph_edges: {
         Row: {
           created_at: string

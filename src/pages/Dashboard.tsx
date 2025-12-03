@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { Files, User, Loader2, CheckCircle2, AlertCircle, Clock, Settings as SettingsIcon, ChevronRight, Table, FlaskRound } from "lucide-react";
+import { Files, User, Loader2, CheckCircle2, Settings as SettingsIcon, ChevronRight, Table, FlaskRound } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { DocumentsPanel } from "@/components/DocumentsPanel";
 
 interface Stats {
   total: number;
@@ -242,47 +242,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-0 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-xl">Getting Started</CardTitle>
-              <CardDescription>Next steps for using NeameGraph v2</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                  1
-                </div>
-                <div>
-                  <p className="font-semibold mb-1">Add or update pages</p>
-                  <p className="text-sm text-muted-foreground">
-                    Use WIZmode or the Pages view to import your corporate URLs (via CSV) and assign page types and categories.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                  2
-                </div>
-                <div>
-                  <p className="font-semibold mb-1">Configure rules & generate schema</p>
-                  <p className="text-sm text-muted-foreground">
-                    Set up or refine the Corporate v2 (and Beer) rules, then generate JSON-LD for your pages from the Rules / WIZmode flow.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                  3
-                </div>
-                <div>
-                  <p className="font-semibold mb-1">Validate & implement</p>
-                  <p className="text-sm text-muted-foreground">
-                    Test the generated schema on staging, fix any issues, then mark pages as Tested or Implemented once they're live.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <DocumentsPanel />
         </div>
       </div>
     </Layout>
