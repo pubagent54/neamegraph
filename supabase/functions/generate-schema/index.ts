@@ -1120,26 +1120,28 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         console.log(`✓ Cleaned ${cleanedHasPartCount} dangling hasPart reference(s)`);
       }
 
-      // STEP 6: Make Product the rich, canonical beer entity (beer detail pages)
-      // Charter rule: Individual beer pages should model the beer as a Product with rich data
-      // Supporting Brand node is allowed but must be lean and secondary
-      // Collection pages (like /Beers) remain as ItemList/CollectionPage
+      // STEP 6: Make Brand the canonical beer entity (beer detail pages)
+      // Beer Domain Rule v2.3: Brand-first, non-transactional
+      // Beer detail pages use Brand as the main entity with NO Product/Offer nodes
+      // Collection pages (like /Beers) remain as ItemList/CollectionPage pointing to Brand IDs
       const BEERS_COLLECTION_URL = "https://www.shepherdneame.co.uk/beers";
 
-      // Beer detail pages: any path under /beers/slug
-      const isBeerDetailPage = typeof page.path === "string" && page.path.toLowerCase().startsWith("/beers/");
+      // Beer detail pages: any path under /beers/slug (but NOT the collection page itself)
+      const isBeerDetailPage =
+        typeof page.path === "string" &&
+        page.path.toLowerCase().startsWith("/beers/") &&
+        canonicalUrl.toLowerCase() !== BEERS_COLLECTION_URL.toLowerCase();
 
       // Beers collection page: the top-level /Beers
       const isBeersCollectionPage =
         typeof canonicalUrl === "string" && canonicalUrl.toLowerCase() === BEERS_COLLECTION_URL.toLowerCase();
 
-      // TEMP DEBUG LOGGING FOR 1698 IMAGE ISSUE
       console.log(
         `[Beer Detail Detection] path=${page.path}, domain=${pageDomain}, isBeerDetailPage=${isBeerDetailPage}, isBeersCollectionPage=${isBeersCollectionPage}`,
       );
 
       if (isBeerDetailPage) {
-        console.log("Beer detail page detected - applying Product/Brand canonicalisation");
+        console.log("Beer detail page detected - applying Brand-first canonicalisation (no Product)");
 
         // Find the main WebPage node for this page
         const pageWebPageNode = graph.find((node: any) => {
@@ -1168,122 +1170,107 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           };
 
           const beerName = deriveBeerName();
-
-          const productId = `${canonicalUrl}#product`;
           const brandId = `${canonicalUrl}#brand`;
-          let productNode = graph.find((node: any) => node["@id"] === productId);
+          const webpageId = `${canonicalUrl}#webpage`;
 
-          if (!productNode) {
-            // Create a minimal Product node if AI didn't generate one
-            productNode = {
-              "@type": "Product",
-              "@id": productId,
-              name: beerName,
-              url: canonicalUrl,
-              brand: { "@id": brandId },
-              manufacturer: { "@id": ORG_ID },
-            };
-            graph.push(productNode);
-            console.log("✓ Created Product node for beer");
-          } else {
-            // Ensure existing Product node has correct brand/manufacturer references
-            productNode.brand = { "@id": brandId };
-            productNode.manufacturer = { "@id": ORG_ID };
-          }
-
-          // Apply clean beer name to Product
-          productNode.name = beerName;
-
-          // Find the Brand node for this beer (if any)
-          const brandNode = graph.find((node: any) => {
+          // Find existing Brand node or legacy Product node to convert
+          let brandNode = graph.find((node: any) => {
+            if (node["@id"] === brandId) return true;
             const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
             return types.includes("Brand") && node.url === canonicalUrl;
           });
 
-          // Copy rich beer detail from Brand → Product
-          if (brandNode) {
-            // Description
-            if (!productNode.description && brandNode.description) {
-              productNode.description = brandNode.description;
-            }
+          // Look for legacy Product node to convert if no Brand exists
+          const legacyProductNode = graph.find((node: any) => {
+            if (node["@id"] === `${canonicalUrl}#product`) return true;
+            const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+            return types.includes("Product") && node.url === canonicalUrl;
+          });
 
-            // Additional properties like ABV, Formats, Brewed with, Tasting notes
-            if (brandNode.additionalProperty) {
-              const props = Array.isArray(brandNode.additionalProperty)
-                ? brandNode.additionalProperty
-                : [brandNode.additionalProperty];
+          if (!brandNode) {
+            // Create Brand node, copying data from legacy Product if available
+            brandNode = {
+              "@type": "Brand",
+              "@id": brandId,
+              name: beerName,
+              url: canonicalUrl,
+              mainEntityOfPage: { "@id": webpageId },
+            };
 
-              productNode.additionalProperty = productNode.additionalProperty || [];
-
-              props.forEach((prop: any) => {
-                if (
-                  prop?.["@type"] === "PropertyValue" &&
-                  typeof prop.name === "string" &&
-                  ["ABV", "ABV (bottle)", "ABV (draught)", "Formats", "Brewed with", "Tasting notes", "Style"].includes(
-                    prop.name,
-                  )
-                ) {
-                  productNode.additionalProperty.push(prop);
-                }
-              });
-            }
-
-            // If Brand has a good image/logo and Product has none, copy it
-            if (!productNode.image && (brandNode.image || brandNode.logo)) {
-              const imgUrl =
-                typeof brandNode.image === "string" ? brandNode.image : brandNode.image?.url || brandNode.logo;
-              if (imgUrl) {
-                productNode.image = { "@type": "ImageObject", url: imgUrl };
+            if (legacyProductNode) {
+              // Copy useful properties from legacy Product to Brand
+              if (legacyProductNode.description && !brandNode.description) {
+                brandNode.description = legacyProductNode.description;
+              }
+              if (legacyProductNode.image && !brandNode.image) {
+                brandNode.image = legacyProductNode.image;
+              }
+              if (legacyProductNode.logo && !brandNode.logo) {
+                brandNode.logo = legacyProductNode.logo;
+              }
+              if (legacyProductNode.additionalProperty) {
+                brandNode.additionalProperty = legacyProductNode.additionalProperty;
+              }
+              console.log("✓ Converted legacy Product data to Brand node");
+            } else {
+              // Use WebPage description as fallback
+              if (pageWebPageNode.description && !brandNode.description) {
+                brandNode.description = pageWebPageNode.description;
               }
             }
 
-            console.log("✓ Copied rich beer detail from Brand to Product");
+            graph.push(brandNode);
+            console.log("✓ Created Brand node for beer");
+          } else {
+            // Ensure existing Brand has correct linking
+            brandNode["@id"] = brandId;
+            brandNode.name = beerName;
+            brandNode.url = canonicalUrl;
+            brandNode.mainEntityOfPage = { "@id": webpageId };
           }
 
-          // Add page-backed descriptive properties (no transactional data)
-          // Tasting notes from page metadata
-          if (page.notes && !productNode.additionalProperty?.some((p: any) => p.name === "Tasting notes")) {
-            productNode.additionalProperty = productNode.additionalProperty || [];
-            productNode.additionalProperty.push({
+          // Add beer-specific metadata from page data to Brand
+          if (page.beer_abv && !brandNode.additionalProperty?.some((p: any) => p.name === "ABV")) {
+            brandNode.additionalProperty = brandNode.additionalProperty || [];
+            brandNode.additionalProperty.push({
               "@type": "PropertyValue",
-              name: "Tasting notes",
-              value: page.notes,
+              name: "ABV",
+              value: page.beer_abv.toString() + "%",
             });
           }
 
-          // Add beer-specific metadata from page data
-          if (page.beer_abv && !productNode.alcoholByVolume) {
-            productNode.alcoholByVolume = page.beer_abv.toString();
-          }
-
-          if (page.beer_style && !productNode.additionalProperty?.some((p: any) => p.name === "Style")) {
-            productNode.additionalProperty = productNode.additionalProperty || [];
-            productNode.additionalProperty.push({
+          if (page.beer_style && !brandNode.additionalProperty?.some((p: any) => p.name === "Style")) {
+            brandNode.additionalProperty = brandNode.additionalProperty || [];
+            brandNode.additionalProperty.push({
               "@type": "PropertyValue",
               name: "Style",
               value: page.beer_style,
             });
           }
 
-          if (page.beer_launch_year && !productNode.releaseDate) {
-            productNode.releaseDate = page.beer_launch_year.toString();
+          if (page.beer_launch_year) {
+            brandNode.foundingDate = page.beer_launch_year.toString();
           }
 
-          if (page.wikidata_qid && !productNode.sameAs) {
-            productNode.sameAs = [`https://www.wikidata.org/wiki/${page.wikidata_qid}`];
+          if (page.wikidata_qid && !brandNode.sameAs) {
+            brandNode.sameAs = [`https://www.wikidata.org/wiki/${page.wikidata_qid}`];
           }
 
-          // If no description, use WebPage description
-          if (!productNode.description && pageWebPageNode.description) {
-            productNode.description = pageWebPageNode.description;
+          // Tasting notes from page metadata
+          if (page.notes && !brandNode.additionalProperty?.some((p: any) => p.name === "Tasting notes")) {
+            brandNode.additionalProperty = brandNode.additionalProperty || [];
+            brandNode.additionalProperty.push({
+              "@type": "PropertyValue",
+              name: "Tasting notes",
+              value: page.notes,
+            });
           }
+
+          console.log("✓ Enriched Brand with page-backed descriptive properties");
 
           // ========================================
           // BEER IMAGE EXTRACTION (Next.js-aware)
           // ========================================
-          // Extract hero image and logo from HTML using Next.js image URL patterns
-          // Priority: og:image with page_hero > any page_hero img > beer name match > fallback
-          // Derive beer slug from path for matching (e.g., "/beers/double-stout" → "double-stout")
           const beerSlug = page.path?.split("/").pop() || "";
           const extractedImages = extractBeerImagesFromHtml(html, beerName, beerSlug);
 
@@ -1293,27 +1280,16 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           // Hero image priority:
           // 1) Extracted from HTML (Next.js image URLs with page_hero pattern)
           // 2) page.hero_image_url from metadata
-          // 3) Brand image/logo
-          // 4) existing Product.image
-          // 5) final fallback: ORG_LOGO_URL
+          // 3) Existing Brand image
+          // 4) final fallback: ORG_LOGO_URL
 
           if (extractedImages.heroImageUrl) {
             chosenHeroUrl = extractedImages.heroImageUrl;
             console.log(`✓ Using extracted hero image: ${chosenHeroUrl.substring(0, 100)}...`);
           } else if (page.hero_image_url) {
             chosenHeroUrl = page.hero_image_url;
-          } else if (brandNode) {
-            if (typeof brandNode.image === "string") {
-              chosenHeroUrl = brandNode.image;
-            } else if (brandNode.image?.url) {
-              chosenHeroUrl = brandNode.image.url;
-            } else if (typeof brandNode.logo === "string") {
-              chosenHeroUrl = brandNode.logo;
-            }
-          }
-
-          if (!chosenHeroUrl && productNode.image) {
-            chosenHeroUrl = typeof productNode.image === "string" ? productNode.image : productNode.image.url;
+          } else if (brandNode.image) {
+            chosenHeroUrl = typeof brandNode.image === "string" ? brandNode.image : brandNode.image?.url;
           }
 
           if (!chosenHeroUrl) {
@@ -1323,28 +1299,28 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           // Logo image priority:
           // 1) Extracted from HTML (filename contains "logo" or "pumpclip")
           // 2) page.logo_url from metadata
-          // 3) Brand logo if present
+          // 3) Existing Brand logo
 
           if (extractedImages.logoImageUrl) {
             chosenLogoUrl = extractedImages.logoImageUrl;
             console.log(`✓ Using extracted logo image: ${chosenLogoUrl.substring(0, 100)}...`);
           } else if (page.logo_url) {
             chosenLogoUrl = page.logo_url;
-          } else if (brandNode?.logo) {
+          } else if (brandNode.logo) {
             chosenLogoUrl = typeof brandNode.logo === "string" ? brandNode.logo : brandNode.logo?.url;
           }
 
-          // Apply hero image to Product node
-          productNode.image = {
+          // Apply hero image to Brand node
+          brandNode.image = {
             "@type": "ImageObject",
             url: chosenHeroUrl,
             contentUrl: chosenHeroUrl,
             caption: `${beerName} hero image`,
           };
 
-          // Apply logo to Product node if found
+          // Apply logo to Brand node if found
           if (chosenLogoUrl) {
-            productNode.logo = {
+            brandNode.logo = {
               "@type": "ImageObject",
               url: chosenLogoUrl,
               contentUrl: chosenLogoUrl,
@@ -1360,48 +1336,42 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             caption: `${beerName} hero image`,
           };
 
-          console.log("✓ Enriched Product with page-backed descriptive properties");
-
-          // Slim the Brand node so it is secondary, but preserve/add images
-          if (brandNode) {
-            const leanBrand: any = {
-              "@type": brandNode["@type"] || "Brand",
-              "@id": brandNode["@id"],
-              name: beerName,
-              url: brandNode.url,
-              brand: brandNode.brand || { "@id": ORG_ID },
-            };
-
-            // Apply hero image to Brand
-            leanBrand.image = {
-              "@type": "ImageObject",
-              url: chosenHeroUrl,
-              contentUrl: chosenHeroUrl,
-              caption: `${beerName} hero image`,
-            };
-
-            // Apply logo to Brand if found
-            if (chosenLogoUrl) {
-              leanBrand.logo = {
-                "@type": "ImageObject",
-                url: chosenLogoUrl,
-                contentUrl: chosenLogoUrl,
-                caption: `${beerName} logo`,
-              };
-            }
-
-            // Replace the existing Brand node with the lean version
-            const index = graph.indexOf(brandNode);
-            if (index !== -1) graph[index] = leanBrand;
-
-            console.log("✓ Slimmed Brand node with extracted images for beer detail page");
+          // Ensure WebPage has correct @id and types for AboutPage
+          pageWebPageNode["@id"] = webpageId;
+          const existingTypes = Array.isArray(pageWebPageNode["@type"])
+            ? pageWebPageNode["@type"]
+            : [pageWebPageNode["@type"]];
+          if (!existingTypes.includes("AboutPage")) {
+            pageWebPageNode["@type"] = [...existingTypes.filter((t: string) => t !== "WebPage"), "WebPage", "AboutPage"];
           }
 
-          // Ensure WebPage mainEntity/about point ONLY to Product
-          pageWebPageNode.mainEntity = { "@id": productId };
-          pageWebPageNode.about = { "@id": productId };
+          // Ensure WebPage mainEntity/about point to Brand (not Product)
+          pageWebPageNode.mainEntity = { "@id": brandId };
+          pageWebPageNode.about = { "@id": brandId };
 
-          console.log("✓ Linked WebPage mainEntity/about to Product");
+          console.log("✓ Linked WebPage mainEntity/about to Brand");
+
+          // ========================================
+          // REMOVE PRODUCT/OFFER NODES FROM BEER PAGES
+          // ========================================
+          // Beer domain is strictly non-transactional: no Product, Offer, AggregateOffer
+          const commerceTypes = ["Product", "Offer", "AggregateOffer", "ProductModel"];
+          const beforeLength = graph.length;
+
+          for (let i = graph.length - 1; i >= 0; i--) {
+            const node = graph[i];
+            const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+            const hasCommerceType = types.some((t: string) => commerceTypes.includes(t));
+
+            if (hasCommerceType) {
+              graph.splice(i, 1);
+            }
+          }
+
+          const removedCount = beforeLength - graph.length;
+          if (removedCount > 0) {
+            console.log(`✓ Removed ${removedCount} Product/Offer node(s) from Beer detail page`);
+          }
         }
       }
 
@@ -1415,9 +1385,9 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         });
 
         if (breadcrumbNode && breadcrumbNode.itemListElement) {
-          // Get cleaned beer name from Product node
-          const productNode = graph.find((n: any) => n["@id"] === `${canonicalUrl}#product`);
-          const beerName = productNode?.name || canonicalUrl.split("/").pop()?.replace(/-/g, " ") || "Beer";
+          // Get cleaned beer name from Brand node (not Product - Beer is Brand-first)
+          const brandNode = graph.find((n: any) => n["@id"] === `${canonicalUrl}#brand`);
+          const beerName = brandNode?.name || canonicalUrl.split("/").pop()?.replace(/-/g, " ") || "Beer";
 
           // Normalize breadcrumbs: Home → Beers (canonical URL) → Beer name (clean)
           breadcrumbNode.itemListElement = [
@@ -1445,11 +1415,12 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         }
       }
 
-      // STEP 7: /Beers collection ItemList → Product @ids
-      // For the /Beers collection page, update ItemList to reference beer Product nodes
-      // by @id instead of standalone Brand blobs, strengthening graph connectivity.
+      // STEP 7: /Beers collection ItemList → Brand @ids
+      // Beer Domain Rule v2.3: Brand-first, non-transactional
+      // For the /Beers collection page, update ItemList to reference beer Brand nodes
+      // by @id instead of Product references, ensuring Brand-first architecture.
       if (isBeersCollectionPage) {
-        console.log("/Beers collection page detected - updating ItemList to reference Products");
+        console.log("/Beers collection page detected - updating ItemList to reference Brands");
 
         const beersItemList = graph.find((node: any) => {
           const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
@@ -1457,33 +1428,89 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         });
 
         if (beersItemList && Array.isArray(beersItemList.itemListElement)) {
-          // Build a Set of existing Product @ids
-          const existingProductIds = new Set(
-            graph
-              .filter((node: any) => {
-                const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
-                return types.includes("Product");
-              })
-              .map((node: any) => node["@id"])
-              .filter((id: any) => typeof id === "string"),
-          );
-
           let updatedCount = 0;
 
           beersItemList.itemListElement.forEach((listItem: any) => {
-            if (listItem.item && listItem.item.url) {
+            // Handle case where item is an object with url property
+            if (listItem.item && typeof listItem.item === "object" && listItem.item.url) {
               const itemUrl = listItem.item.url;
-              const expectedProductId = `${itemUrl}#product`;
-
-              if (existingProductIds.has(expectedProductId)) {
-                listItem.item = { "@id": expectedProductId };
+              // Normalize to Brand @id
+              const brandId = `${itemUrl}#brand`;
+              listItem.item = { "@id": brandId };
+              updatedCount++;
+            }
+            // Handle case where item is a string URL
+            else if (listItem.item && typeof listItem.item === "string") {
+              const itemUrl = listItem.item;
+              // Only process beer detail page URLs (not the collection itself)
+              if (itemUrl.toLowerCase().includes("/beers/") && !itemUrl.toLowerCase().endsWith("/beers")) {
+                const brandId = `${itemUrl}#brand`;
+                listItem.item = { "@id": brandId };
                 updatedCount++;
               }
-              // Fallback: keep existing Brand object if Product doesn't exist
+            }
+            // Handle case where item already has @id but points to #product
+            else if (listItem.item && typeof listItem.item === "object" && listItem.item["@id"]) {
+              const existingId = listItem.item["@id"];
+              if (existingId.endsWith("#product")) {
+                // Convert #product to #brand
+                const brandId = existingId.replace(/#product$/, "#brand");
+                listItem.item = { "@id": brandId };
+                updatedCount++;
+              }
             }
           });
 
-          console.log(`✓ Updated ${updatedCount} /Beers ItemList items to reference Product @ids`);
+          console.log(`✓ Updated ${updatedCount} /Beers ItemList items to reference Brand @ids`);
+        }
+
+        // Also ensure the /Beers collection WebPage has correct types
+        const collectionWebPage = graph.find((node: any) => {
+          const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+          return types.includes("WebPage") && node.url === canonicalUrl;
+        });
+
+        if (collectionWebPage) {
+          const existingTypes = Array.isArray(collectionWebPage["@type"])
+            ? collectionWebPage["@type"]
+            : [collectionWebPage["@type"]];
+
+          // Ensure CollectionPage is in the types
+          if (!existingTypes.includes("CollectionPage")) {
+            collectionWebPage["@type"] = [
+              ...existingTypes.filter((t: string) => t !== "WebPage"),
+              "WebPage",
+              "CollectionPage",
+            ];
+          }
+
+          // If ItemList exists, link mainEntity/about to it
+          if (beersItemList && beersItemList["@id"]) {
+            collectionWebPage.mainEntity = { "@id": beersItemList["@id"] };
+            collectionWebPage.about = { "@id": beersItemList["@id"] };
+          }
+
+          console.log("✓ Ensured /Beers collection WebPage has CollectionPage type");
+        }
+
+        // STEP 7a: Remove any Product/Offer nodes from collection page too
+        // Beer domain is strictly non-transactional at all levels
+        const commerceTypes = ["Product", "Offer", "AggregateOffer", "ProductModel"];
+        const beforeLength = graph.length;
+
+        for (let i = graph.length - 1; i >= 0; i--) {
+          const node = graph[i];
+          const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+          const hasCommerceType = types.some((t: string) => commerceTypes.includes(t));
+
+          if (hasCommerceType) {
+            graph.splice(i, 1);
+          }
+        }
+
+        const removedCount = beforeLength - graph.length;
+        if (removedCount > 0) {
+          console.log(`✓ Removed ${removedCount} Product/Offer node(s) from Beer collection page`);
         }
       }
 
@@ -1906,6 +1933,47 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         console.warn("See docs/schema-quality-charter.md for quality standards");
       } else {
         console.log("✓ Schema Quality Charter: All checks passed");
+      }
+
+      // ========================================
+      // FINAL BEER-DOMAIN VALIDATION
+      // ----------------------------------------
+      // Beer Domain Rule v2.3: Brand-first, non-transactional
+      // Final safety check: Beer-domain @graph must NEVER contain:
+      // - Product, Offer, AggregateOffer, or any ecommerce types
+      // This is a last-line-of-defence validation after all processing.
+      // ========================================
+      if (pageDomain === "Beer") {
+        const commerceTypes = ["Product", "Offer", "AggregateOffer", "ProductModel"];
+        const offendingNodes: string[] = [];
+
+        graph.forEach((node: any) => {
+          const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+          const foundCommerce = types.filter((t: string) => commerceTypes.includes(t));
+          if (foundCommerce.length > 0) {
+            offendingNodes.push(`${node["@id"] || "unknown"} (${foundCommerce.join(", ")})`);
+          }
+        });
+
+        if (offendingNodes.length > 0) {
+          // Log error but also defensively strip them out
+          console.error(`[Beer Domain Validation] ERROR: Found ${offendingNodes.length} commerce node(s) in Beer-domain schema:`);
+          offendingNodes.forEach((n) => console.error(`  - ${n}`));
+          charterWarnings.push(`BEER DOMAIN VIOLATION: Found Product/Offer schema in Beer-domain output: ${offendingNodes.join("; ")}`);
+
+          // Defensive removal (should not be needed if earlier steps worked correctly)
+          for (let i = graph.length - 1; i >= 0; i--) {
+            const node = graph[i];
+            const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+            const hasCommerceType = types.some((t: string) => commerceTypes.includes(t));
+            if (hasCommerceType) {
+              graph.splice(i, 1);
+            }
+          }
+          console.log(`✓ Defensively removed commerce nodes from Beer-domain output`);
+        } else {
+          console.log("✓ Beer-domain validation passed: No Product/Offer nodes in output");
+        }
       }
 
       // ========================================
