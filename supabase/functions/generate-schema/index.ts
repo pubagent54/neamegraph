@@ -1490,12 +1490,12 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // ========================================
       // STEP 8: NON-BEER PAGE HERO IMAGE HANDLING
       // ----------------------------------------
-      // For Corporate pages (not beer detail or beer collection), extract
-      // hero image from HTML and set WebPage.image + primaryImageOfPage.
+      // For Corporate pages AND the /Beers collection (NOT beer detail pages),
+      // extract hero image from HTML and set WebPage.image + primaryImageOfPage.
       // Organization.logo is already set to ORG_LOGO_URL in STEP 1a.
       // All logo fields use the canonical corporate logo.
       // ========================================
-      if (!isBeerDetailPage) {
+      if (!isBeerDetailPage || isBeersCollectionPage) {
         console.log("[Non-beer page] Extracting hero image");
 
         // Helper: Robust URL normalisation for non-beer images
