@@ -471,80 +471,140 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
 /**
  * Canonical Shepherd Neame Organization configuration
  *
- * IMPORTANT: This must stay in sync with src/config/organization.ts
- * These are the single source of truth for the Organization node.
+ * MASTER LOCKER: These constants are the single source of truth for
+ * Organization and WebSite nodes across ALL schema generation.
  */
 const ORG_ID = "https://www.shepherdneame.co.uk/#organization";
-const ORG_NAME = "Shepherd Neame Limited";
 const ORG_URL = "https://www.shepherdneame.co.uk";
 const ORG_LOGO_URL = "https://www.shepherdneame.co.uk/sites/default/files/shepherd-neame-logo-square-1024.png";
 
-const ORG_DESCRIPTION =
-  "Shepherd Neame Limited is listed on the Aquis Stock Exchange and is Britain's oldest brewer, based in Faversham, Kent. It owns and operates a large estate of pubs and hotels across Kent, London and the South East.";
+// Canonical master Organization node ("locker" schema)
+const MASTER_ORG_NODE: any = {
+  "@type": ["Organization", "Corporation"],
+  "@id": "https://www.shepherdneame.co.uk/#organization",
+  "name": "Shepherd Neame Limited",
+  "url": "https://www.shepherdneame.co.uk",
+  "description": "Shepherd Neame is an independent family brewer, pub and hotel operator based in Faversham, Kent, widely recognised as Britain's oldest brewer.",
+  "foundingDate": "1698",
+  "foundingLocation": {
+    "@type": "Place",
+    "name": "Faversham, Kent, UK"
+  },
+  "slogan": "Britain's Oldest Brewer",
+  "logo": {
+    "@id": "https://www.shepherdneame.co.uk/#logo"
+  },
+  "image": {
+    "@id": "https://www.shepherdneame.co.uk/#logo"
+  },
+  "address": {
+    "@id": "https://www.shepherdneame.co.uk/#org-address"
+  },
+  "telephone": "+44 1795 532206",
+  "email": "company@shepherd-neame.co.uk",
+  "leiCode": "2138005EBUHGVOACDX31",
+  "identifier": [
+    {
+      "@type": "PropertyValue",
+      "propertyID": "Companies House",
+      "value": "00138256",
+      "url": "https://find-and-update.company-information.service.gov.uk/company/00138256"
+    },
+    {
+      "@type": "PropertyValue",
+      "propertyID": "AQSE Ticker",
+      "value": "SHEP",
+      "url": "https://www.aquis.eu/companies/shepherd-neame"
+    }
+  ],
+  "tickerSymbol": "AQSE:SHEP",
+  "sameAs": [
+    "https://www.wikidata.org/wiki/Q12002324",
+    "https://en.wikipedia.org/wiki/Shepherd_Neame_Brewery",
+    "https://www.linkedin.com/company/shepherd-neame/",
+    "https://www.facebook.com/ShepherdNeame",
+    "https://twitter.com/shepherdneame",
+    "https://www.instagram.com/shepherdneame/",
+    "https://www.youtube.com/user/ShepherdNeameBrewery"
+  ],
+  "memberOf": [
+    {
+      "@type": "Organization",
+      "name": "British Beer & Pub Association",
+      "url": "https://beerandpub.com/"
+    }
+  ],
+  "areaServed": [
+    {
+      "@type": "Place",
+      "name": "South East England"
+    },
+    {
+      "@type": "Country",
+      "name": "United Kingdom"
+    }
+  ],
+  "contactPoint": [
+    {
+      "@type": "ContactPoint",
+      "contactType": "Customer Service",
+      "telephone": "+44 1795 532206",
+      "email": "company@shepherd-neame.co.uk",
+      "areaServed": "GB",
+      "availableLanguage": ["en-GB", "en"]
+    },
+    {
+      "@type": "ContactPoint",
+      "contactType": "Investor Relations",
+      "telephone": "+44 1795 532206",
+      "email": "investors@shepherdneame.co.uk",
+      "areaServed": "GB",
+      "availableLanguage": ["en-GB", "en"]
+    }
+  ],
+  "mainEntityOfPage": {
+    "@id": "https://www.shepherdneame.co.uk/#webpage"
+  }
+};
 
-const ORG_SAME_AS = [
-  "https://en.wikipedia.org/wiki/Shepherd_Neame_Brewery",
-  "https://www.wikidata.org/wiki/Q748035",
-  "https://www.instagram.com/shepherdneame",
-  "https://www.facebook.com/shepherdneame",
-  "https://www.linkedin.com/company/shepherd-neame/",
-  "https://twitter.com/shepherdneame",
-];
-
-const ORG_FOUNDING_DATE = "1698";
-const ORG_FOUNDER_NAME = "Richard Marsh";
-
-const ORG_ADDRESS = {
-  streetAddress: "17 Court Street",
-  addressLocality: "Faversham",
-  addressRegion: "Kent",
-  postalCode: "ME13 7AX",
-  addressCountry: "United Kingdom",
+// Canonical master WebSite node ("locker" schema)
+const MASTER_WEBSITE_NODE: any = {
+  "@type": "WebSite",
+  "@id": "https://www.shepherdneame.co.uk/#website",
+  "url": "https://www.shepherdneame.co.uk",
+  "name": "Shepherd Neame",
+  "description": "Shepherd Neame's official website, featuring its brewery, beers, pubs and hotels across Kent, London and the South East.",
+  "publisher": {
+    "@id": "https://www.shepherdneame.co.uk/#organization"
+  },
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://www.shepherdneame.co.uk/search?keys={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
 };
 
 /**
- * Build default Organization node from hardcoded config
- * Used as fallback when homepage schema is unavailable
+ * Build default Organization node from master locker
+ * Deep-clones to prevent accidental mutation
  */
 function buildDefaultOrgNode(): any {
-  return {
-    "@type": ["Organization", "Corporation"],
-    "@id": ORG_ID,
-    name: ORG_NAME,
-    url: ORG_URL,
-    description: ORG_DESCRIPTION,
-    logo: {
-      "@type": "ImageObject",
-      url: ORG_LOGO_URL,
-    },
-    sameAs: ORG_SAME_AS,
-    foundingDate: ORG_FOUNDING_DATE,
-    founder: { "@type": "Person", name: ORG_FOUNDER_NAME },
-    address: {
-      "@type": "PostalAddress",
-      ...ORG_ADDRESS,
-    },
-  };
+  return JSON.parse(JSON.stringify(MASTER_ORG_NODE));
 }
 
 /**
- * Build default WebSite node from hardcoded config
- * Used as fallback when homepage schema is unavailable
+ * Build default WebSite node from master locker
+ * Deep-clones to prevent accidental mutation
  */
 function buildDefaultWebsiteNode(): any {
-  return {
-    "@type": "WebSite",
-    "@id": "https://www.shepherdneame.co.uk/#website",
-    url: "https://www.shepherdneame.co.uk",
-    name: "Shepherd Neame",
-    publisher: { "@id": ORG_ID },
-  };
+  return JSON.parse(JSON.stringify(MASTER_WEBSITE_NODE));
 }
 
 /**
- * Load canonical Organization and WebSite nodes from the stored homepage schema.
- * Merges homepage data with rich defaults to ensure complete nodes.
- * Falls back to hardcoded defaults if homepage schema is unavailable.
+ * Load canonical Organization and WebSite nodes.
+ * 
+ * Strategy: Start with the rich master locker, overlay any extra fields from
+ * the homepage schema (if available), but ensure master locker core fields always win.
  * 
  * This ensures a single source of truth for Org/WebSite across ALL pages.
  */
@@ -554,7 +614,7 @@ async function getCanonicalOrgAndWebsite(
   const orgId = "https://www.shepherdneame.co.uk/#organization";
   const websiteId = "https://www.shepherdneame.co.uk/#website";
 
-  // Always start with rich defaults
+  // Always start with rich master locker defaults
   const defaultOrg = buildDefaultOrgNode();
   const defaultWebsite = buildDefaultWebsiteNode();
 
@@ -568,7 +628,7 @@ async function getCanonicalOrgAndWebsite(
       .single();
 
     if (homePageError) {
-      console.log(`[Canonical Org/WebSite] Homepage query error: ${homePageError.message}, using defaults`);
+      console.log(`[Canonical Org/WebSite] Homepage query error: ${homePageError.message}, using master locker`);
       return {
         orgNode: defaultOrg,
         websiteNode: defaultWebsite,
@@ -577,7 +637,7 @@ async function getCanonicalOrgAndWebsite(
     }
 
     if (!homePage) {
-      console.log("[Canonical Org/WebSite] No homepage found with is_home_page=true, using defaults");
+      console.log("[Canonical Org/WebSite] No homepage found with is_home_page=true, using master locker");
       return {
         orgNode: defaultOrg,
         websiteNode: defaultWebsite,
@@ -597,7 +657,7 @@ async function getCanonicalOrgAndWebsite(
       .single();
 
     if (schemaError) {
-      console.log(`[Canonical Org/WebSite] Schema query error: ${schemaError.message}, using defaults`);
+      console.log(`[Canonical Org/WebSite] Schema query error: ${schemaError.message}, using master locker`);
       return {
         orgNode: defaultOrg,
         websiteNode: defaultWebsite,
@@ -606,7 +666,7 @@ async function getCanonicalOrgAndWebsite(
     }
 
     if (!schemaVersion || !schemaVersion.jsonld) {
-      console.log("[Canonical Org/WebSite] No schema_version found for homepage, using defaults");
+      console.log("[Canonical Org/WebSite] No schema_version found for homepage, using master locker");
       return {
         orgNode: defaultOrg,
         websiteNode: defaultWebsite,
@@ -623,7 +683,7 @@ async function getCanonicalOrgAndWebsite(
         ? JSON.parse(schemaVersion.jsonld)
         : schemaVersion.jsonld;
     } catch (parseErr) {
-      console.log(`[Canonical Org/WebSite] Failed to parse homepage schema JSON: ${parseErr}, using defaults`);
+      console.log(`[Canonical Org/WebSite] Failed to parse homepage schema JSON: ${parseErr}, using master locker`);
       return {
         orgNode: defaultOrg,
         websiteNode: defaultWebsite,
@@ -633,7 +693,7 @@ async function getCanonicalOrgAndWebsite(
 
     const graph = homeJsonld["@graph"];
     if (!Array.isArray(graph)) {
-      console.log("[Canonical Org/WebSite] Homepage schema has no @graph array, using defaults");
+      console.log("[Canonical Org/WebSite] Homepage schema has no @graph array, using master locker");
       return {
         orgNode: defaultOrg,
         websiteNode: defaultWebsite,
@@ -661,31 +721,32 @@ async function getCanonicalOrgAndWebsite(
       });
     }
 
-    // Merge found homepage Org with defaults (homepage overrides defaults for present properties)
-    // This ensures we always have rich data (description, sameAs, logo, etc.) even if homepage is minimal
+    // MERGE STRATEGY: Homepage fields first, then master locker wins
+    // This means: extra fields from homepage are preserved, but master locker core fields overwrite
+    // Order: foundOrg → defaultOrg means default (master locker) wins for shared keys
     const orgNode = foundOrg
       ? {
-          ...defaultOrg,            // Start with rich defaults
-          ...foundOrg,              // Overlay homepage properties
+          ...foundOrg,              // Any extra homepage-only fields first
+          ...defaultOrg,            // Master locker wins for all its fields
           "@id": orgId,             // Force canonical @id
           url: ORG_URL,             // Force canonical url
         }
       : defaultOrg;
 
-    // Merge found homepage WebSite with defaults similarly
+    // Same merge for WebSite
     const websiteNode = foundWebsite
       ? {
-          ...defaultWebsite,        // Start with defaults
-          ...foundWebsite,          // Overlay homepage properties
+          ...foundWebsite,          // Any extra homepage-only fields first
+          ...defaultWebsite,        // Master locker wins
           "@id": websiteId,         // Force canonical @id
           url: "https://www.shepherdneame.co.uk",
           publisher: { "@id": orgId },
         }
       : defaultWebsite;
 
-    const orgSource = foundOrg ? "homepage (merged with defaults)" : "defaults only";
-    const websiteSource = foundWebsite ? "homepage (merged with defaults)" : "defaults only";
-    console.log(`[Canonical Org/WebSite] Loaded from homepage schema (org: ${orgSource}, website: ${websiteSource})`);
+    const orgSource = foundOrg ? "homepage (master locker wins)" : "master locker only";
+    const websiteSource = foundWebsite ? "homepage (master locker wins)" : "master locker only";
+    console.log(`[Canonical Org/WebSite] Loaded (org: ${orgSource}, website: ${websiteSource})`);
 
     return {
       orgNode,
