@@ -543,6 +543,7 @@ function buildDefaultWebsiteNode(): any {
 
 /**
  * Load canonical Organization and WebSite nodes from the stored homepage schema.
+ * Merges homepage data with rich defaults to ensure complete nodes.
  * Falls back to hardcoded defaults if homepage schema is unavailable.
  * 
  * This ensures a single source of truth for Org/WebSite across ALL pages.
@@ -553,40 +554,67 @@ async function getCanonicalOrgAndWebsite(
   const orgId = "https://www.shepherdneame.co.uk/#organization";
   const websiteId = "https://www.shepherdneame.co.uk/#website";
 
+  // Always start with rich defaults
+  const defaultOrg = buildDefaultOrgNode();
+  const defaultWebsite = buildDefaultWebsiteNode();
+
   try {
     // Find the homepage page record
+    console.log("[Canonical Org/WebSite] Looking for homepage with is_home_page=true...");
     const { data: homePage, error: homePageError } = await supabaseClient
       .from("pages")
-      .select("id")
+      .select("id, path")
       .eq("is_home_page", true)
       .single();
 
-    if (homePageError || !homePage) {
-      console.log("[Canonical Org/WebSite] Homepage not found, using defaults");
+    if (homePageError) {
+      console.log(`[Canonical Org/WebSite] Homepage query error: ${homePageError.message}, using defaults`);
       return {
-        orgNode: buildDefaultOrgNode(),
-        websiteNode: buildDefaultWebsiteNode(),
+        orgNode: defaultOrg,
+        websiteNode: defaultWebsite,
         fromHomepage: false,
       };
     }
 
-    // Get the latest approved schema version for homepage (prefer approved, fall back to any)
+    if (!homePage) {
+      console.log("[Canonical Org/WebSite] No homepage found with is_home_page=true, using defaults");
+      return {
+        orgNode: defaultOrg,
+        websiteNode: defaultWebsite,
+        fromHomepage: false,
+      };
+    }
+
+    console.log(`[Canonical Org/WebSite] Found homepage: id=${homePage.id}, path=${homePage.path}`);
+
+    // Get the latest schema version for homepage (prefer approved, fall back to any)
     const { data: schemaVersion, error: schemaError } = await supabaseClient
       .from("schema_versions")
-      .select("jsonld")
+      .select("jsonld, version_number, status")
       .eq("page_id", homePage.id)
       .order("version_number", { ascending: false })
       .limit(1)
       .single();
 
-    if (schemaError || !schemaVersion || !schemaVersion.jsonld) {
-      console.log("[Canonical Org/WebSite] No homepage schema found, using defaults");
+    if (schemaError) {
+      console.log(`[Canonical Org/WebSite] Schema query error: ${schemaError.message}, using defaults`);
       return {
-        orgNode: buildDefaultOrgNode(),
-        websiteNode: buildDefaultWebsiteNode(),
+        orgNode: defaultOrg,
+        websiteNode: defaultWebsite,
         fromHomepage: false,
       };
     }
+
+    if (!schemaVersion || !schemaVersion.jsonld) {
+      console.log("[Canonical Org/WebSite] No schema_version found for homepage, using defaults");
+      return {
+        orgNode: defaultOrg,
+        websiteNode: defaultWebsite,
+        fromHomepage: false,
+      };
+    }
+
+    console.log(`[Canonical Org/WebSite] Found homepage schema: v${schemaVersion.version_number}, status=${schemaVersion.status}, jsonld length=${schemaVersion.jsonld.length}`);
 
     // Parse the homepage JSON-LD
     let homeJsonld: any;
@@ -595,59 +623,69 @@ async function getCanonicalOrgAndWebsite(
         ? JSON.parse(schemaVersion.jsonld)
         : schemaVersion.jsonld;
     } catch (parseErr) {
-      console.log("[Canonical Org/WebSite] Failed to parse homepage schema, using defaults");
+      console.log(`[Canonical Org/WebSite] Failed to parse homepage schema JSON: ${parseErr}, using defaults`);
       return {
-        orgNode: buildDefaultOrgNode(),
-        websiteNode: buildDefaultWebsiteNode(),
+        orgNode: defaultOrg,
+        websiteNode: defaultWebsite,
         fromHomepage: false,
       };
     }
 
     const graph = homeJsonld["@graph"];
     if (!Array.isArray(graph)) {
-      console.log("[Canonical Org/WebSite] Homepage schema has no @graph, using defaults");
+      console.log("[Canonical Org/WebSite] Homepage schema has no @graph array, using defaults");
       return {
-        orgNode: buildDefaultOrgNode(),
-        websiteNode: buildDefaultWebsiteNode(),
+        orgNode: defaultOrg,
+        websiteNode: defaultWebsite,
         fromHomepage: false,
       };
     }
 
-    // Extract Organization node
+    console.log(`[Canonical Org/WebSite] Homepage @graph has ${graph.length} nodes`);
+
+    // Extract Organization node by @id first, then by type
     let foundOrg = graph.find((node: any) => node["@id"] === orgId);
     if (!foundOrg) {
-      // Try finding by type if @id doesn't match exactly
       foundOrg = graph.find((node: any) => {
         const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
         return types.includes("Organization") || types.includes("Corporation");
       });
     }
 
-    // Extract WebSite node
+    // Extract WebSite node by @id first, then by type
     let foundWebsite = graph.find((node: any) => node["@id"] === websiteId);
     if (!foundWebsite) {
-      // Try finding by type if @id doesn't match exactly
       foundWebsite = graph.find((node: any) => {
         const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
         return types.includes("WebSite");
       });
     }
 
-    // Build final nodes, ensuring canonical @id values
+    // Merge found homepage Org with defaults (homepage overrides defaults for present properties)
+    // This ensures we always have rich data (description, sameAs, logo, etc.) even if homepage is minimal
     const orgNode = foundOrg
-      ? { ...foundOrg, "@id": orgId, url: ORG_URL }
-      : buildDefaultOrgNode();
+      ? {
+          ...defaultOrg,            // Start with rich defaults
+          ...foundOrg,              // Overlay homepage properties
+          "@id": orgId,             // Force canonical @id
+          url: ORG_URL,             // Force canonical url
+        }
+      : defaultOrg;
 
+    // Merge found homepage WebSite with defaults similarly
     const websiteNode = foundWebsite
       ? {
-          ...foundWebsite,
-          "@id": websiteId,
+          ...defaultWebsite,        // Start with defaults
+          ...foundWebsite,          // Overlay homepage properties
+          "@id": websiteId,         // Force canonical @id
           url: "https://www.shepherdneame.co.uk",
           publisher: { "@id": orgId },
         }
-      : buildDefaultWebsiteNode();
+      : defaultWebsite;
 
-    console.log(`[Canonical Org/WebSite] Loaded from homepage schema (org: ${foundOrg ? "found" : "default"}, website: ${foundWebsite ? "found" : "default"})`);
+    const orgSource = foundOrg ? "homepage (merged with defaults)" : "defaults only";
+    const websiteSource = foundWebsite ? "homepage (merged with defaults)" : "defaults only";
+    console.log(`[Canonical Org/WebSite] Loaded from homepage schema (org: ${orgSource}, website: ${websiteSource})`);
 
     return {
       orgNode,
@@ -655,10 +693,10 @@ async function getCanonicalOrgAndWebsite(
       fromHomepage: foundOrg !== undefined || foundWebsite !== undefined,
     };
   } catch (err) {
-    console.error("[Canonical Org/WebSite] Error loading from homepage:", err);
+    console.error("[Canonical Org/WebSite] Unexpected error loading from homepage:", err);
     return {
-      orgNode: buildDefaultOrgNode(),
-      websiteNode: buildDefaultWebsiteNode(),
+      orgNode: defaultOrg,
+      websiteNode: defaultWebsite,
       fromHomepage: false,
     };
   }
