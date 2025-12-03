@@ -392,9 +392,9 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
     // =====================
     // CRITICAL: Only select logos that belong to THIS beer, not "related beers"
     // Priority (within each level, prefer Next.js URLs):
-    // 1. Logo with beer name in URL/alt AND NOT in related section
-    // 2. Logo with beer name in URL/alt (any location)
-    // 3. Logo pattern NOT in related section
+    // 1. Logo with beer name in URL/alt AND NOT in related section (best case)
+    // 2. Logo with beer name in URL/alt from ANY location (beer-specific badge trumps generic logo)
+    // 3. Logo pattern NOT in related section (generic logo fallback)
     // 4. Fallback: any logo pattern (last resort)
     
     // Filter candidates for logo selection - exclude related beers section for primary picks
@@ -411,20 +411,26 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
       );
     }
 
-    // 2. Logo pattern in main content (no beer name match, but at least not from related section)
+    // 2. Beer name match from ANY location (even related section) - beer-specific badge always beats generic logo
+    if (!logoCandidate) {
+      logoCandidate = candidatePool.find(
+        (c) => c.isNextJs && containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
+      );
+    }
+    
+    if (!logoCandidate) {
+      logoCandidate = candidatePool.find(
+        (c) => containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
+      );
+    }
+
+    // 3. Generic logo pattern in main content (no beer name match, but at least not from related section)
     if (!logoCandidate) {
       logoCandidate = mainContentLogoCandidates.find((c) => c.isNextJs && isLogoCandidate(c.innerUrl));
     }
 
     if (!logoCandidate) {
       logoCandidate = mainContentLogoCandidates.find((c) => isLogoCandidate(c.innerUrl));
-    }
-    
-    // 3. Final fallback: any logo with beer name match (even from related section, if it matches our beer)
-    if (!logoCandidate) {
-      logoCandidate = candidatePool.find(
-        (c) => containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
-      );
     }
 
     if (logoCandidate) {
