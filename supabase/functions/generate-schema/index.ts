@@ -1509,52 +1509,64 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         
         // Helper: Robust URL normalisation for non-beer images
         // Returns null for invalid/empty URLs, fully qualified absolute URL otherwise
+        // Handles Next.js /_next/image wrappers with both absolute and relative inner URLs
         function normaliseNonBeerUrl(raw: string | null | undefined, pageUrl?: string): string | null {
           if (!raw || raw.trim() === "") return null;
-          
+
           const trimmed = raw.trim();
           const canonicalOrigin = "https://www.shepherdneame.co.uk";
-          
+          const cdnOrigin = "https://snsites.co.uk";
+
           try {
-            // Already absolute URL
-            if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-              const url = new URL(trimmed);
-              // Handle Next.js image wrapper - extract inner URL
-              if (url.pathname === "/_next/image") {
-                const inner = url.searchParams.get("url");
-                if (inner) {
-                  return decodeURIComponent(inner);
-                }
-              }
-              // Return full URL with query string and hash intact
-              return url.toString();
-            }
-            
             // Protocol-relative URL
             if (trimmed.startsWith("//")) {
               return `https:${trimmed}`;
             }
-            
-            // Absolute path (starts with /)
-            if (trimmed.startsWith("/")) {
-              const url = new URL(trimmed, canonicalOrigin);
-              // Handle Next.js image wrapper
-              if (url.pathname === "/_next/image") {
-                const inner = url.searchParams.get("url");
-                if (inner) {
-                  return decodeURIComponent(inner);
+
+            // Absolute URLs and absolute paths handled through URL()
+            const isAbsolutePath = trimmed.startsWith("/");
+            const baseForPath = isAbsolutePath ? canonicalOrigin : undefined;
+            const url = new URL(trimmed, baseForPath);
+
+            // Handle Next.js image wrapper - unwrap the inner ?url=
+            if (url.pathname === "/_next/image") {
+              const inner = url.searchParams.get("url");
+              if (inner) {
+                const innerDecoded = decodeURIComponent(inner);
+
+                // Already a full URL (e.g. https://snsites.co.uk/...)
+                if (innerDecoded.startsWith("http://") || innerDecoded.startsWith("https://")) {
+                  return innerDecoded;
                 }
+
+                // Protocol-relative in the inner URL
+                if (innerDecoded.startsWith("//")) {
+                  return `https:${innerDecoded}`;
+                }
+
+                // If it's a CDN /sites path, resolve against snsites.co.uk,
+                // otherwise resolve against the page URL or canonical origin.
+                const base =
+                  innerDecoded.startsWith("/sites/") || innerDecoded.startsWith("sites/")
+                    ? cdnOrigin
+                    : pageUrl || canonicalOrigin;
+
+                return new URL(innerDecoded, base).toString();
               }
-              return url.toString();
             }
-            
-            // Relative path - resolve against page URL or canonical origin
-            const baseUrl = pageUrl || canonicalOrigin;
-            const resolved = new URL(trimmed, baseUrl);
-            return resolved.toString();
+
+            // Not a Next.js wrapper; return fully resolved URL with query + hash intact
+            return url.toString();
           } catch {
-            // If URL parsing fails entirely, return null
-            return null;
+            // Relative path that failed the first URL() call – try resolving against page URL
+            try {
+              const baseUrl = pageUrl || canonicalOrigin;
+              const resolved = new URL(trimmed, baseUrl);
+              return resolved.toString();
+            } catch {
+              // If URL parsing still fails, give up
+              return null;
+            }
           }
         }
         
@@ -1755,11 +1767,43 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           node.image = heroImageObject;
           node.primaryImageOfPage = heroImageObject;
         });
-        
+
+        // Also wire hero + logo to the primary mainEntity for this non-beer page
+        const primaryWebPageNode = webPageNodes.find((node: any) => node.url === canonicalUrl);
+        if (primaryWebPageNode) {
+          // Prefer mainEntity, fall back to about
+          const mainEntityId =
+            (primaryWebPageNode.mainEntity &&
+              typeof primaryWebPageNode.mainEntity === "object" &&
+              (primaryWebPageNode.mainEntity as any)["@id"]) ||
+            (primaryWebPageNode.about &&
+              typeof primaryWebPageNode.about === "object" &&
+              (primaryWebPageNode.about as any)["@id"]) ||
+            null;
+
+          if (mainEntityId) {
+            const mainEntityNode = graph.find((node: any) => node["@id"] === mainEntityId);
+            if (mainEntityNode) {
+              // Use the same hero image for the main entity image
+              (mainEntityNode as any).image = heroImageObject;
+
+              // Ensure the main entity exposes a corporate logo for Schema Weaver
+              if (!(mainEntityNode as any).logo) {
+                (mainEntityNode as any).logo = {
+                  "@type": "ImageObject",
+                  url: logoUrl,
+                  contentUrl: logoUrl
+                };
+              }
+              console.log(`✓ Set mainEntity image + logo for ${mainEntityId}`);
+            }
+          }
+        }
+
         if (webPageNodes.length > 0) {
           console.log(`✓ Set WebPage.image + primaryImageOfPage on ${webPageNodes.length} node(s)`);
         }
-        
+
         // Ensure Organization node has consistent logo (should already be set in STEP 1a)
         // This is defensive - logo should already be correct
         if (orgNode && !orgNode.logo) {
