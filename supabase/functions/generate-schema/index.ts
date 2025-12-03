@@ -4,7 +4,7 @@ import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts
 
 /**
  * Beer Image Extraction Utility
- * 
+ *
  * Extracts hero images and logos from beer page HTML, handling Next.js image URLs.
  * Priority logic:
  * - Hero: og:image with /styles/page_hero/, then any img with page_hero, then beer name match
@@ -18,16 +18,21 @@ interface BeerImages {
 function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: string): BeerImages {
   const canonicalBase = "https://www.shepherdneame.co.uk";
   const result: BeerImages = {};
-  
+
   // Normalize beer name for matching (e.g., "1698" or "Spitfire")
   const beerNameLower = beerName.toLowerCase().replace(/[^a-z0-9]/g, "");
   // Beer slug is the URL-friendly version (e.g., "double-stout", "1698")
-  const beerSlugLower = (beerSlug || beerName).toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  const beerSlugLower = (beerSlug || beerName)
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
   // Also create underscore version for filename matching
   const beerSlugUnderscore = beerSlugLower.replace(/-/g, "_");
-  
-  console.log(`[Beer Image Extraction] Starting extraction for beer: "${beerName}" (normalized: "${beerNameLower}", slug: "${beerSlugLower}")`);
-  
+
+  console.log(
+    `[Beer Image Extraction] Starting extraction for beer: "${beerName}" (normalized: "${beerNameLower}", slug: "${beerSlugLower}")`,
+  );
+
   // Helper: Normalize a URL and extract the inner URL if it's a Next.js image wrapper
   // Returns isNextJs flag to help prioritize these URLs
   interface NormalizedUrl {
@@ -35,11 +40,11 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
     innerUrl: string;
     isNextJs: boolean;
   }
-  
+
   function normaliseUrl(raw: string): NormalizedUrl {
     try {
       const url = new URL(raw, canonicalBase);
-      
+
       // Check if this is a Next.js image wrapper URL
       if (url.pathname === "/_next/image") {
         const inner = url.searchParams.get("url");
@@ -49,58 +54,62 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
           return {
             fullUrl: url.toString(),
             innerUrl: decoded,
-            isNextJs: true
+            isNextJs: true,
           };
         }
       }
-      
+
       return { fullUrl: url.toString(), innerUrl: url.toString(), isNextJs: false };
     } catch {
       return { fullUrl: raw, innerUrl: raw, isNextJs: false };
     }
   }
-  
+
   // Helper: Check if URL matches hero patterns (in the innerUrl for matching)
   function isHeroCandidate(innerUrl: string): boolean {
     const lower = innerUrl.toLowerCase();
-    return lower.includes("/styles/page_hero/") || 
-           lower.includes("page_hero") ||
-           lower.includes("/styles/hero_") ||
-           lower.includes("hero_");
+    return (
+      lower.includes("/styles/page_hero/") ||
+      lower.includes("page_hero") ||
+      lower.includes("/styles/hero_") ||
+      lower.includes("hero_")
+    );
   }
-  
+
   // Helper: Check if URL matches logo patterns (in the innerUrl for matching)
   function isLogoCandidate(innerUrl: string): boolean {
     const lower = innerUrl.toLowerCase();
     // Extract filename from path
     const filename = lower.split("/").pop() || "";
-    return filename.includes("logo") || 
-           filename.includes("lockup") || 
-           filename.includes("pumpclip") ||
-           filename.includes("badge") ||
-           filename.includes("roundel");
+    return (
+      filename.includes("logo") ||
+      filename.includes("lockup") ||
+      filename.includes("pumpclip") ||
+      filename.includes("badge") ||
+      filename.includes("roundel")
+    );
   }
-  
+
   // Helper: Check if URL or alt text contains the CURRENT beer's name/slug
   function containsBeerName(innerUrl: string, alt?: string): boolean {
     if (!beerNameLower && !beerSlugLower) return false;
     const urlLower = innerUrl.toLowerCase();
     const altLower = (alt || "").toLowerCase();
-    
+
     // Check URL for beer name/slug matches
     const urlNormalized = urlLower.replace(/[^a-z0-9]/g, "");
     if (urlNormalized.includes(beerNameLower)) return true;
     if (urlLower.includes(beerSlugLower)) return true;
     if (urlLower.includes(beerSlugUnderscore)) return true;
-    
+
     // Check alt text for beer name match
     const altNormalized = altLower.replace(/[^a-z0-9]/g, "");
     if (altNormalized.includes(beerNameLower)) return true;
     if (altLower.includes(beerSlugLower)) return true;
-    
+
     return false;
   }
-  
+
   // Helper: Check if image is inside a "related beers" section
   // These sections show other beers (e.g., "The Classic collection" strip)
   function isInRelatedBeersSection(imgElement: any): boolean {
@@ -108,59 +117,63 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
     let parent = imgElement.parentElement;
     let depth = 0;
     const maxDepth = 10; // Don't walk too far up
-    
+
     while (parent && depth < maxDepth) {
       const tagName = parent.tagName?.toLowerCase() || "";
       const className = (parent.getAttribute?.("class") || "").toLowerCase();
       const id = (parent.getAttribute?.("id") || "").toLowerCase();
-      
+
       // Look for headings within this section that indicate related beers
       const headings = parent.querySelectorAll?.("h2, h3, h4");
       if (headings) {
         for (const h of headings) {
           const headingText = (h.textContent || "").toLowerCase();
           // Patterns for related beers sections
-          if (headingText.includes("collection") ||
-              headingText.includes("you might also like") ||
-              headingText.includes("other beers") ||
-              headingText.includes("related beers") ||
-              headingText.includes("more beers") ||
-              headingText.includes("discover more")) {
+          if (
+            headingText.includes("collection") ||
+            headingText.includes("you might also like") ||
+            headingText.includes("other beers") ||
+            headingText.includes("related beers") ||
+            headingText.includes("more beers") ||
+            headingText.includes("discover more")
+          ) {
             return true;
           }
         }
       }
-      
+
       // Check class/id for carousel, slider, related section patterns
-      if (className.includes("carousel") ||
-          className.includes("slider") ||
-          className.includes("related") ||
-          className.includes("collection-strip") ||
-          className.includes("beer-grid") ||
-          className.includes("other-beers") ||
-          id.includes("related") ||
-          id.includes("collection")) {
+      if (
+        className.includes("carousel") ||
+        className.includes("slider") ||
+        className.includes("related") ||
+        className.includes("collection-strip") ||
+        className.includes("beer-grid") ||
+        className.includes("other-beers") ||
+        id.includes("related") ||
+        id.includes("collection")
+      ) {
         return true;
       }
-      
+
       parent = parent.parentElement;
       depth++;
     }
-    
+
     return false;
   }
-  
+
   // Helper: Check if this is a known-bad pattern to exclude
   // CRITICAL: These are zombie URLs that 404 on the live site
   function isKnownBadPattern(innerUrl: string, isNextJs: boolean): boolean {
     const lower = innerUrl.toLowerCase();
-    
+
     // HARD BAN: Legacy theme-based beer images - these ALL 404
     if (lower.includes("/themes/custom/shepherdneame/images/beers/")) {
       console.log(`[Beer Image Extraction] ZOMBIE: Legacy theme path excluded: ${lower.substring(0, 80)}...`);
       return true;
     }
-    
+
     // HARD BAN: Old d8-era zombie paths known to 404 (like 1698_Bottle_0.png, 1698_Lockup_0.png)
     if (lower.includes("/sites/default/files/styles/d8/public/image/")) {
       console.log(`[Beer Image Extraction] ZOMBIE: d8 style image path excluded: ${lower.substring(0, 80)}...`);
@@ -170,50 +183,53 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
       console.log(`[Beer Image Extraction] ZOMBIE: Old 2023-03 image path excluded: ${lower.substring(0, 80)}...`);
       return true;
     }
-    
+
     // Old wysiwyg paths that are always dead
-    if (lower.includes("/styles/sn_wysiwyg_full_width/") ||
-        lower.includes("/styles/sn_wysiwyg_")) {
+    if (lower.includes("/styles/sn_wysiwyg_full_width/") || lower.includes("/styles/sn_wysiwyg_")) {
       return true;
     }
-    
+
     // SVG sprites, icons, social logos etc - never useful for beer images
-    if (lower.includes("sprite") ||
-        lower.includes("favicon") ||
-        lower.includes("icon-") ||
-        lower.includes("logo-sheps") ||
-        lower.includes("/icons/")) {
+    if (
+      lower.includes("sprite") ||
+      lower.includes("favicon") ||
+      lower.includes("icon-") ||
+      lower.includes("logo-sheps") ||
+      lower.includes("/icons/")
+    ) {
       return true;
     }
-    
+
     // CRITICAL: Direct shepherdneame.co.uk /sites/default/files/ paths that are NOT wrapped in _next/image
     // These old Drupal paths often 404 now that the site uses Next.js image optimization
     // Only flag as bad if it's NOT a Next.js wrapped URL AND it's on shepherdneame.co.uk (not snsites.co.uk)
     if (!isNextJs && lower.includes("shepherdneame.co.uk/sites/default/files/")) {
-      console.log(`[Beer Image Extraction] ZOMBIE: Direct SN Drupal path (not via Next.js): ${lower.substring(0, 80)}...`);
+      console.log(
+        `[Beer Image Extraction] ZOMBIE: Direct SN Drupal path (not via Next.js): ${lower.substring(0, 80)}...`,
+      );
       return true;
     }
-    
+
     return false;
   }
-  
+
   // Helper: Check if filename looks like a bottle/pack shot
   function isBottleCandidate(innerUrl: string): boolean {
     const lower = innerUrl.toLowerCase();
     const filename = lower.split("/").pop() || "";
-    return (filename.includes("bottle") || 
-            filename.includes("pack") || 
-            filename.includes("can")) &&
-           containsBeerName(innerUrl);
+    return (
+      (filename.includes("bottle") || filename.includes("pack") || filename.includes("can")) &&
+      containsBeerName(innerUrl)
+    );
   }
-  
+
   try {
     const doc = new DOMParser().parseFromString(html, "text/html");
     if (!doc) {
       console.log("[Beer Image Extraction] Failed to parse HTML");
       return result;
     }
-    
+
     // Collect all candidate images with scoring
     interface ImageCandidate {
       fullUrl: string;
@@ -223,32 +239,32 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
       alt?: string; // alt text for img tags
       isInRelatedSection?: boolean; // true if from a "related beers" section
     }
-    
+
     // Helper: Determine the schema-safe URL for a beer image candidate
     // Rule: If it's a Next.js URL with an inner snsites.co.uk CMS asset, use the inner URL
     // This gives us canonical, CDN-served URLs that don't 404
     const getSchemaImageUrl = (candidate: ImageCandidate): string => {
       const inner = candidate.innerUrl || "";
-      
+
       // Prefer canonical CMS URLs on snsites.co.uk - these are the real CDN-served assets
       if (candidate.isNextJs && inner.startsWith("https://snsites.co.uk/sites/default/files/")) {
         console.log(`[Beer Image Extraction] → Using canonical snsites.co.uk URL: ${inner.substring(0, 100)}...`);
         return inner;
       }
-      
+
       // Also accept direct snsites.co.uk URLs (not wrapped in Next.js)
       if (inner.startsWith("https://snsites.co.uk/sites/default/files/")) {
         console.log(`[Beer Image Extraction] → Using direct snsites.co.uk URL: ${inner.substring(0, 100)}...`);
         return inner;
       }
-      
+
       // Fallback: whatever the browser actually uses (but this may be a wrapper URL)
       console.log(`[Beer Image Extraction] → Fallback to fullUrl: ${candidate.fullUrl.substring(0, 100)}...`);
       return candidate.fullUrl;
     };
-    
+
     const candidates: ImageCandidate[] = [];
-    
+
     // 1. og:image meta tag (highest priority source)
     const ogImage = doc.querySelector('meta[property="og:image"]');
     if (ogImage) {
@@ -256,10 +272,12 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
       if (content) {
         const normalized = normaliseUrl(content);
         candidates.push({ ...normalized, source: "og" });
-        console.log(`[Beer Image Extraction] Found og:image: ${normalized.fullUrl.substring(0, 80)}... (isNextJs: ${normalized.isNextJs})`);
+        console.log(
+          `[Beer Image Extraction] Found og:image: ${normalized.fullUrl.substring(0, 80)}... (isNextJs: ${normalized.isNextJs})`,
+        );
       }
     }
-    
+
     // 2. twitter:image meta tag
     const twitterImage = doc.querySelector('meta[name="twitter:image"]');
     if (twitterImage) {
@@ -269,7 +287,7 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
         candidates.push({ ...normalized, source: "twitter" });
       }
     }
-    
+
     // 3. img tags in main content (filter out related beers sections)
     const imgTags = doc.querySelectorAll("img");
     imgTags.forEach((img: any) => {
@@ -278,27 +296,27 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
         const normalized = normaliseUrl(src);
         const alt = img.getAttribute("alt") || "";
         const isRelated = isInRelatedBeersSection(img);
-        
+
         candidates.push({
           ...normalized,
           source: "img",
           alt,
-          isInRelatedSection: isRelated
+          isInRelatedSection: isRelated,
         });
-        
+
         if (isRelated && isLogoCandidate(normalized.innerUrl)) {
-          console.log(`[Beer Image Extraction] Skipping logo from related section: ${normalized.innerUrl.substring(0, 60)}...`);
+          console.log(
+            `[Beer Image Extraction] Skipping logo from related section: ${normalized.innerUrl.substring(0, 60)}...`,
+          );
         }
       }
     });
-    
+
     console.log(`[Beer Image Extraction] Found ${candidates.length} total image candidates`);
 
     // Filter out known-bad patterns
     const validCandidates = candidates.filter((c) => !isKnownBadPattern(c.innerUrl, c.isNextJs));
-    console.log(
-      `[Beer Image Extraction] After filtering bad patterns: ${validCandidates.length} valid candidates`,
-    );
+    console.log(`[Beer Image Extraction] After filtering bad patterns: ${validCandidates.length} valid candidates`);
 
     // =====================
     // CANDIDATE POOL SELECTION (snsites first)
@@ -311,23 +329,23 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
     // existing sortedCandidates behaviour so other beers still get images.
 
     const snsitesCandidates = validCandidates.filter((c) => {
-      const u = (c.innerUrl || c.fullUrl || '').toLowerCase();
-      return u.includes('snsites.co.uk/sites/default/files/');
+      const u = (c.innerUrl || c.fullUrl || "").toLowerCase();
+      return u.includes("snsites.co.uk/sites/default/files/");
     });
 
     // Sort candidates to prefer Next.js URLs and og:image, as before
     const sortedCandidates = [...validCandidates].sort((a, b) => {
       if (a.isNextJs && !b.isNextJs) return -1;
       if (!a.isNextJs && b.isNextJs) return 1;
-      if (a.source === 'og' && b.source !== 'og') return -1;
-      if (a.source !== 'og' && b.source === 'og') return 1;
+      if (a.source === "og" && b.source !== "og") return -1;
+      if (a.source !== "og" && b.source === "og") return 1;
       return 0;
     });
 
     const candidatePool = snsitesCandidates.length > 0 ? snsitesCandidates : sortedCandidates;
 
     console.log(
-      `[Beer Image Extraction] Using ${snsitesCandidates.length > 0 ? 'snsites-only' : 'all'} candidate pool for hero/logo selection (snsites=${snsitesCandidates.length})`,
+      `[Beer Image Extraction] Using ${snsitesCandidates.length > 0 ? "snsites-only" : "all"} candidate pool for hero/logo selection (snsites=${snsitesCandidates.length})`,
     );
 
     // =====================
@@ -342,9 +360,7 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
     // 6. Bottle/pack shot with beer name
     // 7. Fallback: any og:image
 
-    let heroCandidate = candidatePool.find(
-      (c) => c.source === 'og' && isHeroCandidate(c.innerUrl),
-    );
+    let heroCandidate = candidatePool.find((c) => c.source === "og" && isHeroCandidate(c.innerUrl));
 
     if (!heroCandidate) {
       heroCandidate = candidatePool.find((c) => c.isNextJs && isHeroCandidate(c.innerUrl));
@@ -368,7 +384,7 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
 
     if (!heroCandidate) {
       // Final fallback: any og:image from the current pool
-      heroCandidate = candidatePool.find((c) => c.source === 'og');
+      heroCandidate = candidatePool.find((c) => c.source === "og");
     }
 
     if (heroCandidate) {
@@ -377,14 +393,10 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
       console.log(
         `[Beer Image Extraction] ✓ Selected hero: source=${heroCandidate.source}, isNextJs=${heroCandidate.isNextJs}`,
       );
-      console.log(
-        `[Beer Image Extraction]   innerUrl: ${heroCandidate.innerUrl.substring(0, 120)}...`,
-      );
-      console.log(
-        `[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`,
-      );
+      console.log(`[Beer Image Extraction]   innerUrl: ${heroCandidate.innerUrl.substring(0, 120)}...`);
+      console.log(`[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`);
     } else {
-      console.log('[Beer Image Extraction] ✗ No hero image found');
+      console.log("[Beer Image Extraction] ✗ No hero image found");
     }
 
     // =====================
@@ -396,15 +408,15 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
     // 2. Logo with beer name in URL/alt from ANY location (beer-specific badge trumps generic logo)
     // 3. Logo pattern NOT in related section (generic logo fallback)
     // 4. Fallback: any logo pattern (last resort)
-    
+
     // Filter candidates for logo selection - exclude related beers section for primary picks
     const mainContentLogoCandidates = candidatePool.filter((c) => !c.isInRelatedSection);
-    
+
     // 1. Best: Logo with beer name match, in main content area
     let logoCandidate = mainContentLogoCandidates.find(
       (c) => c.isNextJs && containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
     );
-    
+
     if (!logoCandidate) {
       logoCandidate = mainContentLogoCandidates.find(
         (c) => containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
@@ -417,11 +429,9 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
         (c) => c.isNextJs && containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
       );
     }
-    
+
     if (!logoCandidate) {
-      logoCandidate = candidatePool.find(
-        (c) => containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl),
-      );
+      logoCandidate = candidatePool.find((c) => containsBeerName(c.innerUrl, c.alt) && isLogoCandidate(c.innerUrl));
     }
 
     // 3. Generic logo pattern in main content (no beer name match, but at least not from related section)
@@ -442,30 +452,25 @@ function extractBeerImagesFromHtml(html: string, beerName: string, beerSlug?: st
       console.log(
         `[Beer Logo Selection]   path=${beerSlugLower}, beerSlug=${beerSlugLower}, logoSrc=${schemaUrl.substring(0, 100)}`,
       );
-      console.log(
-        `[Beer Image Extraction]   innerUrl: ${logoCandidate.innerUrl.substring(0, 120)}...`,
-      );
-      console.log(
-        `[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`,
-      );
+      console.log(`[Beer Image Extraction]   innerUrl: ${logoCandidate.innerUrl.substring(0, 120)}...`);
+      console.log(`[Beer Image Extraction]   schemaUrl: ${schemaUrl.substring(0, 120)}...`);
     } else {
-      console.log(
-        '[Beer Image Extraction] ✗ No logo image found (this is OK - not all beers have logos in page)',
-      );
+      console.log("[Beer Image Extraction] ✗ No logo image found (this is OK - not all beers have logos in page)");
     }
-    
-    console.log(`[Beer Image Extraction] Complete for "${beerName}": hero=${result.heroImageUrl ? "✓" : "✗"}, logo=${result.logoImageUrl ? "✓" : "✗"}`);
-    
+
+    console.log(
+      `[Beer Image Extraction] Complete for "${beerName}": hero=${result.heroImageUrl ? "✓" : "✗"}, logo=${result.logoImageUrl ? "✓" : "✗"}`,
+    );
   } catch (err) {
     console.error("[Beer Image Extraction] Error:", err);
   }
-  
+
   return result;
 }
 
 /**
  * Canonical Shepherd Neame Organization configuration
- * 
+ *
  * IMPORTANT: This must stay in sync with src/config/organization.ts
  * These are the single source of truth for the Organization node.
  */
@@ -483,7 +488,7 @@ const ORG_SAME_AS = [
   "https://www.instagram.com/shepherdneame",
   "https://www.facebook.com/shepherdneame",
   "https://www.linkedin.com/company/shepherd-neame/",
-  "https://twitter.com/shepherdneame"
+  "https://twitter.com/shepherdneame",
 ];
 
 const ORG_FOUNDING_DATE = "1698";
@@ -494,7 +499,7 @@ const ORG_ADDRESS = {
   addressLocality: "Faversham",
   addressRegion: "Kent",
   postalCode: "ME13 7AX",
-  addressCountry: "United Kingdom"
+  addressCountry: "United Kingdom",
 };
 
 const corsHeaders = {
@@ -529,19 +534,20 @@ serve(async (req) => {
     if (!isServiceRoleCall) {
       // Regular user call - require authentication
       if (!authHeader) {
-        return new Response(
-          JSON.stringify({ error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      const { data: { user }, error: authError } = await supabase.auth.getUser(
-        authHeader.replace("Bearer ", "")
-      );
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
       if (authError || !user) {
-        return new Response(
-          JSON.stringify({ error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       userId = user.id;
     } else {
@@ -553,10 +559,10 @@ serve(async (req) => {
     const { page_id }: GenerateSchemaRequest = await req.json();
 
     if (!page_id) {
-      return new Response(
-        JSON.stringify({ error: "page_id is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "page_id is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log("Generating schema for page:", page_id);
@@ -564,16 +570,18 @@ serve(async (req) => {
     // 1. Load page context (including wikidata_qid for sameAs injection)
     const { data: page, error: pageError } = await supabase
       .from("pages")
-      .select("id, path, section, page_type, category, faq_mode, logo_url, hero_image_url, is_home_page, domain, beer_abv, beer_style, beer_launch_year, beer_official_url, last_html_hash, has_faq, notes, wikidata_qid")
+      .select(
+        "id, path, section, page_type, category, faq_mode, logo_url, hero_image_url, is_home_page, domain, beer_abv, beer_style, beer_launch_year, beer_official_url, last_html_hash, has_faq, notes, wikidata_qid",
+      )
       .eq("id", page_id)
       .single();
 
     if (pageError || !page) {
       console.error("Error fetching page:", pageError);
-      return new Response(
-        JSON.stringify({ error: "Page not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Page not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ========================================
@@ -586,7 +594,7 @@ serve(async (req) => {
       console.log("Homepage detected - AI generation blocked (manual-only)");
       return new Response(
         JSON.stringify({ error: "Homepage schema is managed manually and cannot be generated by AI." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -598,14 +606,14 @@ serve(async (req) => {
     // ========================================
 
     // Defensive check: UI should prevent Pub calls, but handle gracefully if reached
-    const pageDomain = page.domain || 'Corporate'; // Default to Corporate for existing records
-    
-    if (pageDomain === 'Pub') {
+    const pageDomain = page.domain || "Corporate"; // Default to Corporate for existing records
+
+    if (pageDomain === "Pub") {
       console.log("Pub lane - should not reach edge function (UI should block)");
-      return new Response(
-        JSON.stringify({ error: "Pub schema generation is not yet implemented (Phase 2)" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Pub schema generation is not yet implemented (Phase 2)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ========================================
@@ -616,44 +624,37 @@ serve(async (req) => {
 
     // Check if HTML has been fetched
     if (!page.last_html_hash) {
-      return new Response(
-        JSON.stringify({ error: "HTML not fetched yet. Please fetch HTML first." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "HTML not fetched yet. Please fetch HTML first." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Load settings for canonical_base_url
-    const { data: settings, error: settingsError } = await supabase
-      .from("settings")
-      .select("*")
-      .single();
+    const { data: settings, error: settingsError } = await supabase.from("settings").select("*").single();
 
     if (settingsError || !settings) {
       console.error("Error fetching settings:", settingsError);
-      return new Response(
-        JSON.stringify({ error: "Settings not found" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Settings not found" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Check schema engine version first to determine which rules to load
     const schemaEngineVersion = settings.schema_engine_version || "v1";
-    
+
     // For v1, load the active rule from rules table
     let activeRule = null;
     if (schemaEngineVersion === "v1") {
-      const { data: rule, error: ruleError } = await supabase
-        .from("rules")
-        .select("*")
-        .eq("is_active", true)
-        .single();
+      const { data: rule, error: ruleError } = await supabase.from("rules").select("*").eq("is_active", true).single();
 
       if (ruleError || !rule) {
         console.error("Error fetching active rule:", ruleError);
-        return new Response(
-          JSON.stringify({ error: "No active rule found. Please activate a rule first." }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "No active rule found. Please activate a rule first." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       activeRule = rule;
     }
@@ -676,35 +677,38 @@ serve(async (req) => {
 
     if (!htmlResponse.ok) {
       console.error("Failed to fetch HTML:", htmlResponse.status);
-      return new Response(
-        JSON.stringify({ error: "Failed to fetch HTML for schema generation" }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Failed to fetch HTML for schema generation" }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const html = await htmlResponse.text();
     console.log("HTML fetched for schema generation, length:", html.length);
 
     // Trim HTML to reasonable size (keep first 50k characters to avoid token limits)
-    const trimmedHtml = html.length > 50000 ? html.substring(0, 50000) + "\n<!-- HTML truncated for AI processing -->" : html;
+    const trimmedHtml =
+      html.length > 50000 ? html.substring(0, 50000) + "\n<!-- HTML truncated for AI processing -->" : html;
 
     // Build canonical_url
     const canonicalBaseUrl = settings.canonical_base_url.replace(/\/$/, "");
     const canonicalUrl = `${canonicalBaseUrl}${page.path}`;
-    
+
     if (schemaEngineVersion === "v2") {
       // Load v2 rules from the rules table based on domain, page_type, and category
       // The rules matching system handles missing/invalid page_type by falling back to default domain rule
-      console.log(`Loading v2 rules for domain: ${pageDomain}, pageType: ${page.page_type || 'none'}, category: ${page.category || 'none'}`);
-      
+      console.log(
+        `Loading v2 rules for domain: ${pageDomain}, pageType: ${page.page_type || "none"}, category: ${page.category || "none"}`,
+      );
+
       // RULES MATCHING ALGORITHM (with domain priority):
       // 1. Try: domain + page_type + category match
       // 2. Try: domain + page_type (category null)
       // 3. Try: domain-level default (page_type & category both null)
       // 4. Fall back to any active rule if no domain match
-      
+
       let matchedRule = null;
-      
+
       // Try domain + page_type + category
       if (page.page_type && page.category) {
         const { data: specificRule } = await supabase
@@ -717,13 +721,15 @@ serve(async (req) => {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        
+
         if (specificRule) {
           matchedRule = specificRule;
-          console.log(`Using specific rule for ${pageDomain} · ${page.page_type} · ${page.category}: ${matchedRule.name}`);
+          console.log(
+            `Using specific rule for ${pageDomain} · ${page.page_type} · ${page.category}: ${matchedRule.name}`,
+          );
         }
       }
-      
+
       // Try domain + page_type (category null)
       if (!matchedRule && page.page_type) {
         const { data: pageTypeRule } = await supabase
@@ -736,13 +742,13 @@ serve(async (req) => {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        
+
         if (pageTypeRule) {
           matchedRule = pageTypeRule;
           console.log(`Using page type rule for ${pageDomain} · ${page.page_type}: ${matchedRule.name}`);
         }
       }
-      
+
       // Try domain-level default (page_type & category both null)
       if (!matchedRule) {
         const { data: domainRule } = await supabase
@@ -755,13 +761,13 @@ serve(async (req) => {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        
+
         if (domainRule) {
           matchedRule = domainRule;
           console.log(`Using domain-level default rule for ${pageDomain}: ${matchedRule.name}`);
         }
       }
-      
+
       // Final fallback: any active default rule (no domain filter)
       if (!matchedRule) {
         const { data: fallbackRule } = await supabase
@@ -773,9 +779,9 @@ serve(async (req) => {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        
+
         matchedRule = fallbackRule;
-        
+
         if (matchedRule) {
           console.log(`Using fallback default rule (no domain match): ${matchedRule.name}`);
         }
@@ -783,16 +789,16 @@ serve(async (req) => {
 
       if (!matchedRule) {
         return new Response(
-          JSON.stringify({ 
-            error: `No active rule found for domain "${pageDomain}". Please create a rule for this domain in the Brain Rules section.`
+          JSON.stringify({
+            error: `No active rule found for domain "${pageDomain}". Please create a rule for this domain in the Brain Rules section.`,
           }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
       const v2Rules = matchedRule.body;
       const usedRuleId = matchedRule.id;
-      console.log(`Final matched rule: ${matchedRule.name} (domain: ${matchedRule.domain || 'any'})`);
+      console.log(`Final matched rule: ${matchedRule.name} (domain: ${matchedRule.domain || "any"})`);
       console.log(`v2 rules loaded, length: ${v2Rules.length}`);
 
       // Build v2 user message with rules at the top
@@ -822,23 +828,23 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // Call Lovable AI with v2 rules
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       if (!LOVABLE_API_KEY) {
-        return new Response(
-          JSON.stringify({ error: "LOVABLE_API_KEY not configured" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const v2AiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: "You are a corporate schema.org JSON-LD generator. Follow all rules provided." },
-            { role: "user", content: v2UserMessage }
+            { role: "user", content: v2UserMessage },
           ],
         }),
       });
@@ -846,25 +852,25 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       if (!v2AiResponse.ok) {
         const errorText = await v2AiResponse.text();
         console.error("AI API error (v2):", v2AiResponse.status, errorText);
-        
+
         if (v2AiResponse.status === 429) {
-          return new Response(
-            JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
-        
+
         if (v2AiResponse.status === 402) {
           return new Response(
             JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
 
-        return new Response(
-          JSON.stringify({ error: "AI API error" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "AI API error" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const v2AiData = await v2AiResponse.json();
@@ -872,10 +878,10 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
 
       if (!v2GeneratedContent) {
         console.error("No content in v2 AI response");
-        return new Response(
-          JSON.stringify({ error: "AI returned no content" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "AI returned no content" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       console.log("v2 AI response received, length:", v2GeneratedContent.length);
@@ -884,7 +890,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       let v2Jsonld;
       try {
         let jsonContent = v2GeneratedContent.trim();
-        
+
         // Remove markdown code blocks if present
         if (jsonContent.startsWith("```")) {
           const match = jsonContent.match(/```(?:json|jsonld)?\s*([\s\S]*?)```/);
@@ -892,15 +898,15 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             jsonContent = match[1].trim();
           }
         }
-        
+
         // Remove any leading/trailing text that's not JSON
-        const jsonStart = jsonContent.indexOf('{');
-        const jsonEnd = jsonContent.lastIndexOf('}');
-        
+        const jsonStart = jsonContent.indexOf("{");
+        const jsonEnd = jsonContent.lastIndexOf("}");
+
         if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
           jsonContent = jsonContent.substring(jsonStart, jsonEnd + 1);
         }
-        
+
         // Try to parse
         v2Jsonld = JSON.parse(jsonContent);
       } catch (parseError) {
@@ -908,11 +914,12 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         console.error("AI response (first 1000 chars):", v2GeneratedContent.substring(0, 1000));
         return new Response(
           JSON.stringify({
-            error: "AI did not return valid JSON. The schema generation prompt may need refinement, or the AI may be having difficulty with this page content.",
+            error:
+              "AI did not return valid JSON. The schema generation prompt may need refinement, or the AI may be having difficulty with this page content.",
             details: v2GeneratedContent.substring(0, 500),
-            parseError: parseError instanceof Error ? parseError.message : String(parseError)
+            parseError: parseError instanceof Error ? parseError.message : String(parseError),
           }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
@@ -932,9 +939,9 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         return new Response(
           JSON.stringify({
             error: "Schema validation failed",
-            validation_errors: v2ValidationErrors
+            validation_errors: v2ValidationErrors,
           }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
@@ -950,22 +957,22 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // ========================================
       const graph = v2Jsonld["@graph"] || [];
       let charterWarnings: string[] = [];
-      
+
       // STEP 1: Ensure canonical WebSite node exists
       // Required by Charter: single WebSite node that all WebPage nodes link to
       const websiteId = "https://www.shepherdneame.co.uk/#website";
       const orgId = "https://www.shepherdneame.co.uk/#organization";
-      
+
       let websiteNode = graph.find((node: any) => node["@id"] === websiteId);
-      
+
       if (!websiteNode) {
         // Create the canonical WebSite node
         websiteNode = {
           "@type": "WebSite",
           "@id": websiteId,
-          "url": "https://www.shepherdneame.co.uk",
-          "name": "Shepherd Neame",
-          "publisher": { "@id": orgId }
+          url: "https://www.shepherdneame.co.uk",
+          name: "Shepherd Neame",
+          publisher: { "@id": orgId },
         };
         graph.push(websiteNode);
         console.log("✓ Added canonical WebSite node");
@@ -974,21 +981,21 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         websiteNode.publisher = { "@id": orgId };
         console.log("✓ Updated existing WebSite node");
       }
-      
+
       // STEP 1a: Ensure canonical Organization node is rich and config-driven
       // Charter requirement: Organization must be consistent, canonical, and complete
       let orgNode = graph.find((node: any) => node["@id"] === orgId);
-      
+
       if (!orgNode) {
         // Create Organization node if missing (should be generated by AI)
         orgNode = {
           "@type": ["Organization", "Corporation"],
-          "@id": orgId
+          "@id": orgId,
         };
         graph.push(orgNode);
         console.log("✓ Added canonical Organization node");
       }
-      
+
       // Enrich with canonical Organization data from config
       orgNode["@type"] = ["Organization", "Corporation"];
       orgNode.name = ORG_NAME;
@@ -996,18 +1003,18 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       orgNode.description = ORG_DESCRIPTION;
       orgNode.logo = {
         "@type": "ImageObject",
-        url: ORG_LOGO_URL
+        url: ORG_LOGO_URL,
       };
       orgNode.sameAs = ORG_SAME_AS;
       orgNode.foundingDate = ORG_FOUNDING_DATE;
       orgNode.founder = { "@type": "Person", name: ORG_FOUNDER_NAME };
       orgNode.address = {
         "@type": "PostalAddress",
-        ...ORG_ADDRESS
+        ...ORG_ADDRESS,
       };
-      
+
       console.log("✓ Enriched Organization node with canonical config data");
-      
+
       // STEP 2: Fix isPartOf on all WebPage nodes
       // Charter rule: WebPage nodes must link to WebSite via isPartOf, not Organization
       // NOTE: This filter only matches primary WebPage nodes, not specialized types like FAQPage
@@ -1016,16 +1023,16 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
         return types.includes("WebPage");
       });
-      
+
       webPageNodes.forEach((node: any) => {
         // Set isPartOf to WebSite (not Organization)
         node.isPartOf = { "@id": websiteId };
       });
-      
+
       if (webPageNodes.length > 0) {
         console.log(`✓ Fixed isPartOf for ${webPageNodes.length} WebPage node(s)`);
       }
-      
+
       // STEP 3: Ensure WebPage nodes have publisher linking to Organization
       // Charter rule: key entities must explicitly link back to canonical Organization
       webPageNodes.forEach((node: any) => {
@@ -1036,20 +1043,20 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           node.publisher = { "@id": orgId };
         }
       });
-      
+
       console.log(`✓ Ensured publisher on ${webPageNodes.length} WebPage node(s)`);
-      
+
       // STEP 4: Remove FAQ schema if not appropriate
       // Charter rule: FAQ schema only when real on-page FAQ content exists
       const shouldHaveFAQ = page.has_faq === true && page.faq_mode !== "ignore";
-      
+
       if (!shouldHaveFAQ) {
         // Remove any FAQPage, Question, or Answer nodes
         const beforeLength = graph.length;
         for (let i = graph.length - 1; i >= 0; i--) {
           const node = graph[i];
           const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
-          
+
           if (types.includes("FAQPage") || types.includes("Question") || types.includes("Answer")) {
             graph.splice(i, 1);
           } else if (Array.isArray(node["@type"]) && node["@type"].includes("FAQPage")) {
@@ -1060,25 +1067,21 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             }
           }
         }
-        
+
         const removedCount = beforeLength - graph.length;
         if (removedCount > 0) {
           console.log(`✓ Removed ${removedCount} FAQ-related node(s) (no real FAQ content)`);
         }
       }
-      
+
       // STEP 5: Clean up dangling hasPart references
       // Prevent validation errors like "hasPart references non-existent node .../Beers#brewery-faq"
       // This can happen when FAQ nodes are removed but hasPart still references them
-      const existingIds = new Set(
-        graph
-          .map((node: any) => node["@id"])
-          .filter((id: any) => typeof id === "string")
-      );
-      
+      const existingIds = new Set(graph.map((node: any) => node["@id"]).filter((id: any) => typeof id === "string"));
+
       const cleanHasPart = (value: any) => {
         if (!value) return undefined;
-        
+
         const toIds = (v: any): string[] => {
           if (!v) return [];
           if (typeof v === "string") return [v];
@@ -1086,20 +1089,20 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           if (typeof v === "object" && v["@id"]) return [v["@id"]];
           return [];
         };
-        
+
         const ids = toIds(value).filter((id) => existingIds.has(id));
-        
+
         if (ids.length === 0) return undefined;
-        
+
         if (Array.isArray(value)) {
           // Return array of objects with @id
           return ids.map((id) => ({ "@id": id }));
         }
-        
+
         // Single reference: return as object with @id
         return { "@id": ids[0] };
       };
-      
+
       let cleanedHasPartCount = 0;
       graph.forEach((node: any) => {
         if (node.hasPart) {
@@ -1112,11 +1115,11 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           }
         }
       });
-      
+
       if (cleanedHasPartCount > 0) {
         console.log(`✓ Cleaned ${cleanedHasPartCount} dangling hasPart reference(s)`);
       }
-      
+
       // STEP 6: Make Product the rich, canonical beer entity (beer detail pages)
       // Charter rule: Individual beer pages should model the beer as a Product with rich data
       // Supporting Brand node is allowed but must be lean and secondary
@@ -1124,29 +1127,26 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       const BEERS_COLLECTION_URL = "https://www.shepherdneame.co.uk/beers";
 
       // Beer detail pages: any path under /beers/slug
-      const isBeerDetailPage =
-        typeof page.path === "string" &&
-        page.path.toLowerCase().startsWith("/beers/");
+      const isBeerDetailPage = typeof page.path === "string" && page.path.toLowerCase().startsWith("/beers/");
 
       // Beers collection page: the top-level /Beers
       const isBeersCollectionPage =
-        typeof canonicalUrl === "string" &&
-        canonicalUrl.toLowerCase() === BEERS_COLLECTION_URL.toLowerCase();
+        typeof canonicalUrl === "string" && canonicalUrl.toLowerCase() === BEERS_COLLECTION_URL.toLowerCase();
 
       // TEMP DEBUG LOGGING FOR 1698 IMAGE ISSUE
       console.log(
         `[Beer Detail Detection] path=${page.path}, domain=${pageDomain}, isBeerDetailPage=${isBeerDetailPage}, isBeersCollectionPage=${isBeersCollectionPage}`,
       );
-      
+
       if (isBeerDetailPage) {
         console.log("Beer detail page detected - applying Product/Brand canonicalisation");
-        
+
         // Find the main WebPage node for this page
         const pageWebPageNode = graph.find((node: any) => {
           const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
           return types.includes("WebPage") && node.url === canonicalUrl;
         });
-        
+
         if (pageWebPageNode) {
           // Derive clean beer name (remove "| Shepherd Neame" suffix)
           const deriveBeerName = () => {
@@ -1154,22 +1154,25 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             if (pageWebPageNode.name && typeof pageWebPageNode.name === "string") {
               return pageWebPageNode.name.replace(/\s*\|\s*Shepherd Neame\s*$/i, "").trim();
             }
-            
+
             // Fallback: slug → words
             const slugPart = page.path?.split("/").pop() || "";
             if (slugPart) {
-              return slugPart.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()).trim();
+              return slugPart
+                .replace(/-/g, " ")
+                .replace(/\b\w/g, (c: string) => c.toUpperCase())
+                .trim();
             }
-            
+
             return "Beer";
           };
-          
+
           const beerName = deriveBeerName();
-          
+
           const productId = `${canonicalUrl}#product`;
           const brandId = `${canonicalUrl}#brand`;
           let productNode = graph.find((node: any) => node["@id"] === productId);
-          
+
           if (!productNode) {
             // Create a minimal Product node if AI didn't generate one
             productNode = {
@@ -1178,7 +1181,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
               name: beerName,
               url: canonicalUrl,
               brand: { "@id": brandId },
-              manufacturer: { "@id": ORG_ID }
+              manufacturer: { "@id": ORG_ID },
             };
             graph.push(productNode);
             console.log("✓ Created Product node for beer");
@@ -1187,63 +1190,56 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             productNode.brand = { "@id": brandId };
             productNode.manufacturer = { "@id": ORG_ID };
           }
-          
+
           // Apply clean beer name to Product
           productNode.name = beerName;
-          
+
           // Find the Brand node for this beer (if any)
           const brandNode = graph.find((node: any) => {
             const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
             return types.includes("Brand") && node.url === canonicalUrl;
           });
-          
+
           // Copy rich beer detail from Brand → Product
           if (brandNode) {
             // Description
             if (!productNode.description && brandNode.description) {
               productNode.description = brandNode.description;
             }
-            
+
             // Additional properties like ABV, Formats, Brewed with, Tasting notes
             if (brandNode.additionalProperty) {
               const props = Array.isArray(brandNode.additionalProperty)
                 ? brandNode.additionalProperty
                 : [brandNode.additionalProperty];
-              
+
               productNode.additionalProperty = productNode.additionalProperty || [];
-              
+
               props.forEach((prop: any) => {
                 if (
                   prop?.["@type"] === "PropertyValue" &&
                   typeof prop.name === "string" &&
-                  [
-                    "ABV",
-                    "ABV (bottle)",
-                    "ABV (draught)",
-                    "Formats",
-                    "Brewed with",
-                    "Tasting notes",
-                    "Style"
-                  ].includes(prop.name)
+                  ["ABV", "ABV (bottle)", "ABV (draught)", "Formats", "Brewed with", "Tasting notes", "Style"].includes(
+                    prop.name,
+                  )
                 ) {
                   productNode.additionalProperty.push(prop);
                 }
               });
             }
-            
+
             // If Brand has a good image/logo and Product has none, copy it
             if (!productNode.image && (brandNode.image || brandNode.logo)) {
-              const imgUrl = typeof brandNode.image === "string"
-                ? brandNode.image
-                : brandNode.image?.url || brandNode.logo;
+              const imgUrl =
+                typeof brandNode.image === "string" ? brandNode.image : brandNode.image?.url || brandNode.logo;
               if (imgUrl) {
                 productNode.image = { "@type": "ImageObject", url: imgUrl };
               }
             }
-            
+
             console.log("✓ Copied rich beer detail from Brand to Product");
           }
-          
+
           // Add page-backed descriptive properties (no transactional data)
           // Tasting notes from page metadata
           if (page.notes && !productNode.additionalProperty?.some((p: any) => p.name === "Tasting notes")) {
@@ -1251,37 +1247,37 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             productNode.additionalProperty.push({
               "@type": "PropertyValue",
               name: "Tasting notes",
-              value: page.notes
+              value: page.notes,
             });
           }
-          
+
           // Add beer-specific metadata from page data
           if (page.beer_abv && !productNode.alcoholByVolume) {
             productNode.alcoholByVolume = page.beer_abv.toString();
           }
-          
+
           if (page.beer_style && !productNode.additionalProperty?.some((p: any) => p.name === "Style")) {
             productNode.additionalProperty = productNode.additionalProperty || [];
             productNode.additionalProperty.push({
               "@type": "PropertyValue",
               name: "Style",
-              value: page.beer_style
+              value: page.beer_style,
             });
           }
-          
+
           if (page.beer_launch_year && !productNode.releaseDate) {
             productNode.releaseDate = page.beer_launch_year.toString();
           }
-          
+
           if (page.wikidata_qid && !productNode.sameAs) {
             productNode.sameAs = [`https://www.wikidata.org/wiki/${page.wikidata_qid}`];
           }
-          
+
           // If no description, use WebPage description
           if (!productNode.description && pageWebPageNode.description) {
             productNode.description = pageWebPageNode.description;
           }
-          
+
           // ========================================
           // BEER IMAGE EXTRACTION (Next.js-aware)
           // ========================================
@@ -1290,17 +1286,17 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           // Derive beer slug from path for matching (e.g., "/beers/double-stout" → "double-stout")
           const beerSlug = page.path?.split("/").pop() || "";
           const extractedImages = extractBeerImagesFromHtml(html, beerName, beerSlug);
-          
+
           let chosenHeroUrl: string | undefined = undefined;
           let chosenLogoUrl: string | undefined = undefined;
-          
+
           // Hero image priority:
           // 1) Extracted from HTML (Next.js image URLs with page_hero pattern)
           // 2) page.hero_image_url from metadata
           // 3) Brand image/logo
           // 4) existing Product.image
           // 5) final fallback: ORG_LOGO_URL
-          
+
           if (extractedImages.heroImageUrl) {
             chosenHeroUrl = extractedImages.heroImageUrl;
             console.log(`✓ Using extracted hero image: ${chosenHeroUrl.substring(0, 100)}...`);
@@ -1315,61 +1311,57 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
               chosenHeroUrl = brandNode.logo;
             }
           }
-          
+
           if (!chosenHeroUrl && productNode.image) {
-            chosenHeroUrl = typeof productNode.image === "string"
-              ? productNode.image
-              : productNode.image.url;
+            chosenHeroUrl = typeof productNode.image === "string" ? productNode.image : productNode.image.url;
           }
-          
+
           if (!chosenHeroUrl) {
             chosenHeroUrl = ORG_LOGO_URL; // final fallback only
           }
-          
+
           // Logo image priority:
           // 1) Extracted from HTML (filename contains "logo" or "pumpclip")
           // 2) page.logo_url from metadata
           // 3) Brand logo if present
-          
+
           if (extractedImages.logoImageUrl) {
             chosenLogoUrl = extractedImages.logoImageUrl;
             console.log(`✓ Using extracted logo image: ${chosenLogoUrl.substring(0, 100)}...`);
           } else if (page.logo_url) {
             chosenLogoUrl = page.logo_url;
           } else if (brandNode?.logo) {
-            chosenLogoUrl = typeof brandNode.logo === "string" 
-              ? brandNode.logo 
-              : brandNode.logo?.url;
+            chosenLogoUrl = typeof brandNode.logo === "string" ? brandNode.logo : brandNode.logo?.url;
           }
-          
+
           // Apply hero image to Product node
           productNode.image = {
             "@type": "ImageObject",
             url: chosenHeroUrl,
             contentUrl: chosenHeroUrl,
-            caption: `${beerName} hero image`
+            caption: `${beerName} hero image`,
           };
-          
+
           // Apply logo to Product node if found
           if (chosenLogoUrl) {
             productNode.logo = {
               "@type": "ImageObject",
               url: chosenLogoUrl,
               contentUrl: chosenLogoUrl,
-              caption: `${beerName} logo`
+              caption: `${beerName} logo`,
             };
           }
-          
+
           // Apply hero image to WebPage node as well
           pageWebPageNode.image = {
             "@type": "ImageObject",
             url: chosenHeroUrl,
             contentUrl: chosenHeroUrl,
-            caption: `${beerName} hero image`
+            caption: `${beerName} hero image`,
           };
-          
+
           console.log("✓ Enriched Product with page-backed descriptive properties");
-          
+
           // Slim the Brand node so it is secondary, but preserve/add images
           if (brandNode) {
             const leanBrand: any = {
@@ -1377,42 +1369,42 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
               "@id": brandNode["@id"],
               name: beerName,
               url: brandNode.url,
-              brand: brandNode.brand || { "@id": ORG_ID }
+              brand: brandNode.brand || { "@id": ORG_ID },
             };
-            
+
             // Apply hero image to Brand
             leanBrand.image = {
               "@type": "ImageObject",
               url: chosenHeroUrl,
               contentUrl: chosenHeroUrl,
-              caption: `${beerName} hero image`
+              caption: `${beerName} hero image`,
             };
-            
+
             // Apply logo to Brand if found
             if (chosenLogoUrl) {
               leanBrand.logo = {
                 "@type": "ImageObject",
                 url: chosenLogoUrl,
                 contentUrl: chosenLogoUrl,
-                caption: `${beerName} logo`
+                caption: `${beerName} logo`,
               };
             }
-            
+
             // Replace the existing Brand node with the lean version
             const index = graph.indexOf(brandNode);
             if (index !== -1) graph[index] = leanBrand;
-            
+
             console.log("✓ Slimmed Brand node with extracted images for beer detail page");
           }
-          
+
           // Ensure WebPage mainEntity/about point ONLY to Product
           pageWebPageNode.mainEntity = { "@id": productId };
           pageWebPageNode.about = { "@id": productId };
-          
+
           console.log("✓ Linked WebPage mainEntity/about to Product");
         }
       }
-      
+
       // STEP 6a: Normalize breadcrumbs for beer detail pages
       // Enforce consistent middle breadcrumb: Home → Beers → Beer name
       if (isBeerDetailPage) {
@@ -1421,50 +1413,49 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
           return types.includes("BreadcrumbList") && node["@id"]?.endsWith("#breadcrumbs");
         });
-        
+
         if (breadcrumbNode && breadcrumbNode.itemListElement) {
           // Get cleaned beer name from Product node
           const productNode = graph.find((n: any) => n["@id"] === `${canonicalUrl}#product`);
-          const beerName = productNode?.name || 
-                          canonicalUrl.split('/').pop()?.replace(/-/g, ' ') || "Beer";
-          
+          const beerName = productNode?.name || canonicalUrl.split("/").pop()?.replace(/-/g, " ") || "Beer";
+
           // Normalize breadcrumbs: Home → Beers (canonical URL) → Beer name (clean)
           breadcrumbNode.itemListElement = [
             {
               "@type": "ListItem",
               position: 1,
               name: "Home",
-              item: "https://www.shepherdneame.co.uk/"
+              item: "https://www.shepherdneame.co.uk/",
             },
             {
               "@type": "ListItem",
               position: 2,
               name: "Beers",
-              item: BEERS_COLLECTION_URL
+              item: BEERS_COLLECTION_URL,
             },
             {
               "@type": "ListItem",
               position: 3,
               name: beerName,
-              item: canonicalUrl
-            }
+              item: canonicalUrl,
+            },
           ];
-          
+
           console.log("✓ Normalized breadcrumbs for beer detail page");
         }
       }
-      
+
       // STEP 7: /Beers collection ItemList → Product @ids
       // For the /Beers collection page, update ItemList to reference beer Product nodes
       // by @id instead of standalone Brand blobs, strengthening graph connectivity.
       if (isBeersCollectionPage) {
         console.log("/Beers collection page detected - updating ItemList to reference Products");
-        
+
         const beersItemList = graph.find((node: any) => {
           const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
           return types.includes("ItemList");
         });
-        
+
         if (beersItemList && Array.isArray(beersItemList.itemListElement)) {
           // Build a Set of existing Product @ids
           const existingProductIds = new Set(
@@ -1474,16 +1465,16 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
                 return types.includes("Product");
               })
               .map((node: any) => node["@id"])
-              .filter((id: any) => typeof id === "string")
+              .filter((id: any) => typeof id === "string"),
           );
-          
+
           let updatedCount = 0;
-          
+
           beersItemList.itemListElement.forEach((listItem: any) => {
             if (listItem.item && listItem.item.url) {
               const itemUrl = listItem.item.url;
               const expectedProductId = `${itemUrl}#product`;
-              
+
               if (existingProductIds.has(expectedProductId)) {
                 listItem.item = { "@id": expectedProductId };
                 updatedCount++;
@@ -1491,11 +1482,11 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
               // Fallback: keep existing Brand object if Product doesn't exist
             }
           });
-          
-        console.log(`✓ Updated ${updatedCount} /Beers ItemList items to reference Product @ids`);
+
+          console.log(`✓ Updated ${updatedCount} /Beers ItemList items to reference Product @ids`);
         }
       }
-      
+
       // ========================================
       // STEP 8: NON-BEER PAGE HERO IMAGE HANDLING
       // ----------------------------------------
@@ -1504,9 +1495,9 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // Organization.logo is already set to ORG_LOGO_URL in STEP 1a.
       // All logo fields use the canonical corporate logo.
       // ========================================
-      if (!isBeerDetailPage && !isBeersCollectionPage) {
+      if (!isBeerDetailPage) {
         console.log("[Non-beer page] Extracting hero image");
-        
+
         // Helper: Robust URL normalisation for non-beer images
         // Returns null for invalid/empty URLs, fully qualified absolute URL otherwise
         // Handles Next.js /_next/image wrappers with both absolute and relative inner URLs
@@ -1569,7 +1560,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             }
           }
         }
-        
+
         // Helper: Check if URL looks like a valid image URL
         function isLikelyImageUrl(url: string): boolean {
           const lower = url.toLowerCase();
@@ -1582,24 +1573,24 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           if (lower.includes("/styles/")) return true;
           return false;
         }
-        
+
         // Helper: Check if image should be excluded (logos, icons, social, etc.)
         function shouldExcludeImage(src: string, alt?: string, className?: string): boolean {
           const srcLower = src.toLowerCase();
           const altLower = (alt || "").toLowerCase();
           const classLower = (className || "").toLowerCase();
-          
+
           // SVGs and tiny icons
           if (srcLower.endsWith(".svg")) return true;
           if (srcLower.includes("/icons/")) return true;
           if (srcLower.includes("favicon")) return true;
           if (srcLower.includes("sprite")) return true;
-          
+
           // Logo patterns
           if (srcLower.includes("logo")) return true;
           if (altLower.includes("logo")) return true;
           if (classLower.includes("logo")) return true;
-          
+
           // Social media icons
           const socialPatterns = ["facebook", "twitter", "instagram", "linkedin", "youtube", "x.com", "social"];
           for (const pattern of socialPatterns) {
@@ -1607,25 +1598,28 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
               return true;
             }
           }
-          
+
           // Icon patterns
           if (altLower.includes("icon") || classLower.includes("icon")) return true;
-          
+
           // Tracking pixels and tiny images (base64 1x1)
           if (srcLower.includes("pixel") || srcLower.includes("tracking")) return true;
-          
+
           return false;
         }
-        
+
         // Helper: Extract hero image URL from non-beer page HTML
-        function extractNonBeerHeroImageFromHtml(htmlContent: string, pageUrl: string): { heroUrl: string | null; caption?: string } {
+        function extractNonBeerHeroImageFromHtml(
+          htmlContent: string,
+          pageUrl: string,
+        ): { heroUrl: string | null; caption?: string } {
           try {
             const doc = new DOMParser().parseFromString(htmlContent, "text/html");
             if (!doc) return { heroUrl: null };
-            
+
             // Priority 1: og:image meta tag (if it looks like a real image)
-            const ogImageMeta = doc.querySelector('meta[property="og:image"]') || 
-                               doc.querySelector('meta[name="og:image"]');
+            const ogImageMeta =
+              doc.querySelector('meta[property="og:image"]') || doc.querySelector('meta[name="og:image"]');
             if (ogImageMeta) {
               const content = ogImageMeta.getAttribute("content");
               if (content) {
@@ -1636,7 +1630,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
                 }
               }
             }
-            
+
             // Priority 2: twitter:image meta tag
             const twitterImageMeta = doc.querySelector('meta[name="twitter:image"]');
             if (twitterImageMeta) {
@@ -1649,13 +1643,13 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
                 }
               }
             }
-            
+
             // Priority 3: Hero image from <main> element (or body fallback)
             const mainElement = doc.querySelector("main") || doc.querySelector("body");
             if (mainElement) {
               // Get all images within main content
               const imgs = mainElement.querySelectorAll("img");
-              
+
               // First pass: look for page_hero images
               for (const img of imgs) {
                 const imgEl = img as any;
@@ -1663,13 +1657,13 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
                 const srcset = imgEl.getAttribute("srcset");
                 const alt = imgEl.getAttribute("alt") || "";
                 const className = imgEl.getAttribute("class") || "";
-                
+
                 if (!src || src.startsWith("data:")) continue;
                 if (shouldExcludeImage(src, alt, className)) continue;
-                
+
                 const normalised = normaliseNonBeerUrl(src, pageUrl);
                 if (!normalised) continue;
-                
+
                 // Check for page_hero pattern (highest priority within main)
                 const lower = normalised.toLowerCase();
                 if (lower.includes("/styles/page_hero/") || lower.includes("page_hero")) {
@@ -1677,7 +1671,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
                   return { heroUrl: normalised, caption: alt || undefined };
                 }
               }
-              
+
               // Second pass: first significant image in main (not a logo/icon)
               for (const img of imgs) {
                 const imgEl = img as any;
@@ -1685,10 +1679,10 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
                 const srcset = imgEl.getAttribute("srcset");
                 const alt = imgEl.getAttribute("alt") || "";
                 const className = imgEl.getAttribute("class") || "";
-                
+
                 if (!src || src.startsWith("data:")) continue;
                 if (shouldExcludeImage(src, alt, className)) continue;
-                
+
                 // Use srcset first URL if available
                 let urlToUse = src;
                 if (srcset) {
@@ -1697,29 +1691,28 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
                     urlToUse = firstSrcsetUrl;
                   }
                 }
-                
+
                 const normalised = normaliseNonBeerUrl(urlToUse, pageUrl);
                 if (!normalised) continue;
-                
+
                 // Accept snsites.co.uk CDN images or /sites/default/files/ paths
                 const lower = normalised.toLowerCase();
-                if (lower.includes("snsites.co.uk/sites/default/files/") || 
-                    lower.includes("/sites/default/files/")) {
+                if (lower.includes("snsites.co.uk/sites/default/files/") || lower.includes("/sites/default/files/")) {
                   console.log(`[Non-beer hero] Found main content img: ${normalised.substring(0, 100)}...`);
                   return { heroUrl: normalised, caption: alt || undefined };
                 }
               }
-              
+
               // Third pass: any reasonable image in main content
               for (const img of imgs) {
                 const imgEl = img as any;
                 const src = imgEl.getAttribute("src") || imgEl.getAttribute("data-src");
                 const alt = imgEl.getAttribute("alt") || "";
                 const className = imgEl.getAttribute("class") || "";
-                
+
                 if (!src || src.startsWith("data:")) continue;
                 if (shouldExcludeImage(src, alt, className)) continue;
-                
+
                 const normalised = normaliseNonBeerUrl(src, pageUrl);
                 if (normalised && isLikelyImageUrl(normalised)) {
                   console.log(`[Non-beer hero] Found fallback main img: ${normalised.substring(0, 100)}...`);
@@ -1727,7 +1720,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
                 }
               }
             }
-            
+
             console.log("[Non-beer hero] No suitable hero image found");
             return { heroUrl: null };
           } catch (err) {
@@ -1735,33 +1728,34 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             return { heroUrl: null };
           }
         }
-        
+
         // Default fallback hero image for non-beer pages when no hero is found
         // Using the corporate hero image from the website
-        const DEFAULT_NON_BEER_HERO_URL = "https://snsites.co.uk/sites/default/files/styles/page_hero/public/shepherd-neame-brewery-hero.jpg";
-        
+        const DEFAULT_NON_BEER_HERO_URL =
+          "https://snsites.co.uk/sites/default/files/styles/page_hero/public/shepherd-neame-brewery-hero.jpg";
+
         // Extract hero image
         const nonBeerImages = extractNonBeerHeroImageFromHtml(html, canonicalUrl);
         const heroImageUrl = nonBeerImages.heroUrl || DEFAULT_NON_BEER_HERO_URL;
-        
+
         // The corporate logo is already defined as ORG_LOGO_URL at the top of this file
         // All non-beer pages use this single consistent logo
         const logoUrl = ORG_LOGO_URL;
-        
+
         console.log(`✓ Non-beer hero image: ${heroImageUrl.substring(0, 100)}...`);
-        
+
         // Build ImageObject for WebPage hero
         const heroImageObject: any = {
           "@type": "ImageObject",
           url: heroImageUrl,
-          contentUrl: heroImageUrl
+          contentUrl: heroImageUrl,
         };
-        
+
         // Add caption if available
         if (nonBeerImages.caption) {
           heroImageObject.caption = nonBeerImages.caption;
         }
-        
+
         // Apply hero image to WebPage node(s)
         webPageNodes.forEach((node: any) => {
           node.image = heroImageObject;
@@ -1792,7 +1786,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
                 (mainEntityNode as any).logo = {
                   "@type": "ImageObject",
                   url: logoUrl,
-                  contentUrl: logoUrl
+                  contentUrl: logoUrl,
                 };
               }
               console.log(`✓ Set mainEntity image + logo for ${mainEntityId}`);
@@ -1809,15 +1803,15 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         if (orgNode && !orgNode.logo) {
           orgNode.logo = {
             "@type": "ImageObject",
-            url: logoUrl
+            url: logoUrl,
           };
           console.log("✓ Set Organization.logo (defensive)");
         }
       }
-      
+
       // Update the graph in the jsonld object
       v2Jsonld["@graph"] = graph;
-      
+
       // ========================================
       // SCHEMA QUALITY CHARTER VALIDATION
       // ----------------------------------------
@@ -1826,22 +1820,26 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
 
       // Rule: mustLinkToCanonicalOrg
       // Check for canonical Organization node
-      const hasOrgNode = graph.some((node: any) =>
-        node["@id"] === "https://www.shepherdneame.co.uk/#organization"
-      );
+      const hasOrgNode = graph.some((node: any) => node["@id"] === "https://www.shepherdneame.co.uk/#organization");
       if (!hasOrgNode) {
-        charterWarnings.push("CHARTER VIOLATION: Missing canonical Organization node (@id: https://www.shepherdneame.co.uk/#organization)");
+        charterWarnings.push(
+          "CHARTER VIOLATION: Missing canonical Organization node (@id: https://www.shepherdneame.co.uk/#organization)",
+        );
       } else {
         // Check that key entities link to Organization (string or object form)
-        const hasOrgReferences = graph.some((node: any) =>
-          node.publisher === "https://www.shepherdneame.co.uk/#organization" ||
-          (typeof node.publisher === "object" && node.publisher?.["@id"] === "https://www.shepherdneame.co.uk/#organization") ||
-          node.manufacturer === "https://www.shepherdneame.co.uk/#organization" ||
-          (typeof node.manufacturer === "object" && node.manufacturer?.["@id"] === "https://www.shepherdneame.co.uk/#organization") ||
-          node.parentOrganization === "https://www.shepherdneame.co.uk/#organization" ||
-          (typeof node.parentOrganization === "object" && node.parentOrganization?.["@id"] === "https://www.shepherdneame.co.uk/#organization") ||
-          node.brand === "https://www.shepherdneame.co.uk/#organization" ||
-          (typeof node.brand === "object" && node.brand?.["@id"] === "https://www.shepherdneame.co.uk/#organization")
+        const hasOrgReferences = graph.some(
+          (node: any) =>
+            node.publisher === "https://www.shepherdneame.co.uk/#organization" ||
+            (typeof node.publisher === "object" &&
+              node.publisher?.["@id"] === "https://www.shepherdneame.co.uk/#organization") ||
+            node.manufacturer === "https://www.shepherdneame.co.uk/#organization" ||
+            (typeof node.manufacturer === "object" &&
+              node.manufacturer?.["@id"] === "https://www.shepherdneame.co.uk/#organization") ||
+            node.parentOrganization === "https://www.shepherdneame.co.uk/#organization" ||
+            (typeof node.parentOrganization === "object" &&
+              node.parentOrganization?.["@id"] === "https://www.shepherdneame.co.uk/#organization") ||
+            node.brand === "https://www.shepherdneame.co.uk/#organization" ||
+            (typeof node.brand === "object" && node.brand?.["@id"] === "https://www.shepherdneame.co.uk/#organization"),
         );
         if (!hasOrgReferences) {
           charterWarnings.push("CHARTER WARNING: No entities link to the canonical Organization node");
@@ -1850,9 +1848,10 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
 
       // Rule: mustLinkToWebsite
       // Check that WebPage nodes link to WebSite via isPartOf (should be enforced already)
-      const hasWebsiteLink = webPageNodes.every((node: any) =>
-        node.isPartOf === "https://www.shepherdneame.co.uk/#website" ||
-        (typeof node.isPartOf === "object" && node.isPartOf?.["@id"] === "https://www.shepherdneame.co.uk/#website")
+      const hasWebsiteLink = webPageNodes.every(
+        (node: any) =>
+          node.isPartOf === "https://www.shepherdneame.co.uk/#website" ||
+          (typeof node.isPartOf === "object" && node.isPartOf?.["@id"] === "https://www.shepherdneame.co.uk/#website"),
       );
       if (webPageNodes.length > 0 && !hasWebsiteLink) {
         charterWarnings.push("CHARTER WARNING: Not all WebPage nodes link to the main Website via isPartOf");
@@ -1889,11 +1888,11 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // Count primary WebPage nodes with mainEntity or about properties
       // NOTE: This only checks true WebPage nodes, not specialized types like FAQPage
       // A WebPage + FAQPage combination is valid and should not trigger this warning
-      const webPagesWithMainEntity = webPageNodes.filter((node: any) =>
-        node.mainEntity || node.about
-      );
+      const webPagesWithMainEntity = webPageNodes.filter((node: any) => node.mainEntity || node.about);
       if (webPagesWithMainEntity.length > 1) {
-        charterWarnings.push("CHARTER WARNING: Multiple WebPage nodes with mainEntity/about detected - page may have competing primary entities");
+        charterWarnings.push(
+          "CHARTER WARNING: Multiple WebPage nodes with mainEntity/about detected - page may have competing primary entities",
+        );
       }
 
       // Log all Charter warnings
@@ -1901,7 +1900,9 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         console.warn("=== Schema Quality Charter Warnings ===");
         charterWarnings.forEach((warning) => console.warn(warning));
         console.warn("=======================================");
-        console.warn(`Charter compliance: ${charterWarnings.filter(w => w.includes("VIOLATION")).length} violations, ${charterWarnings.filter(w => w.includes("WARNING")).length} warnings`);
+        console.warn(
+          `Charter compliance: ${charterWarnings.filter((w) => w.includes("VIOLATION")).length} violations, ${charterWarnings.filter((w) => w.includes("WARNING")).length} warnings`,
+        );
         console.warn("See docs/schema-quality-charter.md for quality standards");
       } else {
         console.log("✓ Schema Quality Charter: All checks passed");
@@ -1913,17 +1914,17 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // If this is a Beer page with a wikidata_qid, inject the sameAs URL
       // into the main Beer entity (typically a Brand node)
       // ========================================
-      if (pageDomain === 'Beer' && page.wikidata_qid && v2Jsonld["@graph"]) {
+      if (pageDomain === "Beer" && page.wikidata_qid && v2Jsonld["@graph"]) {
         const wikidataUrl = `https://www.wikidata.org/wiki/${page.wikidata_qid}`;
         console.log(`Injecting Wikidata sameAs: ${wikidataUrl}`);
-        
+
         // Find the main beer entity in the graph (typically has @type containing "Brand")
         // and inject/append sameAs
         const graph = v2Jsonld["@graph"];
         for (let i = 0; i < graph.length; i++) {
           const node = graph[i];
           const nodeTypes = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
-          
+
           // Look for Brand nodes (main beer entity)
           if (nodeTypes.includes("Brand")) {
             if (!node.sameAs) {
@@ -1958,9 +1959,8 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         .order("version_number", { ascending: false })
         .limit(1);
 
-      const nextVersionNumber = existingVersions && existingVersions.length > 0
-        ? existingVersions[0].version_number + 1
-        : 1;
+      const nextVersionNumber =
+        existingVersions && existingVersions.length > 0 ? existingVersions[0].version_number + 1 : 1;
 
       const { data: v2SchemaVersion, error: v2SchemaError } = await supabase
         .from("schema_versions")
@@ -1978,10 +1978,10 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
 
       if (v2SchemaError) {
         console.error("Error saving v2 schema version:", v2SchemaError);
-        return new Response(
-          JSON.stringify({ error: "Failed to save schema version" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Failed to save schema version" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       await supabase
@@ -2027,7 +2027,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
           },
           charterWarnings, // String array of Charter compliance warnings
         }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -2035,10 +2035,10 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
     // 2. Call Lovable AI
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "LOVABLE_API_KEY not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const userMessage = `
@@ -2074,14 +2074,14 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: activeRule.body },
-          { role: "user", content: userMessage }
+          { role: "user", content: userMessage },
         ],
       }),
     });
@@ -2089,25 +2089,25 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error("AI API error:", aiResponse.status, errorText);
-      
+
       if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      
+
       if (aiResponse.status === 402) {
         return new Response(
           JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
-      return new Response(
-        JSON.stringify({ error: "AI API error" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "AI API error" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const aiData = await aiResponse.json();
@@ -2115,10 +2115,10 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
 
     if (!generatedContent) {
       console.error("No content in AI response");
-      return new Response(
-        JSON.stringify({ error: "AI returned no content" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "AI returned no content" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log("AI response received, length:", generatedContent.length);
@@ -2134,16 +2134,16 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
           jsonContent = match[1].trim();
         }
       }
-      
+
       jsonld = JSON.parse(jsonContent);
     } catch (parseError) {
       console.error("Failed to parse AI response as JSON:", parseError);
       return new Response(
         JSON.stringify({
           error: "AI did not return valid JSON",
-          details: generatedContent.substring(0, 500)
+          details: generatedContent.substring(0, 500),
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -2161,9 +2161,9 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
     // Check for Organization node
     // TODO: In future, replace this validation with a check that the Organization node
     // matches the master Organization schema from settings.organization_schema_json
-    const orgNode = jsonld["@graph"]?.find((node: any) =>
-      node["@id"] === "https://www.shepherdneame.co.uk/#organization" &&
-      node.name === "Shepherd Neame Limited"
+    const orgNode = jsonld["@graph"]?.find(
+      (node: any) =>
+        node["@id"] === "https://www.shepherdneame.co.uk/#organization" && node.name === "Shepherd Neame Limited",
     );
 
     if (!orgNode) {
@@ -2175,7 +2175,7 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
       const hasCommerce = jsonld["@graph"]?.some((node: any) => {
         const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
         return types.some((t: string) =>
-          ["Product", "Offer", "AggregateOffer", "ProductModel", "ItemList"].includes(t)
+          ["Product", "Offer", "AggregateOffer", "ProductModel", "ItemList"].includes(t),
         );
       });
 
@@ -2189,9 +2189,9 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
       return new Response(
         JSON.stringify({
           error: "Schema validation failed",
-          validation_errors: validationErrors
+          validation_errors: validationErrors,
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -2213,9 +2213,8 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
       .order("version_number", { ascending: false })
       .limit(1);
 
-    const nextVersionNumber = existingVersions && existingVersions.length > 0
-      ? existingVersions[0].version_number + 1
-      : 1;
+    const nextVersionNumber =
+      existingVersions && existingVersions.length > 0 ? existingVersions[0].version_number + 1 : 1;
 
     // Insert schema version
     const { data: schemaVersion, error: schemaError } = await supabase
@@ -2234,10 +2233,10 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
 
     if (schemaError) {
       console.error("Error saving schema version:", schemaError);
-      return new Response(
-        JSON.stringify({ error: "Failed to save schema version" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Failed to save schema version" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Update page
@@ -2278,7 +2277,7 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
         schema_version: schemaVersion,
         version_number: nextVersionNumber,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("Error in generate-schema function:", error);
@@ -2286,8 +2285,7 @@ Return ONLY the JSON-LD object. No explanations, no markdown code blocks, just t
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error",
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
-
