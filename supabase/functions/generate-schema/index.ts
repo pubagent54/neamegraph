@@ -1609,112 +1609,111 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
         }
       }
 
-      // STEP 7: /Beers collection ItemList → Brand @ids (STRICT CANONICAL FILTER)
+      // STEP 7: /Beers collection ItemList → Brand @ids (HTML-verified)
       // Beer Domain Rule v2.3: Brand-first, non-transactional
       // For the /Beers collection page:
-      // - ONLY include beers whose URLs are canonical corporate beer detail pages under /beers/
-      // - NEVER include legacy or odd paths such as /beer/... or non-detail URLs
-      // - Reference Brands by @id in the form: https://www.shepherdneame.co.uk/beers/{slug}#brand
-      // - Update numberOfItems and renumber positions 1..N after filtering
+      // - Start from the LLM-emitted ItemList
+      // - ONLY keep entries whose URLs actually appear in the page HTML
+      // - Convert all surviving URLs into Brand @ids
+      // - Update numberOfItems and renumber positions 1..N
       if (isBeersCollectionPage) {
-        console.log("/Beers collection page detected - updating ItemList to reference Brands");
+        console.log("/Beers collection page detected - rebuilding ItemList from HTML-backed items");
 
         const beersItemList = graph.find((node: any) => {
           const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
           return types.includes("ItemList");
         });
 
-        if (beersItemList && Array.isArray(beersItemList.itemListElement)) {
+        if (beersItemList) {
           const canonicalBase = "https://www.shepherdneame.co.uk";
-          // Canonical pattern: /beers/{slug} (NOT /beer/, NOT /beers alone, NOT /beers/)
-          const canonicalBeerPathPattern = /^\/beers\/[^\/]+$/i;
-          
-          // Helper to extract URL from various item formats
+
+          // Helper: extract a usable URL from the ListItem.item structure
           const extractUrlFromItem = (listItem: any): string | null => {
-            if (!listItem.item) return null;
-            
+            if (!listItem?.item) return null;
+
             // item is a string URL
             if (typeof listItem.item === "string") {
               return listItem.item;
             }
-            // item is an object with url property
+
+            // item is an object with a url property
             if (typeof listItem.item === "object" && listItem.item.url) {
               return listItem.item.url;
             }
-            // item is an object with @id property (extract URL from @id)
+
+            // item is an object with an @id (strip fragment)
             if (typeof listItem.item === "object" && listItem.item["@id"]) {
-              // Strip any fragment (#brand, #product, etc.)
-              return listItem.item["@id"].split("#")[0];
+              return String(listItem.item["@id"]).split("#")[0];
             }
+
             return null;
           };
-          
-          // Helper to check if a URL is a canonical /beers/{slug} path
-          const isCanonicalBeerUrl = (url: string): boolean => {
-            try {
-              const parsedUrl = new URL(url, canonicalBase);
-              const path = parsedUrl.pathname;
-              // Must match /beers/{slug} exactly (case-insensitive)
-              return canonicalBeerPathPattern.test(path);
-            } catch {
-              return false;
-            }
-          };
-          
-          // Helper to normalize URL to canonical form
+
+          // Helper: normalize URL to canonical base + pathname
           const normalizeToCanonicalUrl = (url: string): string => {
             try {
               const parsedUrl = new URL(url, canonicalBase);
-              // Rebuild with canonical base and path only
               return `${canonicalBase}${parsedUrl.pathname}`;
             } catch {
               return url;
             }
           };
-          
-          // Rebuild the ItemList from scratch
-          const originalCount = beersItemList.itemListElement.length;
+
+          const originalItems = Array.isArray(beersItemList.itemListElement)
+            ? beersItemList.itemListElement
+            : [];
+
           const filteredItems: any[] = [];
           const droppedItems: string[] = [];
-          
-          for (const listItem of beersItemList.itemListElement) {
-            const itemUrl = extractUrlFromItem(listItem);
-            
-            if (!itemUrl) {
-              droppedItems.push("[no URL found]");
+
+          for (const listItem of originalItems) {
+            const rawUrl = extractUrlFromItem(listItem);
+            if (!rawUrl) {
+              droppedItems.push("[no URL]");
               continue;
             }
-            
-            if (!isCanonicalBeerUrl(itemUrl)) {
-              droppedItems.push(itemUrl);
+
+            const normalizedUrl = normalizeToCanonicalUrl(rawUrl);
+
+            // If HTML is available, require evidence that this URL (or its path) is actually on the page
+            let hasEvidenceInHtml = true;
+            if (typeof html === "string") {
+              try {
+                const parsed = new URL(normalizedUrl, canonicalBase);
+                const pathOnly = parsed.pathname;
+
+                hasEvidenceInHtml =
+                  html.includes(normalizedUrl) ||
+                  html.includes(pathOnly);
+              } catch {
+                hasEvidenceInHtml = html.includes(normalizedUrl);
+              }
+            }
+
+            if (!hasEvidenceInHtml) {
+              droppedItems.push(normalizedUrl);
               continue;
             }
-            
-            // Normalize and convert to Brand @id
-            const normalizedUrl = normalizeToCanonicalUrl(itemUrl);
+
             const brandId = `${normalizedUrl}#brand`;
-            
-            // Preserve any extra properties on the ListItem but update item and position
+
             filteredItems.push({
               "@type": "ListItem",
               position: filteredItems.length + 1, // 1-indexed
               item: { "@id": brandId },
             });
           }
-          
-          // Log dropped items for debugging
-          if (droppedItems.length > 0) {
-            console.log(`⚠ Dropped ${droppedItems.length} non-canonical items from /Beers ItemList:`);
-            droppedItems.forEach(url => console.log(`   - ${url}`));
-          }
-          
-          // Replace the itemListElement array
+
           beersItemList.itemListElement = filteredItems;
-          
-          // Update numberOfItems to match actual count
           beersItemList.numberOfItems = filteredItems.length;
-          
-          console.log(`✓ Updated ${filteredItems.length} /Beers ItemList items to reference Brand @ids (filtered from ${originalCount} original items)`);
+
+          console.log(
+            `✓ Rebuilt /Beers ItemList with ${filteredItems.length} HTML-backed Brand items (from ${originalItems.length} original items)`
+          );
+          if (droppedItems.length > 0) {
+            console.log("⚠ Dropped /Beers ItemList entries with no HTML evidence:");
+            droppedItems.forEach((u) => console.log(`   - ${u}`));
+          }
         }
 
         // Also ensure the /Beers collection WebPage has correct types
@@ -1743,7 +1742,7 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             collectionWebPage.about = { "@id": beersItemList["@id"] };
           }
 
-          console.log("✓ Ensured /Beers collection WebPage has CollectionPage type");
+          console.log("✓ Ensured /Beers collection WebPage has CollectionPage type and mainEntity/about wired to ItemList");
         }
 
         // STEP 7a: Remove any Product/Offer nodes from collection page too
