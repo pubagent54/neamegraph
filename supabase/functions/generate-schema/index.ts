@@ -1492,7 +1492,69 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
             }
           });
           
-          console.log(`✓ Updated ${updatedCount} /Beers ItemList items to reference Product @ids`);
+        console.log(`✓ Updated ${updatedCount} /Beers ItemList items to reference Product @ids`);
+        }
+      }
+      
+      // ========================================
+      // STEP 8: NON-BEER PAGE HERO IMAGE HANDLING
+      // ----------------------------------------
+      // For Corporate pages (not beer detail or beer collection), extract
+      // og:image from HTML and set WebPage.image. Organization.logo is
+      // already set to ORG_LOGO_URL in STEP 1a.
+      // ========================================
+      if (!isBeerDetailPage && !isBeersCollectionPage) {
+        console.log("Non-beer page detected - extracting hero image from og:image");
+        
+        // Simple og:image extraction for non-beer pages
+        let ogImageUrl: string | undefined;
+        try {
+          const doc = new DOMParser().parseFromString(html, "text/html");
+          if (doc) {
+            const ogImageMeta = doc.querySelector('meta[property="og:image"]');
+            if (ogImageMeta) {
+              const content = ogImageMeta.getAttribute("content");
+              if (content) {
+                // Handle Next.js image wrapper URLs
+                try {
+                  const url = new URL(content, "https://www.shepherdneame.co.uk");
+                  if (url.pathname === "/_next/image") {
+                    const inner = url.searchParams.get("url");
+                    if (inner) {
+                      ogImageUrl = decodeURIComponent(inner);
+                    }
+                  } else {
+                    ogImageUrl = url.toString();
+                  }
+                } catch {
+                  ogImageUrl = content;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.log("[Non-beer image extraction] Error parsing HTML:", err);
+        }
+        
+        if (ogImageUrl) {
+          console.log(`✓ Extracted og:image for non-beer page: ${ogImageUrl.substring(0, 100)}...`);
+          
+          // Apply hero image to WebPage node(s)
+          webPageNodes.forEach((node: any) => {
+            if (!node.image) {
+              node.image = {
+                "@type": "ImageObject",
+                url: ogImageUrl,
+                contentUrl: ogImageUrl
+              };
+            }
+          });
+          
+          if (webPageNodes.length > 0) {
+            console.log(`✓ Set WebPage.image on ${webPageNodes.length} node(s)`);
+          }
+        } else {
+          console.log("[Non-beer page] No og:image found");
         }
       }
       
