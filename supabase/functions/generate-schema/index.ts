@@ -1500,61 +1500,130 @@ CRITICAL: Return ONLY valid JSON-LD. Start with { and end with }. Do not include
       // STEP 8: NON-BEER PAGE HERO IMAGE HANDLING
       // ----------------------------------------
       // For Corporate pages (not beer detail or beer collection), extract
-      // og:image from HTML and set WebPage.image. Organization.logo is
-      // already set to ORG_LOGO_URL in STEP 1a.
+      // og:image from HTML and set WebPage.image + primaryImageOfPage.
+      // Organization.logo is already set to ORG_LOGO_URL in STEP 1a.
       // ========================================
       if (!isBeerDetailPage && !isBeersCollectionPage) {
-        console.log("Non-beer page detected - extracting hero image from og:image");
+        console.log("[Non-beer page] Extracting hero image");
         
-        // Simple og:image extraction for non-beer pages
-        let ogImageUrl: string | undefined;
-        try {
-          const doc = new DOMParser().parseFromString(html, "text/html");
-          if (doc) {
+        // Helper: Extract hero image URL from non-beer page HTML
+        function extractNonBeerHeroImageFromHtml(htmlContent: string): { heroUrl?: string; caption?: string } {
+          const canonicalBase = "https://www.shepherdneame.co.uk";
+          
+          // Helper: Normalize URL and extract inner URL from Next.js wrapper
+          function normaliseNonBeerUrl(raw: string): string {
+            try {
+              const url = new URL(raw, canonicalBase);
+              if (url.pathname === "/_next/image") {
+                const inner = url.searchParams.get("url");
+                if (inner) {
+                  return decodeURIComponent(inner);
+                }
+              }
+              return url.toString();
+            } catch {
+              return raw;
+            }
+          }
+          
+          try {
+            const doc = new DOMParser().parseFromString(htmlContent, "text/html");
+            if (!doc) return {};
+            
+            // Priority 1: og:image meta tag
             const ogImageMeta = doc.querySelector('meta[property="og:image"]');
             if (ogImageMeta) {
               const content = ogImageMeta.getAttribute("content");
               if (content) {
-                // Handle Next.js image wrapper URLs
-                try {
-                  const url = new URL(content, "https://www.shepherdneame.co.uk");
-                  if (url.pathname === "/_next/image") {
-                    const inner = url.searchParams.get("url");
-                    if (inner) {
-                      ogImageUrl = decodeURIComponent(inner);
-                    }
-                  } else {
-                    ogImageUrl = url.toString();
-                  }
-                } catch {
-                  ogImageUrl = content;
+                const heroUrl = normaliseNonBeerUrl(content);
+                console.log(`[Non-beer hero] Found og:image: ${heroUrl.substring(0, 80)}...`);
+                return { heroUrl };
+              }
+            }
+            
+            // Priority 2: twitter:image meta tag
+            const twitterImageMeta = doc.querySelector('meta[name="twitter:image"]');
+            if (twitterImageMeta) {
+              const content = twitterImageMeta.getAttribute("content");
+              if (content) {
+                const heroUrl = normaliseNonBeerUrl(content);
+                console.log(`[Non-beer hero] Found twitter:image: ${heroUrl.substring(0, 80)}...`);
+                return { heroUrl };
+              }
+            }
+            
+            // Priority 3: First img with page_hero pattern in src
+            const allImgs = doc.querySelectorAll("img");
+            for (const img of allImgs) {
+              const imgEl = img as any;
+              const src = imgEl.getAttribute("src") || imgEl.getAttribute("data-src");
+              if (src && !src.startsWith("data:")) {
+                const normalised = normaliseNonBeerUrl(src);
+                if (normalised.toLowerCase().includes("/styles/page_hero/") ||
+                    normalised.toLowerCase().includes("page_hero")) {
+                  const alt = imgEl.getAttribute("alt") || undefined;
+                  console.log(`[Non-beer hero] Found page_hero img: ${normalised.substring(0, 80)}...`);
+                  return { heroUrl: normalised, caption: alt };
                 }
               }
             }
+            
+            // Priority 4: First snsites.co.uk image (canonical CDN)
+            for (const img of allImgs) {
+              const imgEl = img as any;
+              const src = imgEl.getAttribute("src") || imgEl.getAttribute("data-src");
+              if (src && !src.startsWith("data:")) {
+                const normalised = normaliseNonBeerUrl(src);
+                if (normalised.toLowerCase().includes("snsites.co.uk/sites/default/files/")) {
+                  const alt = imgEl.getAttribute("alt") || undefined;
+                  console.log(`[Non-beer hero] Found snsites CDN img: ${normalised.substring(0, 80)}...`);
+                  return { heroUrl: normalised, caption: alt };
+                }
+              }
+            }
+            
+            console.log("[Non-beer hero] No suitable hero image found");
+            return {};
+          } catch (err) {
+            console.log("[Non-beer hero] Error parsing HTML:", err);
+            return {};
           }
-        } catch (err) {
-          console.log("[Non-beer image extraction] Error parsing HTML:", err);
         }
         
-        if (ogImageUrl) {
-          console.log(`✓ Extracted og:image for non-beer page: ${ogImageUrl.substring(0, 100)}...`);
+        const nonBeerImages = extractNonBeerHeroImageFromHtml(html);
+        
+        if (nonBeerImages.heroUrl) {
+          console.log(`✓ Non-beer hero image: ${nonBeerImages.heroUrl.substring(0, 100)}...`);
+          
+          // Build ImageObject for WebPage
+          const heroImageObject: any = {
+            "@type": "ImageObject",
+            url: nonBeerImages.heroUrl,
+            contentUrl: nonBeerImages.heroUrl
+          };
+          
+          // Add caption if available
+          if (nonBeerImages.caption) {
+            heroImageObject.caption = nonBeerImages.caption;
+          }
           
           // Apply hero image to WebPage node(s)
           webPageNodes.forEach((node: any) => {
+            // Set image property
             if (!node.image) {
-              node.image = {
-                "@type": "ImageObject",
-                url: ogImageUrl,
-                contentUrl: ogImageUrl
-              };
+              node.image = heroImageObject;
+            }
+            // Also set primaryImageOfPage for completeness
+            if (!node.primaryImageOfPage) {
+              node.primaryImageOfPage = heroImageObject;
             }
           });
           
           if (webPageNodes.length > 0) {
-            console.log(`✓ Set WebPage.image on ${webPageNodes.length} node(s)`);
+            console.log(`✓ Set WebPage.image + primaryImageOfPage on ${webPageNodes.length} node(s)`);
           }
         } else {
-          console.log("[Non-beer page] No og:image found");
+          console.log("[Non-beer page] No hero image found");
         }
       }
       
