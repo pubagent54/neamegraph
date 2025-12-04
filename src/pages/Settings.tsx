@@ -146,6 +146,21 @@ export default function Settings() {
     }
   };
 
+  const handleCopyOrgSchemaForDrupal = async () => {
+    if (!settings?.organization_schema_json) {
+      toast.error("No organization schema to copy");
+      return;
+    }
+    try {
+      const wrappedSchema = `<script type="application/ld+json">\n${settings.organization_schema_json}\n</script>`;
+      await navigator.clipboard.writeText(wrappedSchema);
+      toast.success("Organization schema copied for Drupal");
+    } catch (error) {
+      console.error("Error copying to clipboard:", error);
+      toast.error("Failed to copy to clipboard");
+    }
+  };
+
   const handleSaveOrgSchema = async () => {
     if (!settings || !isAdmin) return;
     setSaving(true);
@@ -552,6 +567,16 @@ export default function Settings() {
                 >
                   <Copy className="mr-2 h-4 w-4" />
                   Copy JSON
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCopyOrgSchemaForDrupal}
+                  disabled={!isUnlocked || !settings.organization_schema_json}
+                  className="rounded-full"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy for Drupal
                 </Button>
                 <Button
                   size="sm"
