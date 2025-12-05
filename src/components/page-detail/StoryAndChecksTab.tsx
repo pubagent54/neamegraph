@@ -77,6 +77,8 @@ export function StoryAndChecksTab({
                 section={page.section}
                 createdAt={latestVersion.created_at}
                 status={latestVersion.status}
+                pageHeroImageUrl={page.hero_image_url}
+                pageLogoUrl={page.logo_url}
               />
             </ErrorBoundary>
           </CardContent>

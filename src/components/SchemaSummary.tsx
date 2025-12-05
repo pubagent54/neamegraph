@@ -1,15 +1,24 @@
 import { CheckCircle, Circle, ExternalLink } from "lucide-react";
 import { parseSchemaForSummary } from "@/lib/schema-parser";
-import { SchemaImagePreview } from "./SchemaImagePreview";
+import { SchemaImagePreview, ImageSource } from "./SchemaImagePreview";
 
 interface SchemaSummaryProps {
   jsonld: string;
   section?: string | null;
   createdAt: string;
   status: string;
+  pageHeroImageUrl?: string | null;
+  pageLogoUrl?: string | null;
 }
 
-export function SchemaSummary({ jsonld, section, createdAt, status }: SchemaSummaryProps) {
+export function SchemaSummary({ 
+  jsonld, 
+  section, 
+  createdAt, 
+  status,
+  pageHeroImageUrl,
+  pageLogoUrl 
+}: SchemaSummaryProps) {
   const summary = parseSchemaForSummary(jsonld, section);
 
   // Defensive check for invalid props
@@ -210,28 +219,48 @@ export function SchemaSummary({ jsonld, section, createdAt, status }: SchemaSumm
       )}
 
       {/* Images this schema is using */}
-      <div>
-        <h4 className="text-sm font-semibold text-muted-foreground mb-2">Images this schema is using</h4>
-        <div className="bg-muted/30 rounded-lg p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <SchemaImagePreview
-              label={summary.keyFacts.type === "beer" ? "Beer hero image (page)" : "WebPage image"}
-              url={summary.images.webPageImage}
-              objectFit="cover"
-            />
-            <SchemaImagePreview
-              label={summary.keyFacts.type === "beer" ? "Beer hero image (brand)" : "Main entity image"}
-              url={summary.images.brandImage}
-              objectFit="cover"
-            />
-            <SchemaImagePreview
-              label={summary.keyFacts.type === "beer" ? "Beer brand logo" : "Main entity logo"}
-              url={summary.images.brandLogo}
-              objectFit="contain"
-            />
+      {(() => {
+        // Compute effective URLs with fallbacks
+        const webPageImageUrl = summary.images?.webPageImage || pageHeroImageUrl || null;
+        const mainEntityImageUrl = summary.images?.brandImage || pageHeroImageUrl || null;
+        const mainEntityLogoUrl = summary.images?.brandLogo || pageLogoUrl || null;
+        
+        // Determine source for each image
+        const webPageImageSource: ImageSource = summary.images?.webPageImage ? 'schema' : (pageHeroImageUrl ? 'metadata' : 'none');
+        const mainEntityImageSource: ImageSource = summary.images?.brandImage ? 'schema' : (pageHeroImageUrl ? 'metadata' : 'none');
+        const mainEntityLogoSource: ImageSource = summary.images?.brandLogo ? 'schema' : (pageLogoUrl ? 'metadata' : 'none');
+        
+        return (
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2">Images this schema is using</h4>
+            <div className="bg-muted/30 rounded-lg p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <SchemaImagePreview
+                  label={summary.keyFacts.type === "beer" ? "Beer hero image (page)" : "WebPage image"}
+                  url={webPageImageUrl || undefined}
+                  objectFit="cover"
+                  source={webPageImageSource}
+                  fallbackUrl={pageHeroImageUrl}
+                />
+                <SchemaImagePreview
+                  label={summary.keyFacts.type === "beer" ? "Beer hero image (brand)" : "Main entity image"}
+                  url={mainEntityImageUrl || undefined}
+                  objectFit="cover"
+                  source={mainEntityImageSource}
+                  fallbackUrl={pageHeroImageUrl}
+                />
+                <SchemaImagePreview
+                  label={summary.keyFacts.type === "beer" ? "Beer brand logo" : "Main entity logo"}
+                  url={mainEntityLogoUrl || undefined}
+                  objectFit="contain"
+                  source={mainEntityLogoSource}
+                  fallbackUrl={pageLogoUrl}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Validation */}
       <div>
