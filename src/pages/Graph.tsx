@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
-import { ExternalLink, Maximize2, Download, Save, Play, Pause, Search } from "lucide-react";
+import { ExternalLink, Maximize2, Minimize2, Download, Save, Play, Pause, Search, ZoomIn } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ForceGraph2D from "react-force-graph-2d";
 import { useNavigate } from "react-router-dom";
@@ -71,8 +71,30 @@ export default function Graph() {
   const [animationSpeed, setAnimationSpeed] = useState([1]);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [zoom, setZoom] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const fgRef = useRef<any>();
   const logoImageRef = useRef<HTMLImageElement | null>(null);
+
+  // Handle Esc key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
+  // Handle zoom changes
+  const handleZoomChange = useCallback((value: number[]) => {
+    const newZoom = value[0];
+    setZoom(newZoom);
+    if (fgRef.current) {
+      fgRef.current.zoom(newZoom, 300);
+    }
+  }, []);
 
   // Load logo image for org node rendering
   useEffect(() => {
@@ -728,6 +750,34 @@ export default function Graph() {
                 </CardContent>
               ) : (
                 <div className="relative">
+                  {/* Zoom and fullscreen controls overlay */}
+                  <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+                    <Card className="rounded-lg shadow-md bg-card/95 backdrop-blur-sm border-border/50">
+                      <CardContent className="p-2 flex items-center gap-3">
+                        <ZoomIn className="h-4 w-4 text-muted-foreground" />
+                        <Slider
+                          value={[zoom]}
+                          onValueChange={handleZoomChange}
+                          min={0.25}
+                          max={2}
+                          step={0.05}
+                          className="w-24"
+                        />
+                        <span className="text-xs font-medium min-w-[40px] text-muted-foreground">
+                          {Math.round(zoom * 100)}%
+                        </span>
+                      </CardContent>
+                    </Card>
+                    <Button
+                      onClick={() => setIsFullscreen(true)}
+                      variant="outline"
+                      size="sm"
+                      className="h-9 bg-card/95 backdrop-blur-sm"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
                   <ForceGraph2D
                     ref={fgRef}
                     graphData={graphData}
@@ -1058,6 +1108,98 @@ export default function Graph() {
           </Card>
         </div>
       </div>
+
+      {/* Fullscreen overlay */}
+      {isFullscreen && (
+        <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
+          {/* Fullscreen control bar */}
+          <div className="flex items-center justify-between p-4 border-b bg-card/80 backdrop-blur-sm">
+            <div className="flex items-center gap-6">
+              {/* Zoom control */}
+              <div className="flex items-center gap-3">
+                <ZoomIn className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">Zoom</span>
+                <Slider
+                  value={[zoom]}
+                  onValueChange={handleZoomChange}
+                  min={0.25}
+                  max={2}
+                  step={0.05}
+                  className="w-32"
+                />
+                <span className="text-sm font-medium min-w-[45px]">
+                  {Math.round(zoom * 100)}%
+                </span>
+              </div>
+
+              <div className="h-6 w-px bg-border" />
+
+              {/* Speed control */}
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={toggleAnimation}
+                  variant="ghost"
+                  size="sm"
+                >
+                  {isAnimating ? (
+                    <Pause className="h-4 w-4" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </Button>
+                <span className="text-sm font-medium text-muted-foreground">Speed</span>
+                <Slider
+                  value={animationSpeed}
+                  onValueChange={handleSpeedChange}
+                  min={0.5}
+                  max={3}
+                  step={0.5}
+                  className="w-24"
+                />
+                <span className="text-sm font-medium min-w-[35px]">
+                  {animationSpeed[0]}x
+                </span>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => setIsFullscreen(false)}
+              variant="default"
+              size="sm"
+              className="gap-2"
+            >
+              <Minimize2 className="h-4 w-4" />
+              Exit Full Screen
+            </Button>
+          </div>
+
+          {/* Fullscreen graph */}
+          <div className="flex-1 relative">
+            {graphData.nodes.length > 0 && (
+              <ForceGraph2D
+                ref={fgRef}
+                graphData={graphData}
+                nodeId="id"
+                nodeLabel={(node: any) => `${node.label}${node.subtitle ? ` (${node.subtitle})` : ''}`}
+                nodeCanvasObject={paintNode}
+                linkCanvasObject={paintLink}
+                onNodeClick={handleNodeClick}
+                onBackgroundClick={handleBackgroundClick}
+                onNodeDragEnd={(node: any) => {
+                  node.fx = node.x;
+                  node.fy = node.y;
+                }}
+                width={typeof window !== 'undefined' ? window.innerWidth : 1200}
+                height={typeof window !== 'undefined' ? window.innerHeight - 73 : 800}
+                backgroundColor="transparent"
+                linkDirectionalParticles={2}
+                linkDirectionalParticleSpeed={0.003}
+                cooldownTicks={100}
+              />
+            )}
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
